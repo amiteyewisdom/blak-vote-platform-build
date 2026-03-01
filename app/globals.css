@@ -1,0 +1,98 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ===============================
+   ROOT DESIGN SYSTEM
+================================ */
+
+:root {
+  --bg-primary: #0B0B0F;
+  --bg-deep: #090B14;
+  --bg-card: #121320;
+  --bg-card-elevated: #17182B;
+
+  --border-soft: rgba(255,255,255,0.06);
+  --border-strong: rgba(245,192,68,0.25);
+
+  --gold: #F5C044;
+  --gold-deep: #D9A92E;
+
+  --text-primary: #FFFFFF;
+  --text-secondary: #9CA3AF;
+}
+
+/* ===============================
+   BODY
+================================ */
+
+body {
+  background: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+/* ===============================
+   PREMIUM CARD
+================================ */
+
+.card-premium {
+  background: var(--bg-card);
+  border-radius: 20px;
+  border: 1px solid var(--border-soft);
+  padding: 24px;
+  transition: all 0.25s ease;
+}
+
+.card-premium:hover {
+  border-color: var(--border-strong);
+  transform: translateY(-4px);
+  box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+}
+
+/* ===============================
+   PRIMARY BUTTON
+================================ */
+
+.btn-primary {
+  background: linear-gradient(135deg, var(--gold), var(--gold-deep));
+  color: black;
+  padding: 10px 22px;
+  border-radius: 14px;
+  font-weight: 600;
+  transition: all 0.25s ease;
+}
+
+.btn-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 0 30px rgba(245,192,68,0.4);
+}
+
+/* ===============================
+   SECONDARY BUTTON
+================================ */
+
+.btn-secondary {
+  background: transparent;
+  border: 1px solid var(--border-soft);
+  color: var(--text-primary);
+  padding: 10px 18px;
+  border-radius: 14px;
+  transition: all 0.25s ease;
+}
+
+.btn-secondary:hover {
+  border-color: var(--gold);
+  color: var(--gold);
+}
+
+/* ===============================
+   SWITCH FIX
+================================ */
+
+[data-state="checked"] {
+  background-color: var(--gold) !important;
+}
+
+[data-state="checked"] span {
+  background-color: black !important;
+}
