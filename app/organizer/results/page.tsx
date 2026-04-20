@@ -20,7 +20,7 @@ interface EventWithResults {
   results: VotingResult[]
 }
 
-const COLORS = ['#3B82F6', '#F97316', '#10B981', '#F43F5E', '#8B5CF6', '#14B8A6']
+const COLORS = ['hsl(var(--chart-1))', 'hsl(var(--chart-3))', 'hsl(var(--success))', 'hsl(var(--chart-4))', 'hsl(var(--chart-2))', 'hsl(var(--chart-5))']
 
 export default function ResultsPage() {
   const [events, setEvents] = useState<EventWithResults[]>([])
@@ -145,7 +145,7 @@ export default function ResultsPage() {
                         <XAxis dataKey="candidateName" angle={-45} textAnchor="end" height={80} />
                         <YAxis />
                         <Tooltip />
-                        <Bar dataKey="voteCount" fill="#3B82F6" name="Votes" />
+                        <Bar dataKey="voteCount" fill="hsl(var(--chart-1))" name="Votes" />
                       </BarChart>
                     </ResponsiveContainer>
                   </div>
@@ -163,7 +163,7 @@ export default function ResultsPage() {
                             `${candidateName}: ${percentage}%`
                           }
                           outerRadius={80}
-                          fill="#8884d8"
+                          fill="hsl(var(--chart-2))"
                           dataKey="voteCount"
                         >
                           {event.results.map((_, index) => (
@@ -178,31 +178,50 @@ export default function ResultsPage() {
               )}
 
               {/* Results Table */}
-              <div className="mt-8">
-                <h3 className="font-semibold mb-4 text-foreground">Detailed Results</h3>
-                <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead className="border-b border-border">
-                      <tr>
-                        <th className="text-left py-2 text-muted-foreground">Candidate</th>
-                        <th className="text-center py-2 text-muted-foreground">Votes</th>
-                        <th className="text-center py-2 text-muted-foreground">Percentage</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {event.results
-                        .sort((a, b) => b.voteCount - a.voteCount)
-                        .map((result, index) => (
-                          <tr key={index} className="border-b border-border hover:bg-secondary">
-                            <td className="py-3 text-foreground">{result.candidateName}</td>
-                            <td className="py-3 text-center font-semibold text-primary">
-                              {result.voteCount}
-                            </td>
-                            <td className="py-3 text-center">{result.percentage}%</td>
-                          </tr>
-                        ))}
-                    </tbody>
-                  </table>
+              <div className="mt-10 pt-8 border-t border-border">
+                <h3 className="font-bold text-lg text-foreground mb-6">Detailed Results</h3>
+                <div className="space-y-3">
+                  {event.results
+                    .sort((a, b) => b.voteCount - a.voteCount)
+                    .map((result, index) => {
+                      const isTopThree = index < 3
+                      const totalVotes = event.results.reduce((sum, r) => sum + r.voteCount, 0)
+                      const barWidth = totalVotes > 0 ? (result.voteCount / totalVotes) * 100 : 0
+                      
+                      return (
+                        <div
+                          key={index}
+                          className={`rounded-lg border p-4 transition-all ${
+                            isTopThree
+                              ? 'bg-primary/5 border-primary/20'
+                              : 'bg-secondary/30 border-border hover:bg-secondary/50'
+                          }`}
+                        >
+                          <div className="flex items-start justify-between mb-3">
+                            <div className="flex items-center gap-3 min-w-0 flex-1">
+                              <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm ${
+                                isTopThree
+                                  ? 'bg-primary text-secondary'
+                                  : 'bg-muted text-muted-foreground'
+                              }`}>
+                                {index + 1}
+                              </div>
+                              <span className="text-foreground font-semibold truncate">{result.candidateName}</span>
+                            </div>
+                            <div className="flex flex-col items-end ml-4 flex-shrink-0">
+                              <span className="text-lg font-bold text-primary">{result.voteCount}</span>
+                              <span className="text-xs text-muted-foreground">{result.percentage}%</span>
+                            </div>
+                          </div>
+                          <div className="w-full bg-muted rounded-full h-2 overflow-hidden">
+                            <div
+                              className="bg-gradient-to-r from-primary to-primary/70 h-full transition-all duration-300"
+                              style={{ width: `${barWidth}%` }}
+                            />
+                          </div>
+                        </div>
+                      )
+                    })}
                 </div>
               </div>
             </CardContent>
@@ -212,3 +231,4 @@ export default function ResultsPage() {
     </div>
   )
 }
+

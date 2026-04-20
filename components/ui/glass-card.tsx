@@ -9,7 +9,7 @@ const GlassCard = React.forwardRef<
   return (
     <div
       ref={ref}
-      className={cn('glass rounded-2xl p-6 bg-card/60', className)}
+      className={cn('glass rounded-2xl p-6', className)}
       {...props}
     >
       {children}

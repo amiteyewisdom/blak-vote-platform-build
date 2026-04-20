@@ -1,5 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
+import { createClient as createServerClient } from '@/lib/supabase/server'
+import { requireRole } from '@/lib/api-auth'
 
 // Function to create Supabase client (lazy initialization)
 function getSupabaseClient() {
@@ -15,6 +17,13 @@ function getSupabaseClient() {
 
 export async function POST(request: NextRequest) {
   try {
+    const sessionClient = await createServerClient()
+
+    const auth = await requireRole(sessionClient, ['admin', 'organizer'])
+    if (!auth.ok) {
+      return auth.response
+    }
+
     const supabase = getSupabaseClient()
     const body = await request.json()
     const {
@@ -23,57 +32,169 @@ export async function POST(request: NextRequest) {
       organizerId,
       startDate,
       endDate,
+      imageUrl,
+      votingType,
+      costPerVote,
+      votePrice,
       votingFee,
       maxVoters,
       candidates,
     } = body
 
-    // Create event
-    const { data: event, error: eventError } = await supabase
-      .from('events')
-      .insert({
+    const effectiveOrganizerId = auth.role === 'admin' ? organizerId : auth.userId
+
+    if (!effectiveOrganizerId) {
+      return NextResponse.json(
+        { error: 'Missing organizerId' },
+        { status: 400 }
+      )
+    }
+
+    if (!title || !description || !startDate || !endDate) {
+      return NextResponse.json(
+        { error: 'Missing required fields' },
+        { status: 400 }
+      )
+    }
+
+    if (auth.role === 'organizer') {
+      const [{ data: platformSettings, error: settingsError }, { count: eventCount, error: countError }] = await Promise.all([
+        supabase
+          .from('platform_settings')
+          .select('max_events_per_organizer')
+          .limit(1)
+          .maybeSingle(),
+        supabase
+          .from('events')
+          .select('*', { count: 'exact', head: true })
+          .eq('organizer_id', auth.userId)
+          .neq('status', 'deleted')
+          .neq('status', 'cancelled'),
+      ])
+
+      const maxEventsPerOrganizer =
+        !settingsError && platformSettings?.max_events_per_organizer != null
+          ? Number(platformSettings.max_events_per_organizer)
+          : 10
+
+      if (!countError && typeof eventCount === 'number' && eventCount >= maxEventsPerOrganizer) {
+        return NextResponse.json(
+          {
+            error: `Event limit reached. Maximum allowed is ${maxEventsPerOrganizer}.`,
+          },
+          { status: 403 }
+        )
+      }
+    }
+
+    const resolvedVotePrice = Number(
+      votePrice ?? costPerVote ?? votingFee ?? 0
+    )
+
+    const buildEventPayload = (organizerIdToUse: string, reduced = false) => {
+      const base = {
         title,
         description,
-        organizer_id: organizerId,
+        organizer_id: organizerIdToUse,
         start_date: startDate,
         end_date: endDate,
-        voting_fee: votingFee,
-        max_voters: maxVoters,
-        status: 'draft',
-        is_active: false,
-      })
-      .select()
+      } as Record<string, any>
 
-    if (eventError) {
+      if (!reduced) {
+        base.image_url = imageUrl ?? null
+        base.voting_type = votingType ?? 'paid'
+        base.vote_price = resolvedVotePrice
+        base.cost_per_vote = resolvedVotePrice
+        base.max_voters = maxVoters
+      }
+
+      return base
+    }
+
+    const tryCreateEvent = async (organizerIdToUse: string, reduced = false) => {
+      return supabase
+        .from('events')
+        .insert(buildEventPayload(organizerIdToUse, reduced))
+        .select()
+        .maybeSingle()
+    }
+
+    let eventData: any = null
+    let eventError: any = null
+
+    // 1) Try with auth user id and full payload
+    const firstInsert = await tryCreateEvent(effectiveOrganizerId)
+    eventData = firstInsert.data
+    eventError = firstInsert.error
+
+    // 2) Retry with reduced payload if schema differs (missing optional columns)
+    if (eventError && !eventData) {
+      const reducedInsert = await tryCreateEvent(effectiveOrganizerId, true)
+      eventData = reducedInsert.data
+      eventError = reducedInsert.error
+    }
+
+    // 3) If organizer FK points to organizers.id, map user -> organizer record and retry
+    if (eventError && !eventData) {
+      const organizerLookup = await supabase
+        .from('organizers')
+        .select('id')
+        .eq('user_id', effectiveOrganizerId)
+        .maybeSingle()
+
+      if (!organizerLookup.error && organizerLookup.data?.id) {
+        const orgInsert = await tryCreateEvent(organizerLookup.data.id)
+        eventData = orgInsert.data
+        eventError = orgInsert.error
+
+        if (eventError && !eventData) {
+          const orgReducedInsert = await tryCreateEvent(organizerLookup.data.id, true)
+          eventData = orgReducedInsert.data
+          eventError = orgReducedInsert.error
+        }
+      }
+    }
+
+    if (!eventData) {
       return NextResponse.json(
-        { error: 'Failed to create event' },
+        { error: eventError?.message || 'Failed to create event' },
         { status: 500 }
       )
     }
 
     // Create candidates
-    const candidatesToInsert = candidates.map((candidate: any) => ({
-      event_id: event[0].id,
-      name: candidate.name,
-      description: candidate.description || null,
-      image_url: candidate.imageUrl || null,
+    const candidateList = Array.isArray(candidates) ? candidates : []
+
+    const candidatesToInsert = candidateList.map((candidate: any) => ({
+      event_id: eventData.id,
+      nominee_name: candidate.name,
+      bio: candidate.description || null,
+      photo_url: candidate.imageUrl || null,
+      status: 'candidate',
+      nominated_by_user_id: null, // Organizer created
     }))
 
-    const { data: createdCandidates, error: candidatesError } = await supabase
-      .from('candidates')
-      .insert(candidatesToInsert)
-      .select()
+    let createdCandidates: any[] = []
 
-    if (candidatesError) {
-      return NextResponse.json(
-        { error: 'Failed to create candidates' },
-        { status: 500 }
-      )
+    if (candidatesToInsert.length > 0) {
+      const { data, error: candidatesError } = await supabase
+        .from('nominations')
+        .insert(candidatesToInsert)
+        .select()
+
+      if (candidatesError) {
+        return NextResponse.json(
+          { error: 'Failed to create candidates' },
+          { status: 500 }
+        )
+      }
+
+      createdCandidates = data ?? []
     }
 
     return NextResponse.json(
       {
-        event: event[0],
+        event: eventData,
         candidates: createdCandidates,
       },
       { status: 201 }

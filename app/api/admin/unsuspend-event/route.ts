@@ -1,8 +1,14 @@
 import { NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
+import { requireRole } from "@/lib/api-auth"
 
 export async function POST(req: Request) {
   const supabase = await createClient()
+
+  const auth = await requireRole(supabase, ["admin"])
+  if (!auth.ok) {
+    return auth.response
+  }
 
   const { eventId } = await req.json()
 
@@ -14,7 +20,7 @@ export async function POST(req: Request) {
     .from("events")
     .update({
       status: "active",
-      suspended_at: null,
+      updated_at: new Date().toISOString(),
     })
     .eq("id", eventId)
 

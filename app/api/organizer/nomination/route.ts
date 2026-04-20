@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createClient } from '@supabase/supabase-js';
+import { createClient as createServerClient } from '@/lib/supabase/server';
+import { ensureEventOwnedByOrganizer, requireRole } from '@/lib/api-auth';
 
 const supabase = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
 
@@ -11,13 +13,47 @@ const nominationSchema = z.object({
 
 export async function POST(req: Request) {
   try {
+    const sessionClient = await createServerClient();
+
+    const auth = await requireRole(sessionClient, ['admin', 'organizer']);
+    if (!auth.ok) {
+      return auth.response;
+    }
+
     const body = await req.json();
     const parseResult = nominationSchema.safeParse(body);
     if (!parseResult.success) {
       return NextResponse.json({ error: 'Invalid input', details: parseResult.error.errors }, { status: 400 });
     }
+
     const { nomination_id, approve } = parseResult.data;
-    const { error } = await supabase.from('nominations').update({ status: approve ? 'approved' : 'declined' }).eq('id', nomination_id);
+
+    const { data: nomination, error: nominationError } = await supabase
+      .from('nominations')
+      .select('event_id')
+      .eq('id', nomination_id)
+      .maybeSingle();
+
+    if (nominationError || !nomination) {
+      return NextResponse.json({ error: 'Nomination not found' }, { status: 404 });
+    }
+
+    if (auth.role === 'organizer') {
+      const ownershipError = await ensureEventOwnedByOrganizer(
+        supabase,
+        nomination.event_id,
+        auth.userId
+      );
+
+      if (ownershipError) {
+        return ownershipError;
+      }
+    }
+
+    const { error } = await supabase
+      .from('nominations')
+      .update({ status: approve ? 'candidate' : 'rejected' })
+      .eq('id', nomination_id);
     if (error) {
       return NextResponse.json({ error: 'Database error', details: error.message }, { status: 500 });
     }

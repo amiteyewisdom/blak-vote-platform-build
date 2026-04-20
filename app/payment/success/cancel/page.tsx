@@ -1,9 +1,11 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
+import { Button } from '@/components/ui/button'
+import { CheckCircle2, Loader2, XCircle } from 'lucide-react'
 
-export default function PaymentSuccessPage() {
+function PaymentSuccessContent() {
   const searchParams = useSearchParams()
   const router = useRouter()
 
@@ -46,49 +48,66 @@ export default function PaymentSuccessPage() {
   }, [reference])
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-black text-white p-8">
-      <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-10 text-center space-y-6 max-w-md w-full">
+    <div className="min-h-screen flex items-center justify-center bg-background text-foreground p-8">
+      <div className="w-full max-w-md space-y-6 rounded-2xl border border-border bg-card p-10 text-center shadow-[0_20px_60px_hsl(var(--foreground)/0.1)]">
 
         {verifying && (
           <>
-            <div className="animate-spin h-10 w-10 border-4 border-yellow-500 border-t-transparent rounded-full mx-auto"></div>
+            <Loader2 className="mx-auto h-10 w-10 animate-spin text-gold" />
             <h1 className="text-xl font-semibold">Verifying payment...</h1>
           </>
         )}
 
         {!verifying && error && (
           <>
-            <div className="text-red-500 text-5xl">✖</div>
+            <XCircle className="mx-auto h-12 w-12 text-destructive" />
             <h1 className="text-2xl font-bold">Payment Failed</h1>
-            <p className="text-gray-400">{error}</p>
+            <p className="text-muted-foreground">{error}</p>
 
-            <button
+            <Button
               onClick={() => router.push('/')}
-              className="w-full py-3 rounded-xl bg-yellow-500 text-black font-semibold hover:bg-yellow-400 transition"
+              className="w-full"
             >
               Go Back
-            </button>
+            </Button>
           </>
         )}
 
         {!verifying && !error && (
           <>
-            <div className="text-green-500 text-5xl">✔</div>
+            <CheckCircle2 className="mx-auto h-12 w-12 text-success" />
             <h1 className="text-2xl font-bold">Vote Successful</h1>
-            <p className="text-gray-400">
+            <p className="text-muted-foreground">
               Your vote has been recorded successfully.
             </p>
 
-            <button
+            <Button
               onClick={() => router.push('/')}
-              className="w-full py-3 rounded-xl bg-yellow-500 text-black font-semibold hover:bg-yellow-400 transition"
+              className="w-full"
             >
               Back to Home
-            </button>
+            </Button>
           </>
         )}
 
       </div>
     </div>
+  )
+}
+
+export default function PaymentSuccessPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen flex items-center justify-center bg-background text-foreground p-8">
+          <div className="w-full max-w-md space-y-6 rounded-2xl border border-border bg-card p-10 text-center shadow-[0_20px_60px_hsl(var(--foreground)/0.1)]">
+            <Loader2 className="mx-auto h-10 w-10 animate-spin text-gold" />
+            <h1 className="text-xl font-semibold">Loading...</h1>
+          </div>
+        </div>
+      }
+    >
+      <PaymentSuccessContent />
+    </Suspense>
   )
 }

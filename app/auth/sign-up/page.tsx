@@ -5,17 +5,21 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabaseClient'
 import { useToast } from '@/hooks/use-toast'
-import { AlertCircle } from 'lucide-react'
+import { DSInput } from '@/components/ui/design-system'
+import { Button } from '@/components/ui/button'
+import BrandLogo from '@/components/BrandLogo'
+import { Sparkles } from 'lucide-react'
 
 export default function SignUpPage() {
   const router = useRouter()
   const { toast } = useToast()
+  const refreshPage = () => {
+    window.location.reload()
+  }
 
   const [firstName, setFirstName] = useState('')
   const [lastName, setLastName] = useState('')
   const [phone, setPhone] = useState('')
-  // Only allow voter role
-  const role = 'voter'
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
@@ -26,31 +30,24 @@ export default function SignUpPage() {
       toast({ title: 'Validation', description: 'Email and password required', variant: 'destructive' })
       return
     }
-
     if (password !== confirmPassword) {
       toast({ title: 'Validation', description: 'Passwords do not match', variant: 'destructive' })
       return
     }
-
     if (password.length < 8) {
       toast({ title: 'Validation', description: 'Password must be at least 8 characters', variant: 'destructive' })
       return
     }
 
     setLoading(true)
+    const role = 'voter'
 
-    // Only allow voter role
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: {
-        data: {
-          role: 'voter',
-          first_name: firstName,
-          last_name: lastName,
-          phone_number: phone,
-        }
-      }
+        data: { role, first_name: firstName, last_name: lastName, phone_number: phone },
+      },
     })
 
     if (error) {
@@ -61,131 +58,112 @@ export default function SignUpPage() {
 
     if (data.user) {
       await supabase.from('users').insert({
-          id: data.user.id,
-          email,
-          first_name: firstName,
-          last_name: lastName,
-          phone,
-          role: 'user',
-      status: 'active',
-})
+        id: data.user.id,
+        email,
+        first_name: firstName,
+        last_name: lastName,
+        phone,
+        role,
+        status: 'active',
+      })
     }
 
     setLoading(false)
-
-    toast({
-      title: 'Account created',
-      description: 'Please sign in to continue',
-    })
-
+    toast({ title: 'Account created!', description: 'Welcome to BlakVote. Sign in to continue.' })
     router.push('/auth/sign-in')
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center relative overflow-hidden bg-[#05060D]">
+    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-background px-4 py-10">
+      <div className="absolute left-[-12rem] top-[-12rem] h-[36rem] w-[36rem] rounded-full bg-[radial-gradient(circle,hsl(var(--gold)/0.18),transparent_65%)] blur-3xl" />
+      <div className="absolute bottom-[-12rem] right-[-12rem] h-[36rem] w-[36rem] rounded-full bg-[radial-gradient(circle,hsl(var(--gold)/0.14),transparent_65%)] blur-3xl" />
 
-      {/* Ambient glow */}
-      <div className="absolute w-[600px] h-[600px] bg-[#F5C044]/10 blur-[160px] rounded-full top-[-200px] left-[-200px]" />
-      <div className="absolute w-[600px] h-[600px] bg-[#F5C044]/10 blur-[160px] rounded-full bottom-[-200px] right-[-200px]" />
-
-      <div className="relative w-full max-w-xl bg-[#121421] border border-white/5 rounded-3xl shadow-[0_0_60px_rgba(0,0,0,0.6)] p-12">
-
-        {/* Header */}
-        <div className="text-center mb-10">
-          <div className="w-16 h-16 mx-auto bg-gradient-to-br from-[#F5C044] to-[#D9A92E] rounded-2xl flex items-center justify-center shadow-[0_0_25px_rgba(245,192,68,0.4)]">
-            <span className="text-black font-bold text-lg tracking-widest">BV</span>
-          </div>
-
-          <h1 className="mt-6 text-3xl font-semibold tracking-tight">
-            Create Your Account
-          </h1>
-
-          <p className="text-white/40 text-sm mt-2">
-            Start building and managing premium voting events
-          </p>
+      <div className="relative w-full max-w-xl rounded-3xl border border-border/70 bg-card/95 p-8 shadow-[0_24px_80px_hsl(var(--foreground)/0.12)] sm:p-12">
+        <div className="text-center mb-8">
+          <button
+            type="button"
+            onClick={refreshPage}
+            aria-label="Refresh page"
+            className="flex w-full items-center justify-center"
+          >
+            <BrandLogo size="lg" centered className="justify-center" />
+          </button>
+          <h1 className="mt-6 text-3xl font-semibold tracking-tight text-foreground">Create Voter Account</h1>
+          <p className="mt-2 text-sm text-muted-foreground">Join BlakVote to vote in events and nominate candidates</p>
         </div>
 
-        <div className="space-y-6">
+        <div className="mb-6 flex items-start gap-3 rounded-2xl border border-gold/20 bg-gold/10 p-4">
+          <Sparkles className="mt-0.5 h-5 w-5 flex-shrink-0 text-gold" />
+          <div>
+            <p className="text-sm font-medium text-gold">Want to organize events?</p>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              Create a voter account first, then{' '}
+              <Link href="/apply-organizer" className="text-gold underline">apply to be an organizer</Link>.
+              Admin approval is required.
+            </p>
+          </div>
+        </div>
 
-          {/* Names */}
-          <div className="grid grid-cols-2 gap-4">
-            <input
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-3 sm:gap-4">
+            <DSInput
               type="text"
               placeholder="First Name"
-              onChange={(e) => setFirstName(e.target.value)}
-              className="bg-[#181822] border border-white/10 p-4 rounded-2xl outline-none focus:ring-2 focus:ring-[#F5C044] text-white placeholder:text-white/30 transition"
+              value={firstName}
+              onChange={(e) => setFirstName(e.target.value.slice(0, 100))}
+              className="h-12 rounded-2xl"
             />
-            <input
+            <DSInput
               type="text"
               placeholder="Last Name"
-              onChange={(e) => setLastName(e.target.value)}
-              className="bg-[#181822] border border-white/10 p-4 rounded-2xl outline-none focus:ring-2 focus:ring-[#F5C044] text-white placeholder:text-white/30 transition"
+              value={lastName}
+              onChange={(e) => setLastName(e.target.value.slice(0, 100))}
+              className="h-12 rounded-2xl"
             />
           </div>
-
-          {/* Email */}
-          <input
+          <DSInput
             type="email"
             placeholder="Email Address"
-            onChange={(e) => setEmail(e.target.value)}
-            className="w-full bg-[#181822] border border-white/10 p-4 rounded-2xl outline-none focus:ring-2 focus:ring-[#F5C044] text-white placeholder:text-white/30 transition"
+            value={email}
+            onChange={(e) => setEmail(e.target.value.slice(0, 255))}
+            className="h-12 rounded-2xl"
           />
-
-          {/* Phone */}
-          <input
+          <DSInput
             type="tel"
             placeholder="Phone Number"
-            onChange={(e) => setPhone(e.target.value)}
-            className="w-full bg-[#181822] border border-white/10 p-4 rounded-2xl outline-none focus:ring-2 focus:ring-[#F5C044] text-white placeholder:text-white/30 transition"
+            value={phone}
+            onChange={(e) => setPhone(e.target.value.replace(/[^0-9+\-\s]/g, '').slice(0, 20))}
+            className="h-12 rounded-2xl"
           />
-
-          {/* Role */}
-          <select
-            value={role}
-            onChange={(e) => setRole(e.target.value)}
-            className="w-full bg-[#181822] border border-white/10 p-4 rounded-2xl outline-none focus:ring-2 focus:ring-[#F5C044] text-white transition"
-          >
-            <option value="user">User</option>
-            <option value="organizer">Organizer</option>
-          </select>
-
-          {/* Password */}
-          <input
+          <DSInput
             type="password"
             placeholder="Password (min 8 characters)"
+            value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="w-full bg-[#181822] border border-white/10 p-4 rounded-2xl outline-none focus:ring-2 focus:ring-[#F5C044] text-white placeholder:text-white/30 transition"
+            className="h-12 rounded-2xl"
           />
-
-          {/* Confirm */}
-          <input
+          <DSInput
             type="password"
             placeholder="Confirm Password"
+            value={confirmPassword}
             onChange={(e) => setConfirmPassword(e.target.value)}
-            className="w-full bg-[#181822] border border-white/10 p-4 rounded-2xl outline-none focus:ring-2 focus:ring-[#F5C044] text-white placeholder:text-white/30 transition"
+            className="h-12 rounded-2xl"
           />
-
-          {/* Submit */}
-          <button
+          <Button
             onClick={handleSignup}
             disabled={loading}
-            className="w-full py-4 rounded-2xl font-semibold text-black bg-gradient-to-r from-[#F5C044] to-[#D9A92E] hover:opacity-90 transition shadow-[0_0_25px_rgba(245,192,68,0.3)] disabled:opacity-50"
+            className="w-full h-12"
           >
-            {loading ? 'Creating Account...' : 'Create Account'}
-          </button>
-
+            {loading ? 'Creating Account...' : 'Create Voter Account'}
+          </Button>
         </div>
 
-        <div className="mt-8 text-center text-sm text-white/40">
+        <div className="mt-8 text-center text-sm text-muted-foreground">
           Already have an account?{' '}
-          <Link
-            href="/auth/sign-in"
-            className="text-[#F5C044] hover:opacity-80 font-medium transition"
-          >
+          <Link href="/auth/sign-in" className="font-medium text-gold transition hover:opacity-80">
             Sign In
           </Link>
         </div>
-
       </div>
     </div>
   )

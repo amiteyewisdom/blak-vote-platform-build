@@ -1,25 +1,31 @@
 import { NextResponse } from 'next/server'
-import { createServerClient } from '@/lib/supabaseClient'
+import { createClient } from '@/lib/supabase/server'
+import { ensureEventOwnedByOrganizer, requireRole } from '@/lib/api-auth'
 
 export async function POST(req: Request) {
   try {
     const body = await req.json()
     const { eventId, amount, method, accountDetails } = body
 
-    const supabase = createServerClient()
-
-    const {
-      data: { user }
-    } = await supabase.auth.getUser()
-
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    if (!eventId || !amount || amount <= 0 || !method || !accountDetails) {
+      return NextResponse.json({ error: 'Invalid withdrawal request payload' }, { status: 400 })
     }
 
-    const { error } = await supabase.rpc('request_withdrawal', {
-      p_event_id: eventId,
-      p_organizer_id: user.id,
-      p_gross_amount: amount,
+    const supabase = await createClient()
+
+    const auth = await requireRole(supabase, ['organizer'])
+    if (!auth.ok) {
+      return auth.response
+    }
+
+    const ownershipError = await ensureEventOwnedByOrganizer(supabase, eventId, auth.userId)
+    if (ownershipError) {
+      return ownershipError
+    }
+
+    const { error } = await supabase.rpc('request_organizer_withdrawal', {
+      p_organizer_id: auth.userId,
+      p_amount: amount,
       p_method: method,
       p_account_details: accountDetails
     })

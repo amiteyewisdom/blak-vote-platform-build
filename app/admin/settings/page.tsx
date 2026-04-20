@@ -1,23 +1,29 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { supabase } from '@/lib/supabaseClient'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
+import {
+  DSCard,
+  DSCardContent,
+  DSCardDescription,
+  DSCardHeader,
+  DSCardTitle,
+  DSInput,
+  DSPrimaryButton,
+} from '@/components/ui/design-system'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { CheckCircle } from 'lucide-react'
+import { useToast } from '@/hooks/use-toast'
 
 export default function AdminSettingsPage() {
+  const { toast } = useToast()
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
 
   const [settings, setSettings] = useState({
-    id: '',
     platformName: '',
-    maxEventsPerOrganizer: 10,
+    maxEventsPerOrganizer: '10',
     enableFraudDetection: true,
     requireEmailVerification: true,
     maintenanceMode: false,
@@ -28,78 +34,121 @@ export default function AdminSettingsPage() {
   }, [])
 
   const fetchSettings = async () => {
-    const { data } = await supabase
-      .from('platform_settings')
-      .select('*')
-      .limit(1)
-      .single()
+    try {
+      const res = await fetch('/api/admin/settings', { cache: 'no-store' })
+      const payload = await res.json().catch(() => ({}))
 
-    if (data) {
-      setSettings({
-        id: data.id,
-        platformName: data.platform_name,
-        maxEventsPerOrganizer: data.max_events_per_organizer,
-        enableFraudDetection: data.enable_fraud_detection,
-        requireEmailVerification: data.require_email_verification,
-        maintenanceMode: data.maintenance_mode,
+      if (!res.ok) {
+        throw new Error(payload?.error || 'Failed to load settings')
+      }
+
+      setSettings((prev) => ({
+        ...prev,
+        platformName: payload.platformName ?? '',
+        maxEventsPerOrganizer: String(payload.maxEventsPerOrganizer ?? 10),
+        enableFraudDetection: payload.enableFraudDetection ?? true,
+        requireEmailVerification: payload.requireEmailVerification ?? true,
+        maintenanceMode: payload.maintenanceMode ?? false,
+      }))
+    } catch (error: any) {
+      toast({
+        title: 'Failed to load settings',
+        description: error?.message || 'Try refreshing the page.',
+        variant: 'destructive',
       })
+    } finally {
+      setLoading(false)
     }
-
-    setLoading(false)
   }
 
   const handleSave = async () => {
+    const parsedMaxEvents = Number.parseInt(settings.maxEventsPerOrganizer, 10)
+
+    if (!Number.isInteger(parsedMaxEvents) || parsedMaxEvents <= 0) {
+      toast({
+        title: 'Invalid value',
+        description: 'Max events per organizer must be a positive integer.',
+        variant: 'destructive',
+      })
+      return
+    }
+
+    if (!settings.platformName.trim()) {
+      toast({
+        title: 'Platform name required',
+        description: 'Please enter a platform name before saving.',
+        variant: 'destructive',
+      })
+      return
+    }
+
     setSaving(true)
 
-    const { error } = await supabase
-      .from('platform_settings')
-      .update({
-        platform_name: settings.platformName,
-        max_events_per_organizer: settings.maxEventsPerOrganizer,
-        enable_fraud_detection: settings.enableFraudDetection,
-        require_email_verification: settings.requireEmailVerification,
-        maintenance_mode: settings.maintenanceMode,
-        updated_at: new Date().toISOString(),
+    try {
+      const res = await fetch('/api/admin/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          platformName: settings.platformName,
+          maxEventsPerOrganizer: parsedMaxEvents,
+          enableFraudDetection: settings.enableFraudDetection,
+          requireEmailVerification: settings.requireEmailVerification,
+          maintenanceMode: settings.maintenanceMode,
+        }),
       })
-      .eq('id', settings.id)
 
-    setSaving(false)
+      const payload = await res.json().catch(() => ({}))
 
-    if (!error) {
+      if (!res.ok) {
+        throw new Error(payload?.error || 'Failed to save settings')
+      }
+
       setSaved(true)
+      toast({
+        title: 'Settings updated',
+        description: 'Platform settings were saved successfully.',
+      })
       setTimeout(() => setSaved(false), 3000)
+    } catch (error: any) {
+      toast({
+        title: 'Save failed',
+        description: error?.message || 'Unable to save platform settings.',
+        variant: 'destructive',
+      })
+    } finally {
+      setSaving(false)
     }
   }
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#0B0B0F]">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#F5C044]" />
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="h-12 w-12 animate-spin rounded-full border-4 border-gold/20 border-t-gold" />
       </div>
     )
   }
 
   return (
-    <div className="flex-1 space-y-8 p-8 text-white max-w-2xl">
+    <div className="max-w-2xl flex-1 space-y-6 p-4 text-foreground md:space-y-8 md:p-8">
       <div>
-        <h1 className="text-3xl font-bold">Platform Settings</h1>
-        <p className="text-neutral-400">
+        <h1 className="text-2xl md:text-3xl font-bold">Platform Settings</h1>
+        <p className="mt-1 text-muted-foreground">
           Configure core platform behavior and security.
         </p>
       </div>
 
-      <Card className="bg-[#111118] border-white/5">
-        <CardHeader>
-          <CardTitle>General Settings</CardTitle>
-          <CardDescription>
+      <DSCard className="p-0">
+        <DSCardHeader>
+          <DSCardTitle>General Settings</DSCardTitle>
+          <DSCardDescription>
             Basic platform configuration
-          </CardDescription>
-        </CardHeader>
+          </DSCardDescription>
+        </DSCardHeader>
 
-        <CardContent className="space-y-6">
+        <DSCardContent className="space-y-6">
           <div>
             <Label>Platform Name</Label>
-            <Input
+            <DSInput
               value={settings.platformName}
               onChange={(e) =>
                 setSettings({ ...settings, platformName: e.target.value })
@@ -110,23 +159,24 @@ export default function AdminSettingsPage() {
 
           <div>
             <Label>Max Events Per Organizer</Label>
-            <Input
+            <DSInput
               type="number"
               value={settings.maxEventsPerOrganizer}
+              min="1"
               onChange={(e) =>
                 setSettings({
                   ...settings,
-                  maxEventsPerOrganizer: parseInt(e.target.value),
+                  maxEventsPerOrganizer: e.target.value,
                 })
               }
               className="mt-2"
             />
           </div>
 
-          <div className="flex items-center justify-between pt-4 border-t border-white/5">
+          <div className="flex items-center justify-between border-t border-border pt-4">
             <div>
               <Label>Maintenance Mode</Label>
-              <p className="text-sm text-neutral-400">
+              <p className="text-sm text-muted-foreground">
                 Temporarily disable platform access
               </p>
             </div>
@@ -137,22 +187,22 @@ export default function AdminSettingsPage() {
               }
             />
           </div>
-        </CardContent>
-      </Card>
+        </DSCardContent>
+      </DSCard>
 
-      <Card className="bg-[#111118] border-white/5">
-        <CardHeader>
-          <CardTitle>Security Settings</CardTitle>
-          <CardDescription>
+      <DSCard className="p-0">
+        <DSCardHeader>
+          <DSCardTitle>Security Settings</DSCardTitle>
+          <DSCardDescription>
             Platform security configuration
-          </CardDescription>
-        </CardHeader>
+          </DSCardDescription>
+        </DSCardHeader>
 
-        <CardContent className="space-y-6">
+        <DSCardContent className="space-y-6">
           <div className="flex items-center justify-between">
             <div>
               <Label>Fraud Detection</Label>
-              <p className="text-sm text-neutral-400">
+              <p className="text-sm text-muted-foreground">
                 Enable IP & device tracking
               </p>
             </div>
@@ -164,11 +214,11 @@ export default function AdminSettingsPage() {
             />
           </div>
 
-          <div className="flex items-center justify-between pt-4 border-t border-white/5">
+          <div className="flex items-center justify-between">
             <div>
               <Label>Email Verification Required</Label>
-              <p className="text-sm text-neutral-400">
-                Require email verification for new users
+              <p className="text-sm text-muted-foreground">
+                Require verified emails for account actions
               </p>
             </div>
             <Switch
@@ -178,17 +228,17 @@ export default function AdminSettingsPage() {
               }
             />
           </div>
-        </CardContent>
-      </Card>
+        </DSCardContent>
+      </DSCard>
 
-      <Button
+      <DSPrimaryButton
         onClick={handleSave}
         disabled={saving}
-        className="gap-2 bg-gradient-to-r from-[#F5C044] to-[#D9A92E] text-black"
+        className="w-full md:w-auto min-h-11 gap-2 rounded-xl"
       >
         {saved && <CheckCircle className="w-4 h-4" />}
-        {saving ? 'Saving...' : saved ? 'Saved' : 'Save Settings'}
-      </Button>
+        {saving ? 'Saving...' : saved ? 'Saved!' : 'Save Settings'}
+      </DSPrimaryButton>
     </div>
   )
 }

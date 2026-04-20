@@ -1,5 +1,6 @@
-import { createClient } from '@supabase/supabase-js'
+import { createClient as createAdminSupabaseClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
+import { createClient as createServerClient } from '@/lib/supabase/server'
 
 // Admin client for creating users
 const getAdminClient = () => {
@@ -10,11 +11,37 @@ const getAdminClient = () => {
     throw new Error('Missing Supabase environment variables')
   }
 
-  return createClient(url, serviceKey)
+  return createAdminSupabaseClient(url, serviceKey)
 }
 
 export async function POST(request: NextRequest) {
   try {
+    // Require both development mode and an explicit feature flag for safer production deployments.
+    if (process.env.NODE_ENV !== 'development' || process.env.ALLOW_TEST_USER_SETUP !== 'true') {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+
+    const sessionClient = await createServerClient()
+
+    const {
+      data: { user },
+      error: authError,
+    } = await sessionClient.auth.getUser()
+
+    if (authError || !user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const { data: actor, error: actorError } = await sessionClient
+      .from('users')
+      .select('role')
+      .eq('id', user.id)
+      .maybeSingle()
+
+    if (actorError || actor?.role !== 'admin') {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+
     const admin = getAdminClient()
 
     // Test users to create
@@ -32,27 +59,6 @@ export async function POST(request: NextRequest) {
         role: 'organizer',
         firstName: 'Organizer',
         lastName: 'Tester',
-      },
-      {
-        email: 'voter1@blakvote.test',
-        password: 'voter123456',
-        role: 'voter',
-        firstName: 'Voter',
-        lastName: 'One',
-      },
-      {
-        email: 'voter2@blakvote.test',
-        password: 'voter123456',
-        role: 'voter',
-        firstName: 'Voter',
-        lastName: 'Two',
-      },
-      {
-        email: 'voter3@blakvote.test',
-        password: 'voter123456',
-        role: 'voter',
-        firstName: 'Voter',
-        lastName: 'Three',
       },
     ]
 
@@ -101,7 +107,8 @@ export async function POST(request: NextRequest) {
           email: user.email,
           success: true,
           userId: authUser.user.id,
-          password: user.password,
+          // Do not return plaintext credentials in API responses.
+          password: '[REDACTED]',
         })
       } catch (error: any) {
         results.push({

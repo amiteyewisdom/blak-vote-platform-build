@@ -10,23 +10,17 @@ export interface SidebarNavProps {
     href: string
     icon: LucideIcon
   }>
+  onNavigate?: () => void
 }
 
-export function SidebarNav({ items }: SidebarNavProps) {
+export function SidebarNav({ items, onNavigate }: SidebarNavProps) {
   const pathname = usePathname()
 
   return (
     <nav className="flex flex-col gap-2">
-
-      {/* Brand */}
-      <div className="mb-8 px-3">
-        <h2 className="text-2xl font-bold tracking-wide bg-gradient-to-r from-[#F5C044] to-[#D9A92E] bg-clip-text text-transparent">
-          BlakVote
-        </h2>
-        <p className="text-xs text-white/40 mt-1 tracking-wider">
-          ORGANIZER PANEL
-        </p>
-      </div>
+      <p className="mb-5 px-4 text-xs font-medium uppercase tracking-[0.24em] text-muted-foreground">
+        Navigation
+      </p>
 
       {items.map((item) => {
         const Icon = item.icon
@@ -36,34 +30,32 @@ export function SidebarNav({ items }: SidebarNavProps) {
           <Link
             key={item.href}
             href={item.href}
-            className={`
-              relative flex items-center gap-3 px-4 py-3 rounded-xl
-              transition-all duration-300 group
-              ${
-                isActive
-                  ? 'bg-[#141827] border border-[#F5C044]/30 shadow-[0_0_20px_rgba(245,192,68,0.15)]'
-                  : 'hover:bg-white/5'
-              }
-            `}
+            onClick={onNavigate}
+            aria-current={isActive ? 'page' : undefined}
+            className={
+              `relative group flex items-center gap-3 rounded-xl px-4 py-3.5 transition-all duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background ` +
+              (isActive
+                ? 'border border-gold/30 bg-surface-card shadow-[0_0_20px_hsl(var(--gold)/0.15)]'
+                : 'hover:bg-muted/60')
+            }
           >
-            {/* Active gold bar */}
             {isActive && (
-              <span className="absolute left-0 top-2 bottom-2 w-1 rounded-r-full bg-gradient-to-b from-[#F5C044] to-[#D9A92E]" />
+              <span className="absolute bottom-2 left-0 top-2 w-1 rounded-r-full bg-gradient-to-b from-gold to-gold-deep" />
             )}
 
             <Icon
-              className={`w-5 h-5 transition-all duration-300 ${
+              className={`h-5 w-5 transition-all duration-300 ${
                 isActive
-                  ? 'text-[#F5C044]'
-                  : 'text-white/50 group-hover:text-white'
+                  ? 'text-gold'
+                  : 'text-muted-foreground group-hover:text-foreground'
               }`}
             />
 
             <span
               className={`text-sm tracking-wide transition-all duration-300 ${
                 isActive
-                  ? 'text-white font-semibold'
-                  : 'text-white/60 group-hover:text-white'
+                  ? 'font-semibold text-foreground'
+                  : 'text-foreground/70 group-hover:text-foreground'
               }`}
             >
               {item.label}

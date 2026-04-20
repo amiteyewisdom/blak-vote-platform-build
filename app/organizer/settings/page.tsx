@@ -1,10 +1,15 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { supabase } from '@/lib/supabaseClient'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
+import {
+  DSCard,
+  DSCardContent,
+  DSCardDescription,
+  DSCardHeader,
+  DSCardTitle,
+  DSInput,
+  DSPrimaryButton,
+} from '@/components/ui/design-system'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { CheckCircle } from 'lucide-react'
@@ -23,136 +28,151 @@ export default function OrganizerSettingsPage() {
     enable_public_results: false,
   })
 
-  // ✅ Fetch existing settings
   useEffect(() => {
     const fetchSettings = async () => {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession()
+      try {
+        const res = await fetch('/api/organizer/settings', { cache: 'no-store' })
+        const data = await res.json().catch(() => ({}))
 
-      if (!session?.user) return
+        if (!res.ok) {
+          throw new Error(data?.error || 'Failed to load organizer settings')
+        }
 
-      const { data, error } = await supabase
-        .from('users')
-        .select(
-          'organization_name, contact_email, enable_notifications, enable_public_results'
-        )
-        .eq('id', session.user.id)
-        .single()
-
-      if (!error && data) {
         setSettings({
           organization_name: data.organization_name || '',
           contact_email: data.contact_email || '',
           enable_notifications: data.enable_notifications ?? true,
           enable_public_results: data.enable_public_results ?? false,
         })
+      } catch (error: any) {
+        toast({
+          title: 'Failed to load settings',
+          description: error?.message || 'Please refresh and try again.',
+          variant: 'destructive',
+        })
+      } finally {
+        setLoading(false)
       }
-
-      setLoading(false)
     }
 
     fetchSettings()
   }, [])
 
-  // ✅ Save to Supabase
   const handleSave = async () => {
-    setSaving(true)
-
-    const {
-      data: { session },
-    } = await supabase.auth.getSession()
-
-    if (!session?.user) return
-
-    const { error } = await supabase
-      .from('users')
-      .update(settings)
-      .eq('id', session.user.id)
-
-    if (error) {
+    if (!settings.organization_name.trim()) {
       toast({
-        title: 'Save failed',
-        description: error.message,
+        title: 'Organization name required',
+        description: 'Please enter your organization name before saving.',
         variant: 'destructive',
       })
-      setSaving(false)
       return
     }
 
-    setSaved(true)
-    toast({
-      title: 'Settings updated',
-      description: 'Organization settings saved successfully.',
-    })
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    if (!emailRegex.test(settings.contact_email.trim())) {
+      toast({
+        title: 'Invalid contact email',
+        description: 'Please enter a valid email address.',
+        variant: 'destructive',
+      })
+      return
+    }
 
-    setTimeout(() => setSaved(false), 3000)
-    setSaving(false)
+    setSaving(true)
+
+    try {
+      const res = await fetch('/api/organizer/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(settings),
+      })
+
+      const payload = await res.json().catch(() => ({}))
+
+      if (!res.ok) {
+        throw new Error(payload?.error || 'Failed to save organizer settings')
+      }
+
+      setSaved(true)
+      toast({
+        title: 'Settings updated',
+        description: 'Organization settings saved successfully.',
+      })
+      setTimeout(() => setSaved(false), 3000)
+    } catch (error: any) {
+      toast({
+        title: 'Save failed',
+        description: error?.message || 'Unable to save settings.',
+        variant: 'destructive',
+      })
+    } finally {
+      setSaving(false)
+    }
   }
 
   if (loading) {
-    return <div className="p-8 text-white">Loading settings...</div>
+    return <div className="p-8 text-foreground">Loading settings...</div>
   }
 
   return (
-    <div className="flex-1 p-10 max-w-3xl mx-auto space-y-10">
+    <div className="mx-auto flex-1 max-w-3xl space-y-10 p-10 text-foreground">
       <div className="space-y-2">
         <h1 className="text-3xl font-bold">Organization Settings</h1>
-        <p className="text-neutral-400">
+        <p className="text-muted-foreground">
           Manage your organization's profile and preferences
         </p>
       </div>
 
       <div className="space-y-6">
         {/* Organization Info */}
-        <Card className="card-premium">
-          <CardHeader>
-            <CardTitle>Organization Information</CardTitle>
-            <CardDescription>
+        <DSCard className="p-0">
+          <DSCardHeader>
+            <DSCardTitle>Organization Information</DSCardTitle>
+            <DSCardDescription>
               Your organization's basic details
-            </CardDescription>
-          </CardHeader>
+            </DSCardDescription>
+          </DSCardHeader>
 
-          <CardContent className="space-y-6">
+          <DSCardContent className="space-y-6">
             <div>
               <Label>Organization Name</Label>
-              <Input
+              <DSInput
                 value={settings.organization_name}
                 onChange={(e) =>
                   setSettings({ ...settings, organization_name: e.target.value })
                 }
-                className="mt-2 bg-[#181822] border-white/10"
+                className="mt-2"
               />
             </div>
 
             <div>
               <Label>Contact Email</Label>
-              <Input
+              <DSInput
                 type="email"
                 value={settings.contact_email}
                 onChange={(e) =>
                   setSettings({ ...settings, contact_email: e.target.value })
                 }
-                className="mt-2 bg-[#181822] border-white/10"
+                className="mt-2"
               />
             </div>
-          </CardContent>
-        </Card>
+          </DSCardContent>
+        </DSCard>
 
         {/* Preferences */}
-        <Card className="card-premium">
-          <CardHeader>
-            <CardTitle>Preferences</CardTitle>
-            <CardDescription>
+        <DSCard className="p-0">
+          <DSCardHeader>
+            <DSCardTitle>Preferences</DSCardTitle>
+            <DSCardDescription>
               Configure your event preferences
-            </CardDescription>
-          </CardHeader>
+            </DSCardDescription>
+          </DSCardHeader>
 
-          <CardContent className="space-y-6">
+          <DSCardContent className="space-y-6">
             <div className="flex items-center justify-between">
               <div>
                 <Label>Event Notifications</Label>
-                <p className="text-sm text-neutral-400 mt-1">
+                <p className="mt-1 text-sm text-muted-foreground">
                   Receive notifications about voting activity
                 </p>
               </div>
@@ -164,10 +184,10 @@ export default function OrganizerSettingsPage() {
               />
             </div>
 
-            <div className="flex items-center justify-between pt-4 border-t border-white/10">
+            <div className="flex items-center justify-between border-t border-border pt-4">
               <div>
                 <Label>Public Results</Label>
-                <p className="text-sm text-neutral-400 mt-1">
+                <p className="mt-1 text-sm text-muted-foreground">
                   Allow the public to view voting results
                 </p>
               </div>
@@ -178,19 +198,19 @@ export default function OrganizerSettingsPage() {
                 }
               />
             </div>
-          </CardContent>
-        </Card>
+          </DSCardContent>
+        </DSCard>
 
         {/* Save Button */}
         <div className="flex gap-2">
-          <Button
+          <DSPrimaryButton
             onClick={handleSave}
             disabled={saving}
-            className="btn-primary gap-2"
+            className="gap-2"
           >
             {saved && <CheckCircle className="w-4 h-4" />}
             {saving ? 'Saving...' : saved ? 'Saved' : 'Save Settings'}
-          </Button>
+          </DSPrimaryButton>
         </div>
       </div>
     </div>

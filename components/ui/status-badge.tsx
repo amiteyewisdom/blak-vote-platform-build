@@ -3,13 +3,13 @@ import { cva, type VariantProps } from 'class-variance-authority'
 import { cn } from '@/lib/utils'
 
 const statusVariants = cva(
-  'inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold shadow-sm',
+  'inline-flex items-center rounded-full border px-3 py-1 text-sm font-semibold shadow-sm',
   {
     variants: {
       variant: {
-        draft: 'bg-neutral-800 text-muted-foreground',
-        published: 'bg-gradient-to-r from-[hsl(var(--gold))] to-[hsl(var(--gold-2))] text-black',
-        closed: 'bg-destructive text-destructive-foreground',
+        draft: 'border-border bg-secondary text-secondary-foreground',
+        pending: 'border-gold/30 bg-gradient-to-r from-gold to-gold-deep text-gold-foreground',
+        closed: 'border-destructive/30 bg-destructive/15 text-destructive',
       },
     },
     defaultVariants: {

@@ -1,99 +1,56 @@
 import { NextRequest, NextResponse } from 'next/server'
-import axios from 'axios'
-import { createClient } from '@supabase/supabase-js'
-
-function getSupabaseClient() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SECRET_KEY!
-  )
-}
+import { paymentService } from '@/lib/payment-service'
+import { extractClientIp, checkRateLimit } from '@/lib/server-security'
 
 export async function POST(request: NextRequest) {
   try {
+    // =========================================================================
+    // CRITICAL FIX #1: Rate limiting on payment initialization
+    // Prevents spam/abuse of payment endpoint
+    // =========================================================================
+    const ipAddress = extractClientIp(request)
+    
+    // Rate limit per IP: 20 payment init attempts per minute
+    const ipLimit = checkRateLimit(`payment:init:ip:${ipAddress}`, 20, 60 * 1000)
+    if (!ipLimit.allowed) {
+      return NextResponse.json(
+        { error: 'Too many payment attempts. Please try again in a few minutes.' },
+        {
+          status: 429,
+          headers: { 'Retry-After': String(Math.ceil(ipLimit.retryAfterMs / 1000)) },
+        }
+      )
+    }
+
     const body = await request.json()
-    const { eventId, candidateId, quantity, phone } = body
+    const email = body.email || body.buyerEmail
 
-    if (!eventId || !candidateId || !quantity) {
-      return NextResponse.json(
-        { error: 'Missing required fields' },
-        { status: 400 }
-      )
-    }
-
-    const supabase = getSupabaseClient()
-
-    // 1️⃣ Get event
-    const { data: event, error: eventError } = await supabase
-      .from('events')
-      .select('id, title, vote_price, status')
-      .eq('id', eventId)
-      .single()
-
-    if (eventError || !event) {
-      return NextResponse.json(
-        { error: 'Event not found' },
-        { status: 404 }
-      )
-    }
-
-    if (event.status !== 'published') {
-      return NextResponse.json(
-        { error: 'Voting is not active for this event' },
-        { status: 403 }
-      )
-    }
-
-    // 2️⃣ Get candidate
-    const { data: candidate, error: candidateError } = await supabase
-      .from('candidates')
-      .select('id, name')
-      .eq('id', candidateId)
-      .eq('event_id', eventId)
-      .single()
-
-    if (candidateError || !candidate) {
-      return NextResponse.json(
-        { error: 'Candidate not found' },
-        { status: 404 }
-      )
-    }
-
-    // 3️⃣ Calculate total amount server-side
-    const totalAmount = event.vote_price * quantity
-
-    const reference = crypto.randomUUID()
-
-    // 4️⃣ Initialize Paystack
-    const paystackResponse = await axios.post(
-      'https://api.paystack.co/transaction/initialize',
-      {
-        email: `${phone}@blakvote.local`, // temporary email for guests
-        amount: totalAmount * 100, // convert to kobo
-        reference,
-        callback_url: `${process.env.NEXT_PUBLIC_BASE_URL}/payment/success`,
-        metadata: {
-          eventId,
-          candidateId,
-          quantity,
-          phone,
-          vote_price: event.vote_price
-        }
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}`,
-          'Content-Type': 'application/json'
-        }
+    // Rate limit per email: 5 payment init attempts per hour
+    if (email) {
+      const emailNormalized = String(email).toLowerCase().trim()
+      const emailLimit = checkRateLimit(`payment:init:email:${emailNormalized}`, 5, 3600 * 1000)
+      if (!emailLimit.allowed) {
+        return NextResponse.json(
+          { error: 'Too many payment attempts with this email. Please try again later.' },
+          {
+            status: 429,
+            headers: { 'Retry-After': String(Math.ceil(emailLimit.retryAfterMs / 1000)) },
+          }
+        )
       }
-    )
+    }
 
-    return NextResponse.json(paystackResponse.data.data)
+    // Log payment initialization for fraud monitoring
+    console.log(`[PAYMENT_INIT] IP: ${ipAddress}, Email: ${email ? 'present' : 'none'}, Timestamp: ${new Date().toISOString()}`)
+
+    const result = await paymentService.initiatePayment(body)
+    return NextResponse.json(result.body, { status: result.status })
 
   } catch (error: any) {
     console.error(
       'Paystack initialize error:',
-      error.response?.data || error.message
+      error.message,
+      { timestamp: new Date().toISOString() }
     )
 
     return NextResponse.json(

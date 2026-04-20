@@ -7,19 +7,123 @@
 ================================ */
 
 :root {
-  --bg-primary: #0B0B0F;
-  --bg-deep: #090B14;
+  --bg-primary: #f5f7fb;
+  --bg-deep: #eef2f8;
+  --bg-card: #ffffff;
+  --bg-card-elevated: #e9edf5;
+
+  --border-soft: rgba(15, 23, 42, 0.1);
+  --border-strong: rgba(217, 169, 46, 0.28);
+
+  --text-primary: #111827;
+  --text-secondary: #64748b;
+
+  --background: 220 33% 98%;
+  --foreground: 224 28% 12%;
+  --card: 0 0% 100%;
+  --card-foreground: 224 28% 12%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 224 28% 12%;
+  --primary: 43 90% 61%;
+  --primary-foreground: 225 25% 8%;
+  --secondary: 220 27% 94%;
+  --secondary-foreground: 224 28% 16%;
+  --muted: 220 24% 92%;
+  --muted-foreground: 218 15% 42%;
+  --accent: 43 90% 61%;
+  --accent-foreground: 225 25% 8%;
+  --destructive: 0 72% 51%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 220 18% 84%;
+  --input: 220 18% 84%;
+  --ring: 43 90% 61%;
+  --surface: 220 30% 96%;
+  --surface-card: 0 0% 100%;
+  --surface-elevated: 220 26% 92%;
+  --gold: 43 90% 61%;
+  --gold-deep: 42 69% 52%;
+  --gold-2: 42 69% 52%;
+  --gold-foreground: 225 25% 8%;
+  --success: 160 84% 39%;
+  --warning: 39 93% 56%;
+  --legacy-bg-base: 220 33% 98%;
+  --legacy-bg-surface: 220 30% 96%;
+  --legacy-bg-card: 0 0% 100%;
+  --legacy-bg-elevated: 220 26% 92%;
+  --legacy-bg-input: 220 27% 94%;
+  --radius: 1rem;
+
+  --font-display: 'Manrope', 'Segoe UI', sans-serif;
+  --font-body: 'Inter', 'Segoe UI', sans-serif;
+  --font-mono: 'JetBrains Mono', 'Consolas', monospace;
+
+  --type-xs: 0.75rem;
+  --type-sm: 0.875rem;
+  --type-base: 1rem;
+  --type-lg: 1.125rem;
+  --type-xl: 1.25rem;
+  --type-2xl: 1.5rem;
+  --type-3xl: 1.875rem;
+  --type-4xl: 2.25rem;
+
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.25rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --space-10: 2.5rem;
+  --space-12: 3rem;
+  --space-14: 3.5rem;
+  --space-16: 4rem;
+}
+
+.dark {
+  --bg-primary: #0b0b0f;
+  --bg-deep: #090b14;
   --bg-card: #121320;
-  --bg-card-elevated: #17182B;
+  --bg-card-elevated: #17182b;
 
-  --border-soft: rgba(255,255,255,0.06);
-  --border-strong: rgba(245,192,68,0.25);
+  --border-soft: rgba(255, 255, 255, 0.08);
+  --border-strong: rgba(245, 192, 68, 0.25);
 
-  --gold: #F5C044;
-  --gold-deep: #D9A92E;
+  --text-primary: #ffffff;
+  --text-secondary: #9ca3af;
 
-  --text-primary: #FFFFFF;
-  --text-secondary: #9CA3AF;
+  --background: 240 18% 6%;
+  --foreground: 0 0% 100%;
+  --card: 240 16% 10%;
+  --card-foreground: 0 0% 100%;
+  --popover: 240 16% 10%;
+  --popover-foreground: 0 0% 100%;
+  --primary: 43 90% 61%;
+  --primary-foreground: 225 25% 8%;
+  --secondary: 240 13% 16%;
+  --secondary-foreground: 0 0% 100%;
+  --muted: 240 11% 18%;
+  --muted-foreground: 217 15% 65%;
+  --accent: 43 90% 61%;
+  --accent-foreground: 225 25% 8%;
+  --destructive: 0 75% 58%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 240 10% 22%;
+  --input: 240 10% 22%;
+  --ring: 43 90% 61%;
+  --surface: 240 15% 9%;
+  --surface-card: 240 16% 10%;
+  --surface-elevated: 240 16% 14%;
+  --gold: 43 90% 61%;
+  --gold-deep: 42 69% 52%;
+  --gold-2: 42 69% 52%;
+  --gold-foreground: 225 25% 8%;
+  --success: 160 84% 39%;
+  --warning: 39 93% 56%;
+  --legacy-bg-base: 240 18% 6%;
+  --legacy-bg-surface: 240 15% 9%;
+  --legacy-bg-card: 240 16% 10%;
+  --legacy-bg-elevated: 240 16% 14%;
+  --legacy-bg-input: 240 13% 16%;
 }
 
 /* ===============================
@@ -27,8 +131,79 @@
 ================================ */
 
 body {
-  background: var(--bg-primary);
-  color: var(--text-primary);
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+  font-family: var(--font-body);
+  transition: background-color 0.2s ease, color 0.2s ease;
+  width: 100%;
+  overflow-x: hidden;
+}
+
+html {
+  color-scheme: light;
+  width: 100%;
+  overflow-x: hidden;
+}
+
+html.dark {
+  color-scheme: dark;
+}
+
+.type-display {
+  font-family: var(--font-display);
+  font-size: var(--type-4xl);
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+  font-weight: 700;
+}
+
+.type-heading {
+  font-family: var(--font-display);
+  font-size: var(--type-2xl);
+  line-height: 1.2;
+  font-weight: 600;
+}
+
+.type-body {
+  font-family: var(--font-body);
+  font-size: var(--type-base);
+  line-height: 1.5;
+}
+
+.type-caption {
+  font-family: var(--font-body);
+  font-size: var(--type-sm);
+  line-height: 1.4;
+}
+
+/* ===============================
+   LUX CARD (base <Card> component)
+================================ */
+
+.lux-card {
+  background: hsl(var(--card));
+  border-radius: 16px;
+  border: 1px solid hsl(var(--border) / 0.7);
+  box-shadow: 0 12px 32px hsl(var(--foreground) / 0.08), 0 2px 8px hsl(var(--foreground) / 0.05);
+  overflow: hidden;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.lux-card:hover {
+  border-color: hsl(var(--gold) / 0.35);
+  box-shadow: 0 20px 44px hsl(var(--foreground) / 0.12), 0 4px 12px hsl(var(--foreground) / 0.08);
+}
+
+/* ===============================
+   GLASS (glassmorphism overlay)
+================================ */
+
+.glass {
+  background: hsl(var(--card) / 0.82);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid hsl(var(--border) / 0.7);
+  box-shadow: 0 10px 30px hsl(var(--foreground) / 0.1);
 }
 
 /* ===============================
@@ -36,53 +211,96 @@ body {
 ================================ */
 
 .card-premium {
-  background: var(--bg-card);
-  border-radius: 20px;
-  border: 1px solid var(--border-soft);
+  background: hsl(var(--card));
+  border-radius: 16px;
+  border: 1px solid hsl(var(--border) / 0.7);
   padding: 24px;
+  box-shadow: 0 12px 32px hsl(var(--foreground) / 0.08), 0 2px 8px hsl(var(--foreground) / 0.05);
   transition: all 0.25s ease;
 }
 
 .card-premium:hover {
-  border-color: var(--border-strong);
-  transform: translateY(-4px);
-  box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+  border-color: hsl(var(--gold) / 0.28);
+  box-shadow: 0 18px 40px hsl(var(--foreground) / 0.12);
 }
 
 /* ===============================
-   PRIMARY BUTTON
+   PRIMARY BUTTON (raw HTML usage)
 ================================ */
 
 .btn-primary {
-  background: linear-gradient(135deg, var(--gold), var(--gold-deep));
-  color: black;
-  padding: 10px 22px;
-  border-radius: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: linear-gradient(135deg, hsl(var(--gold)), hsl(var(--gold-deep)));
+  color: hsl(var(--gold-foreground));
+  padding: 11px 24px;
+  border-radius: 12px;
   font-weight: 600;
-  transition: all 0.25s ease;
+  font-size: 1rem;
+  border: none;
+  cursor: pointer;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+  transition: all 0.2s ease;
 }
 
-.btn-primary:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 0 30px rgba(245,192,68,0.4);
+.btn-primary:hover:not(:disabled) {
+  filter: brightness(1.08);
+  box-shadow: 0 4px 20px hsl(var(--gold) / 0.32);
+}
+
+.btn-primary:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+.btn-primary:focus-visible {
+  outline: 2px solid hsl(var(--gold));
+  outline-offset: 2px;
+}
+
+.btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 /* ===============================
-   SECONDARY BUTTON
+   SECONDARY BUTTON (raw HTML usage)
 ================================ */
 
 .btn-secondary {
-  background: transparent;
-  border: 1px solid var(--border-soft);
-  color: var(--text-primary);
-  padding: 10px 18px;
-  border-radius: 14px;
-  transition: all 0.25s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: hsl(var(--secondary));
+  color: hsl(var(--secondary-foreground));
+  padding: 11px 24px;
+  border-radius: 12px;
+  font-weight: 600;
+  font-size: 1rem;
+  border: 1px solid hsl(var(--border));
+  cursor: pointer;
+  transition: all 0.2s ease;
 }
 
-.btn-secondary:hover {
-  border-color: var(--gold);
-  color: var(--gold);
+.btn-secondary:hover:not(:disabled) {
+  border-color: hsl(var(--gold) / 0.4);
+  background: hsl(var(--muted));
+}
+
+.btn-secondary:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+.btn-secondary:focus-visible {
+  outline: 2px solid hsl(var(--gold));
+  outline-offset: 2px;
+}
+
+.btn-secondary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 /* ===============================
@@ -90,9 +308,83 @@ body {
 ================================ */
 
 [data-state="checked"] {
-  background-color: var(--gold) !important;
+  background-color: hsl(var(--gold)) !important;
 }
 
 [data-state="checked"] span {
   background-color: black !important;
+}
+
+/* ===============================
+   SMOOTH ANIMATIONS & TRANSITIONS
+================================ */
+
+* {
+  transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+}
+
+/* Gold accent hover effects */
+a:not(.no-transition) {
+  position: relative;
+}
+
+a:not(.no-transition)::after {
+  content: '';
+  position: absolute;
+  bottom: -2px;
+  left: 0;
+  width: 0;
+  height: 2px;
+  background: hsl(var(--gold));
+  transition: width 0.3s ease;
+}
+
+a:not(.no-transition):hover::after {
+  width: 100%;
+}
+
+/* Smooth fade animations */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideInFromLeft {
+  from {
+    opacity: 0;
+    transform: translateX(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes slideInFromRight {
+  from {
+    opacity: 0;
+    transform: translateX(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.fade-in {
+  animation: fadeIn 0.4s ease forwards;
+}
+
+.slide-in-left {
+  animation: slideInFromLeft 0.4s ease forwards;
+}
+
+.slide-in-right {
+  animation: slideInFromRight 0.4s ease forwards;
 }

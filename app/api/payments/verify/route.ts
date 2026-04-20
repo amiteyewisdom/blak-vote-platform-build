@@ -1,17 +1,9 @@
 import { NextRequest, NextResponse } from "next/server"
-import axios from "axios"
-import { createClient } from "@supabase/supabase-js"
-
-function getSupabaseClient() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SECRET_KEY!
-  )
-}
+import { paymentService } from '@/lib/payment-service'
 
 export async function POST(request: NextRequest) {
   try {
-    const { reference } = await request.json()
+    const { reference, provider } = await request.json()
 
     if (!reference) {
       return NextResponse.json(
@@ -20,95 +12,48 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const supabase = getSupabaseClient()
+    let verification
+    try {
+      verification = await paymentService.verifyPayment({
+        provider: provider === 'nalo' ? 'nalo' : provider === 'paypal' ? 'paypal' : 'paystack',
+        referenceId: reference,
+      })
+    } catch (error: any) {
+      const message = error?.message || 'Unable to verify payment with provider'
+      const lowered = String(message).toLowerCase()
 
-    // 🔥 1️⃣ Prevent double processing
-    const { data: existingVote } = await supabase
-      .from("votes")
-      .select("id")
-      .eq("transaction_id", reference)
-      .single()
+      const status =
+        lowered.includes('not found') || lowered.includes('invalid')
+          ? 404
+          : lowered.includes('unable to verify') || lowered.includes('timed out') || lowered.includes('network')
+            ? 502
+            : 400
 
-    if (existingVote) {
       return NextResponse.json(
-        { error: "Transaction already processed" },
+        { error: message },
+        { status }
+      )
+    }
+
+    // Never run vote creation flow unless payment is explicitly successful.
+    if (!['success', 'paid', 'completed', 'processed'].includes(String(verification.status || '').toLowerCase())) {
+      return NextResponse.json(
+        { error: 'Payment not successful' },
         { status: 400 }
       )
     }
 
-    // 🔥 2️⃣ Verify with Paystack
-    const verifyResponse = await axios.get(
-      `https://api.paystack.co/transaction/verify/${reference}`,
-      {
-        headers: {
-          Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}`
-        }
-      }
-    )
-
-    const data = verifyResponse.data.data
-
-    if (data.status !== "success") {
-      return NextResponse.json(
-        { error: "Payment not successful" },
-        { status: 400 }
-      )
-    }
-
-    const metadata = data.metadata
-
-    if (!metadata?.eventId || !metadata?.candidateId) {
-      return NextResponse.json(
-        { error: "Invalid payment metadata" },
-        { status: 400 }
-      )
-    }
-
-    // 🔥 3️⃣ Re-check event is still published
-    const { data: event } = await supabase
-      .from("events")
-      .select("status")
-      .eq("id", metadata.eventId)
-      .single()
-
-    if (!event || event.status !== "published") {
-      return NextResponse.json(
-        { error: "Voting is closed for this event" },
-        { status: 403 }
-      )
-    }
-
-    // 🔥 4️⃣ Process vote atomically
-    const { error } = await supabase.rpc("process_vote", {
-      p_event_id: metadata.eventId,
-      p_candidate_id: metadata.candidateId,
-      p_quantity: metadata.quantity,
-      p_voter_id: null,
-      p_voter_phone: metadata.phone || null,
-      p_vote_source: "online",
-      p_payment_method: "paystack",
-      p_transaction_id: reference,
-      p_ip_address: null,
-      p_amount_paid: data.amount / 100
-    })
-
-    if (error) {
-      return NextResponse.json(
-        { error: error.message },
-        { status: 400 }
-      )
-    }
-
-    return NextResponse.json({ success: true })
+    const result = await paymentService.handleSuccess(verification)
+    return NextResponse.json(result.body, { status: result.status })
 
   } catch (error: any) {
     console.error(
       "Verification error:",
-      error.response?.data || error.message
+      error.message
     )
 
     return NextResponse.json(
-      { error: "Verification failed" },
+      { error: error?.message || "Verification failed" },
       { status: 500 }
     )
   }

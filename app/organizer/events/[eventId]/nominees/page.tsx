@@ -2,9 +2,10 @@
 
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { supabase } from '@/lib/supabaseClient'
 import { ArrowLeft, Plus, Trash2, Upload } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
+import { DSCard, DSInput, DSPrimaryButton, DSSelect, DSTextarea } from '@/components/ui/design-system'
+import { supabase } from '@/lib/supabaseClient'
 
 export default function NomineesPage() {
   const params = useParams()
@@ -21,32 +22,31 @@ export default function NomineesPage() {
   const [preview, setPreview] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [creating, setCreating] = useState(false)
+  const [reviewingId, setReviewingId] = useState<string | null>(null)
 
   useEffect(() => {
+    if (!eventId || eventId === 'undefined' || eventId === 'null') return
     fetchData()
-  }, [])
+  }, [eventId])
 
   const fetchData = async () => {
-    const { data: catData } = await supabase
-      .from('categories')
-      .select('*')
-      .eq('event_id', eventId)
+    const res = await fetch(`/api/organizer/nominees?eventId=${eventId}`)
+    const payload = await res.json()
 
-    if (catData) setCategories(catData)
+    if (!res.ok) {
+      toast({
+        title: 'Load Failed',
+        description: payload?.error || 'Unable to load nominees',
+        variant: 'destructive',
+      })
+      setLoading(false)
+      return
+    }
 
-    const { data: nomData } = await supabase
-      .from('nominees')
-      .select('*')
-      .eq('event_id', eventId)
-      .order('created_at', { ascending: false })
-
-    if (nomData) setNominees(nomData)
+    setCategories(payload.categories || [])
+    setNominees(payload.nominees || [])
 
     setLoading(false)
-  }
-
-  const generateVotingCode = () => {
-    return 'BV-' + Math.random().toString(36).substring(2, 8).toUpperCase()
   }
 
   const uploadImage = async (file: File) => {
@@ -69,6 +69,15 @@ export default function NomineesPage() {
   }
 
   const handleCreate = async () => {
+    if (!eventId || eventId === 'undefined' || eventId === 'null') {
+      toast({
+        title: 'Error',
+        description: 'Invalid event selected. Please reload this page.',
+        variant: 'destructive',
+      })
+      return
+    }
+
     if (!name.trim() || !categoryId) {
       toast({
         title: 'Validation Error',
@@ -84,21 +93,38 @@ export default function NomineesPage() {
       let imageUrl = null
 
       if (imageFile) {
-        imageUrl = await uploadImage(imageFile)
+        try {
+          imageUrl = await uploadImage(imageFile)
+        } catch (uploadError: any) {
+          toast({
+            title: 'Image upload failed',
+            description: uploadError?.message || 'Continuing without image',
+            variant: 'destructive',
+          })
+          imageUrl = null
+        }
       }
 
-      const votingCode = generateVotingCode()
-
-      const { error } = await supabase.from('nominees').insert({
-        event_id: eventId,
-        category_id: categoryId,
-        name,
-        bio,
-        photo_url: imageUrl,
-        voting_code: votingCode,
+      const res = await fetch('/api/organizer/nominees', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          eventId,
+          nomineeName: name.trim(),
+          categoryId,
+          bio,
+          photoUrl: imageUrl,
+        }),
       })
 
-      if (error) throw error
+      const payload = await res.json()
+
+      if (!res.ok) {
+        const detailMessage = [payload?.error, payload?.details, payload?.hint, payload?.code]
+          .filter(Boolean)
+          .join(' | ')
+        throw new Error(detailMessage || 'Unable to create nominee')
+      }
 
       toast({ title: 'Nominee Created' })
 
@@ -123,16 +149,54 @@ export default function NomineesPage() {
   const handleDelete = async (id: string) => {
     if (!confirm('Delete this nominee?')) return
 
-    await supabase.from('nominees').delete().eq('id', id)
-    setNominees(nominees.filter((n) => n.id !== id))
+    const res = await fetch(`/api/organizer/nominees?id=${id}`, {
+      method: 'DELETE',
+    })
+
+    if (res.ok) {
+      setNominees(nominees.filter((n) => n.id !== id))
+      return
+    }
+
+    const payload = await res.json().catch(() => ({}))
+    toast({
+      title: 'Delete failed',
+      description: payload?.error || 'Unable to delete nominee',
+      variant: 'destructive',
+    })
+  }
+
+  const reviewNomination = async (id: string, approve: boolean) => {
+    setReviewingId(id)
+    const res = await fetch('/api/organizer/nomination', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ nomination_id: id, approve }),
+    })
+
+    if (res.ok) {
+      fetchData()
+      toast({ title: approve ? 'Nomination approved' : 'Nomination declined' })
+    } else {
+      toast({ title: 'Action failed', variant: 'destructive' })
+    }
+
+    setReviewingId(null)
   }
 
   if (loading)
     return (
       <div className="p-12">
-        <div className="h-64 rounded-3xl bg-[#121421] animate-pulse" />
+        <div className="h-64 rounded-3xl bg-surface-card animate-pulse" />
       </div>
     )
+
+  const pendingPublicNominations = nominees.filter(
+    (nominee) => nominee.status === 'pending'
+  )
+  const activeNominees = nominees.filter(
+    (nominee) => nominee.status !== 'pending'
+  )
 
   return (
     <div className="flex-1 p-6 md:p-12 space-y-12">
@@ -141,7 +205,7 @@ export default function NomineesPage() {
       <div>
         <button
           onClick={() => router.back()}
-          className="flex items-center gap-2 text-white/40 hover:text-white mb-6"
+          className="flex items-center gap-2 text-muted-foreground hover:text-foreground mb-6"
         >
           <ArrowLeft size={16} />
           Back
@@ -153,21 +217,21 @@ export default function NomineesPage() {
       </div>
 
       {/* Create Card */}
-      <div className="bg-[#121421] border border-white/5 rounded-3xl p-6 md:p-10 space-y-8">
+      <DSCard className="p-6 md:p-10 space-y-8">
 
         <div className="grid gap-6 md:grid-cols-2">
 
-          <input
+          <DSInput
             placeholder="Nominee Name"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            className="bg-[#0F111A] border border-white/10 rounded-2xl px-6 py-4"
+            className="bg-surface rounded-2xl px-6 h-14"
           />
 
-          <select
+          <DSSelect
             value={categoryId}
             onChange={(e) => setCategoryId(e.target.value)}
-            className="bg-[#0F111A] border border-white/10 rounded-2xl px-6 py-4"
+            className="bg-surface rounded-2xl px-6 h-14"
           >
             <option value="">Select Category</option>
             {categories.map((cat) => (
@@ -175,30 +239,30 @@ export default function NomineesPage() {
                 {cat.name}
               </option>
             ))}
-          </select>
+          </DSSelect>
 
-          <textarea
+          <DSTextarea
             placeholder="Short Bio"
             value={bio}
             onChange={(e) => setBio(e.target.value)}
-            className="bg-[#0F111A] border border-white/10 rounded-2xl px-6 py-4 md:col-span-2"
+            className="bg-surface rounded-2xl px-6 py-4 md:col-span-2"
           />
 
           {/* Image Upload */}
-          <label className="md:col-span-2 bg-[#0F111A] border border-white/10 rounded-2xl p-6 cursor-pointer hover:border-[#F5C044]/40 transition text-center">
+          <label className="md:col-span-2 bg-surface border border-border rounded-2xl p-6 cursor-pointer hover:border-gold/40 transition text-center">
             {preview ? (
               <img
                 src={preview}
                 className="mx-auto w-32 h-32 rounded-full object-cover"
               />
             ) : (
-              <div className="flex flex-col items-center gap-2 text-white/40">
+              <div className="flex flex-col items-center gap-2 text-muted-foreground">
                 <Upload size={20} />
                 Upload Photo
               </div>
             )}
 
-            <input
+            <DSInput
               type="file"
               hidden
               accept="image/*"
@@ -213,26 +277,83 @@ export default function NomineesPage() {
 
         </div>
 
-        <button
+        <DSPrimaryButton
           onClick={handleCreate}
           disabled={creating}
-          className="px-8 py-4 rounded-2xl bg-gradient-to-br from-[#F5C044] to-[#D9A92E] text-black font-semibold"
+          className="px-8 py-4 rounded-2xl"
         >
           <Plus size={16} className="inline mr-2" />
           {creating ? 'Creating…' : 'Create Nominee'}
-        </button>
+        </DSPrimaryButton>
 
-      </div>
+      </DSCard>
+
+      {pendingPublicNominations.length > 0 && (
+        <div className="space-y-4">
+          <h2 className="text-xl font-semibold text-foreground">Pending Public Nominations</h2>
+          <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-3">
+            {pendingPublicNominations.map((nominee) => (
+              <DSCard
+                key={nominee.id}
+                className="p-6 border-yellow-500/30 bg-yellow-500/5"
+              >
+                <div className="flex items-center gap-4 mb-6">
+                  <div className="w-16 h-16 rounded-full overflow-hidden bg-surface">
+                    {nominee.photo_url ? (
+                      <img
+                        src={nominee.photo_url}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : null}
+                  </div>
+
+                  <div>
+                    <div className="text-lg font-semibold">
+                      {nominee.nominee_name}
+                    </div>
+                    <div className="text-xs text-muted-foreground uppercase">Status: {nominee.status || 'pending'}</div>
+                    <div className="text-xs text-yellow-400">Source: Public nomination</div>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => reviewNomination(nominee.id, true)}
+                    disabled={reviewingId === nominee.id}
+                    className="text-emerald-400 text-sm px-3 py-1 rounded-lg border border-emerald-500/30"
+                  >
+                    Approve
+                  </button>
+                  <button
+                    onClick={() => reviewNomination(nominee.id, false)}
+                    disabled={reviewingId === nominee.id}
+                    className="text-yellow-400 text-sm px-3 py-1 rounded-lg border border-yellow-500/30"
+                  >
+                    Decline
+                  </button>
+
+                  <button
+                    onClick={() => handleDelete(nominee.id)}
+                    className="text-red-500 hover:text-red-400 ml-auto"
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </div>
+              </DSCard>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Nominee Grid */}
       <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-3">
-        {nominees.map((nominee) => (
-          <div
+        {activeNominees.map((nominee) => (
+          <DSCard
             key={nominee.id}
-            className="bg-[#121421] border border-white/5 rounded-3xl p-6 hover:border-[#F5C044]/30 transition"
+            className="p-6 hover:border-gold/30 transition"
           >
             <div className="flex items-center gap-4 mb-6">
-              <div className="w-16 h-16 rounded-full overflow-hidden bg-[#0F111A]">
+              <div className="w-16 h-16 rounded-full overflow-hidden bg-surface">
                 {nominee.photo_url ? (
                   <img
                     src={nominee.photo_url}
@@ -243,18 +364,23 @@ export default function NomineesPage() {
 
               <div>
                 <div className="text-lg font-semibold">
-                  {nominee.name}
+                  {nominee.nominee_name}
                 </div>
+                <div className="text-xs text-muted-foreground">Code: {nominee.voting_code || 'N/A'}</div>
+                <div className="text-xs text-muted-foreground uppercase">Status: {nominee.status || 'pending'}</div>
+                <div className="text-xs text-muted-foreground">Source: Organizer</div>
               </div>
             </div>
 
-            <button
-              onClick={() => handleDelete(nominee.id)}
-              className="text-red-500 hover:text-red-400"
-            >
-              <Trash2 size={16} />
-            </button>
-          </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => handleDelete(nominee.id)}
+                className="text-red-500 hover:text-red-400 ml-auto"
+              >
+                <Trash2 size={16} />
+              </button>
+            </div>
+          </DSCard>
         ))}
       </div>
 

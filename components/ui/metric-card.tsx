@@ -1,6 +1,5 @@
 import * as React from 'react'
 import { cn } from '@/lib/utils'
-import { LucideIcon } from 'lucide-react'
 
 export default function MetricCard({
   title,
@@ -14,19 +13,16 @@ export default function MetricCard({
   className?: string
 }) {
   return (
-    <div className={cn('glass rounded-2xl p-5 flex flex-col justify-between', className)}>
-      <div className="flex justify-between items-start">
-        <div>
-          <div className="text-sm text-muted-foreground">{title}</div>
-          <div className="text-2xl font-semibold mt-2">{value}</div>
-        </div>
-
+    <div className={cn('glass flex flex-col gap-3 rounded-2xl p-5', className)}>
+      <div className="flex items-start justify-between">
+        <p className="text-xs font-medium uppercase tracking-widest text-muted-foreground">{title}</p>
         {Icon && (
-          <div className="text-muted-foreground opacity-70">
-            <Icon className="w-6 h-6" />
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+            <Icon className="h-4 w-4" />
           </div>
         )}
       </div>
+      <div className="text-2xl font-bold leading-none text-foreground">{value}</div>
     </div>
   )
 }

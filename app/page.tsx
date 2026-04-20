@@ -5,12 +5,40 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabaseClient'
 import { Button } from '@/components/ui/button'
+import { Card } from '@/components/ui/card'
+import BrandLogo from '@/components/BrandLogo'
+import PublicNav from '@/components/PublicNav'
 import { ArrowRight, CheckCircle, Lock, BarChart3, Users } from 'lucide-react'
 
 export default function Home() {
   const router = useRouter()
-  const [user, setUser] = useState<any>(null)
   const [loading, setLoading] = useState(true)
+  const features = [
+    {
+      icon: Lock,
+      title: 'Military-Grade Security',
+      description:
+        'End-to-end encrypted votes with verification controls designed for regulated, high-trust elections.',
+    },
+    {
+      icon: Users,
+      title: 'Multi-Role Support',
+      description:
+        'Dedicated admin, organizer, and voter journeys with consistent permissions and guardrails.',
+    },
+    {
+      icon: BarChart3,
+      title: 'Real-Time Analytics',
+      description:
+        'Live dashboards surface turnout, revenue, and result movement without overwhelming the operator.',
+    },
+    {
+      icon: CheckCircle,
+      title: 'Fraud Detection',
+      description:
+        'Payment verification, device checks, and operational safeguards reduce abuse without slowing the flow.',
+    },
+  ]
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -41,7 +69,7 @@ export default function Home() {
         } else if (userData?.role === 'organizer') {
           router.push('/organizer')
         } else {
-          router.push('/voter')
+          router.push('/auth/sign-in')
         }
       } catch (error) {
         console.error('[v0] Auth check error:', error)
@@ -55,102 +83,99 @@ export default function Home() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#0B0B0F] flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#F5C044]"></div>
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <div className="h-12 w-12 animate-spin rounded-full border-4 border-gold/20 border-t-gold" />
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-[#0B0B0F] flex flex-col">
-      {/* Header */}
-      <header className="border-b border-white/5 bg-[#121218]/80 backdrop-blur-xl">
-        <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-gradient-to-br from-[#F5C044] to-[#E6B030] rounded-2xl flex items-center justify-center shadow-lg">
-              <span className="text-[#0B0B0F] font-bold text-lg">BV</span>
-            </div>
-            <span className="font-bold text-xl tracking-wide text-white">BlakVote</span>
+    <div className="flex min-h-screen flex-col bg-background text-foreground">
+      <PublicNav
+        actions={
+          <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row">
+            <Button asChild variant="secondary" size="sm" className="w-full sm:w-auto">
+              <Link href="/auth/sign-in">Sign In</Link>
+            </Button>
+            <Button asChild size="sm" className="w-full sm:w-auto">
+              <Link href="/auth/sign-up">Get Started</Link>
+            </Button>
           </div>
-          <div className="flex gap-3">
-            <button className="btn-secondary" onClick={() => router.push('/auth/sign-in')}>Sign In</button>
-            <button className="btn-primary" onClick={() => router.push('/auth/sign-up')}>Get Started</button>
-          </div>
-        </div>
-      </header>
+        }
+      />
 
-      {/* Hero Section */}
-      <section className="flex-1 flex flex-col justify-center items-center relative overflow-hidden py-24">
-        <div className="absolute inset-0 pointer-events-none z-0">
-          <div className="absolute left-1/2 top-0 -translate-x-1/2 w-[700px] h-[700px] bg-gradient-radial from-[#F5C044]/30 via-[#0B0B0F]/80 to-transparent rounded-full blur-3xl opacity-80 animate-pulse-slow" />
+      <section className="relative flex flex-1 items-center overflow-hidden py-24">
+        <div className="pointer-events-none absolute inset-0">
+          <div className="absolute left-1/2 top-0 h-[42rem] w-[42rem] -translate-x-1/2 rounded-full bg-[radial-gradient(circle,hsl(var(--gold)/0.26),transparent_62%)] blur-3xl" />
+          <div className="absolute bottom-0 right-0 h-80 w-80 rounded-full bg-[radial-gradient(circle,hsl(var(--gold)/0.14),transparent_68%)] blur-3xl" />
         </div>
-        <div className="relative z-10 max-w-3xl mx-auto text-center">
-          <h1 className="text-5xl md:text-7xl font-extrabold tracking-tight mb-8 bg-gradient-to-r from-[#F5C044] via-white to-[#E6B030] bg-clip-text text-transparent drop-shadow-lg">
+        <div className="relative z-10 mx-auto max-w-4xl px-4 text-center sm:px-6">
+          <span className="inline-flex rounded-full border border-gold/25 bg-gold/10 px-4 py-2 text-sm font-medium text-gold shadow-sm">
+            Premium digital voting for modern organizations
+          </span>
+          <h1 className="type-display mt-8 bg-gradient-to-r from-gold via-foreground to-gold-deep bg-clip-text text-4xl text-transparent sm:text-5xl md:text-7xl">
             The Future of Digital Voting
           </h1>
-          <p className="text-2xl text-muted mb-10 font-medium">
-            BlakVote is the luxury platform for secure, transparent, and elegant digital voting. Trusted by organizations, awards, and events.
+          <p className="mx-auto mb-ds-8 mt-6 max-w-3xl px-2 text-lg font-medium text-muted-foreground sm:mb-ds-10 sm:text-xl md:text-2xl">
+            BlakVote combines payment integrity, clear governance, and enterprise-grade operator tooling in one coherent platform.
           </p>
-          <div className="flex flex-col sm:flex-row gap-5 justify-center">
-            <button className="btn-primary flex items-center gap-2 text-lg px-8 py-4" onClick={() => router.push('/auth/sign-up')}>
-              Start Voting <ArrowRight className="w-5 h-5" />
-            </button>
-            <button className="btn-secondary flex items-center gap-2 text-lg px-8 py-4" onClick={() => document.getElementById('features')?.scrollIntoView({behavior:'smooth'})}>
+          <div className="flex flex-col justify-center gap-5 sm:flex-row">
+            <Button asChild size="lg" className="text-lg">
+              <Link href="/auth/sign-up">
+                Get Started <ArrowRight className="h-5 w-5" />
+              </Link>
+            </Button>
+            <Button
+              variant="secondary"
+              size="lg"
+              className="text-lg"
+              onClick={() => document.getElementById('features')?.scrollIntoView({ behavior: 'smooth' })}
+            >
               Learn More
-            </button>
+            </Button>
           </div>
         </div>
       </section>
 
-      {/* Features Section */}
-      <section id="features" className="py-24 border-t border-white/5 bg-[#121218]/80">
-        <div className="max-w-5xl mx-auto px-6">
-          <h2 className="text-4xl font-bold text-white text-center mb-14 tracking-tight">Why Choose BlakVote?</h2>
-          <div className="grid md:grid-cols-2 gap-10">
-            <div className="card-premium flex gap-5 items-start">
-              <Lock className="w-8 h-8 text-[#F5C044] flex-shrink-0" />
-              <div>
-                <h3 className="text-xl font-bold mb-2 text-white">Military-Grade Security</h3>
-                <p className="text-muted text-base">End-to-end encrypted votes with blockchain verification for maximum security and transparency.</p>
-              </div>
-            </div>
-            <div className="card-premium flex gap-5 items-start">
-              <Users className="w-8 h-8 text-[#F5C044] flex-shrink-0" />
-              <div>
-                <h3 className="text-xl font-bold mb-2 text-white">Multi-Role Support</h3>
-                <p className="text-muted text-base">Dedicated dashboards for admins, organizers, and voters with role-based access control.</p>
-              </div>
-            </div>
-            <div className="card-premium flex gap-5 items-start">
-              <BarChart3 className="w-8 h-8 text-[#F5C044] flex-shrink-0" />
-              <div>
-                <h3 className="text-xl font-bold mb-2 text-white">Real-Time Analytics</h3>
-                <p className="text-muted text-base">Live result dashboards and comprehensive voting analytics to monitor elections in real-time.</p>
-              </div>
-            </div>
-            <div className="card-premium flex gap-5 items-start">
-              <CheckCircle className="w-8 h-8 text-[#F5C044] flex-shrink-0" />
-              <div>
-                <h3 className="text-xl font-bold mb-2 text-white">Fraud Detection</h3>
-                <p className="text-muted text-base">Advanced fraud detection using IP tracking, device fingerprinting, and voting pattern analysis.</p>
-              </div>
-            </div>
+      <section id="features" className="border-t border-border/70 bg-surface/70 py-16 sm:py-24">
+        <div className="mx-auto max-w-5xl px-4 sm:px-6">
+          <h2 className="mb-10 text-center text-3xl font-bold tracking-tight text-foreground sm:mb-14 sm:text-4xl">
+            Why teams choose BlakVote
+          </h2>
+          <div className="grid gap-6 md:grid-cols-2 md:gap-10">
+            {features.map((feature) => {
+              const Icon = feature.icon
+
+              return (
+                <Card key={feature.title} className="flex gap-5 p-ds-6">
+                  <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-2xl bg-gold/12 text-gold">
+                    <Icon className="h-6 w-6" />
+                  </div>
+                  <div>
+                    <h3 className="mb-2 text-xl font-bold text-card-foreground">{feature.title}</h3>
+                    <p className="text-base text-muted-foreground">{feature.description}</p>
+                  </div>
+                </Card>
+              )
+            })}
           </div>
         </div>
       </section>
 
-      {/* CTA Section */}
-      <section className="py-24">
-        <div className="card-premium max-w-3xl mx-auto text-center p-14">
-          <h2 className="text-4xl font-bold mb-4 text-white tracking-tight">Ready to Get Started?</h2>
-          <p className="text-muted mb-8 text-lg max-w-xl mx-auto">Join thousands of organizations using BlakVote for secure, transparent voting.</p>
-          <button className="btn-primary text-lg px-10 py-4" onClick={() => router.push('/auth/sign-up')}>Create Your Account</button>
-        </div>
+      <section className="py-16 sm:py-24 px-4 sm:px-6">
+        <Card className="mx-auto max-w-3xl p-ds-8 text-center sm:p-ds-14">
+          <h2 className="mb-4 text-3xl font-bold tracking-tight text-card-foreground sm:text-4xl">Ready to run a sharper election?</h2>
+          <p className="mx-auto mb-8 max-w-xl text-lg text-muted-foreground">
+            Launch secure paid or free voting experiences with cleaner operations and clearer participant trust.
+          </p>
+          <Button asChild size="lg" className="text-lg">
+            <Link href="/auth/sign-up">Create Your Account</Link>
+          </Button>
+        </Card>
       </section>
 
-      {/* Footer */}
-      <footer className="border-t border-white/5 bg-[#121218] py-12 mt-auto">
-        <div className="max-w-7xl mx-auto px-6 text-center text-muted">
+      <footer className="mt-auto border-t border-border/70 bg-surface/60 py-12">
+        <div className="mx-auto max-w-7xl px-6 text-center text-muted-foreground">
           <p>&copy; 2026 BlakVote. All rights reserved.</p>
         </div>
       </footer>

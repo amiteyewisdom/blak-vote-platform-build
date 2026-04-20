@@ -1,12 +1,10 @@
 import { NextRequest, NextResponse } from "next/server"
-import crypto from "crypto"
-import { createClient } from "@supabase/supabase-js"
+import { getSupabaseAdminClient, isValidPaystackSignature } from '@/lib/server-security'
+import { paymentService } from '@/lib/payment-service'
 
 function getSupabaseClient() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SECRET_KEY!
-  )
+  // Reuse one admin-client factory to keep credentials consistent across routes.
+  return getSupabaseAdminClient()
 }
 
 export async function POST(request: NextRequest) {
@@ -14,12 +12,8 @@ export async function POST(request: NextRequest) {
     const body = await request.text()
     const signature = request.headers.get("x-paystack-signature")
 
-    const hash = crypto
-      .createHmac("sha512", process.env.PAYSTACK_SECRET_KEY!)
-      .update(body)
-      .digest("hex")
-
-    if (hash !== signature) {
+    // Verify webhook authenticity with a timing-safe signature comparison.
+    if (!isValidPaystackSignature(body, signature)) {
       return NextResponse.json({ error: "Invalid signature" }, { status: 401 })
     }
 
@@ -30,35 +24,31 @@ export async function POST(request: NextRequest) {
     }
 
     const data = event.data
-    const metadata = data.metadata
     const reference = data.reference
 
     const supabase = getSupabaseClient()
+    const { data: existingPayment } = await supabase
+      .from('payments')
+      .select('vote_id, ticket_id')
+      .eq('reference', reference)
+      .maybeSingle()
 
-    // Prevent duplicate processing
-    const { data: existing } = await supabase
-      .from("votes")
-      .select("id")
-      .eq("transaction_id", reference)
-      .single()
-
-    if (existing) {
+    if (existingPayment?.vote_id || existingPayment?.ticket_id) {
       return NextResponse.json({ received: true })
     }
 
-    // 🔥 CALL ATOMIC VOTE FUNCTION
-    await supabase.rpc("process_vote", {
-      p_event_id: metadata.eventId,
-      p_candidate_id: metadata.candidateId,
-      p_quantity: metadata.quantity,
-      p_voter_id: null,
-      p_voter_phone: metadata.phone || null,
-      p_vote_source: "online",
-      p_payment_method: "paystack",
-      p_transaction_id: reference,
-      p_ip_address: null,
-      p_amount_paid: data.amount / 100
+    const result = await paymentService.handleSuccess({
+      provider: 'paystack',
+      paymentMethod: 'paystack',
+      reference,
+      amount: Number(data.amount) / 100,
+      status: data.status,
+      metadata: data.metadata,
     })
+
+    if (!result.ok) {
+      return NextResponse.json(result.body, { status: result.status })
+    }
 
     return NextResponse.json({ received: true })
 

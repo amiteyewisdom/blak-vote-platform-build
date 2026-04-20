@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createClient } from '@supabase/supabase-js';
 import crypto from 'crypto';
+import { createClient as createServerClient } from '@/lib/supabase/server';
+import { ensureEventOwnedByOrganizer, requireRole } from '@/lib/api-auth';
 
 const supabase = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
 
@@ -10,21 +12,51 @@ const codeSchema = z.object({
   id: z.string().min(1),
 });
 
-function generateUniqueCode(prefix: string) {
-  return prefix + '-' + crypto.randomBytes(4).toString('hex');
+function generateUniqueCode() {
+  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let code = '';
+  for (let i = 0; i < 3; i += 1) {
+    code += alphabet[crypto.randomInt(0, alphabet.length)];
+  }
+  return code;
 }
 
 export async function POST(req: Request) {
   try {
+    const sessionClient = await createServerClient();
+
+    const auth = await requireRole(sessionClient, ['admin', 'organizer']);
+    if (!auth.ok) {
+      return auth.response;
+    }
+
     const body = await req.json();
     const parseResult = codeSchema.safeParse(body);
     if (!parseResult.success) {
       return NextResponse.json({ error: 'Invalid input', details: parseResult.error.errors }, { status: 400 });
     }
+
     const { type, id } = parseResult.data;
-    const code = generateUniqueCode(type === 'event' ? 'EV' : 'NM');
-    let table = type === 'event' ? 'events' : 'nominees';
-    const { error } = await supabase.from(table).update({ unique_code: code }).eq('id', id);
+
+    if (type === 'event' && auth.role === 'organizer') {
+      const ownershipError = await ensureEventOwnedByOrganizer(supabase, id, auth.userId);
+      if (ownershipError) {
+        return ownershipError;
+      }
+    }
+
+    const code = generateUniqueCode();
+    const table = type === 'event' ? 'events' : 'nominations';
+    const primaryColumn = type === 'event' ? 'event_code' : 'voting_code';
+    const updatePayload =
+      type === 'event'
+        ? { event_code: code, short_code: code }
+        : { voting_code: code, short_code: code };
+
+    const { error } = await supabase
+      .from(table)
+      .update(updatePayload)
+      .eq('id', id);
     if (error) {
       return NextResponse.json({ error: 'Database error', details: error.message }, { status: 500 });
     }
