@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdminClient } from '@/lib/server-security'
 
-const supabase = getSupabaseAdminClient()
-
 function normalizeTicketCode(input: unknown): string {
   return typeof input === 'string' ? input.trim().toUpperCase() : ''
 }
@@ -13,6 +11,7 @@ function isValidTicketCodeFormat(code: string): boolean {
 
 export async function GET(req: NextRequest) {
   try {
+    const supabase = getSupabaseAdminClient()
     const code = normalizeTicketCode(req.nextUrl.searchParams.get('code'))
 
     if (!code) {
@@ -60,6 +59,7 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
+    const supabase = getSupabaseAdminClient()
     const body = await req.json()
     const code = normalizeTicketCode(body?.code)
 
