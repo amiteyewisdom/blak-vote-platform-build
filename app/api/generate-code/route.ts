@@ -5,7 +5,16 @@ import crypto from 'crypto';
 import { createClient as createServerClient } from '@/lib/supabase/server';
 import { ensureEventOwnedByOrganizer, requireRole } from '@/lib/api-auth';
 
-const supabase = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
+function getSupabase() {
+  const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SECRET_KEY;
+
+  if (!supabaseUrl || !serviceRoleKey) {
+    return null;
+  }
+
+  return createClient(supabaseUrl, serviceRoleKey);
+}
 
 const codeSchema = z.object({
   type: z.enum(['event', 'nominee']),
@@ -24,6 +33,11 @@ function generateUniqueCode() {
 export async function POST(req: Request) {
   try {
     const sessionClient = await createServerClient();
+    const supabase = getSupabase();
+
+    if (!supabase) {
+      return NextResponse.json({ error: 'Supabase admin credentials are not configured' }, { status: 500 });
+    }
 
     const auth = await requireRole(sessionClient, ['admin', 'organizer']);
     if (!auth.ok) {

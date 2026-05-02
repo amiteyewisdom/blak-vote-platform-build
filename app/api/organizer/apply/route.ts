@@ -3,7 +3,16 @@ import { z } from 'zod';
 import { createClient } from '@supabase/supabase-js';
 import { createClient as createServerClient } from '@/lib/supabase/server';
 
-const supabase = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
+function getSupabase() {
+  const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SECRET_KEY;
+
+  if (!supabaseUrl || !serviceRoleKey) {
+    return null;
+  }
+
+  return createClient(supabaseUrl, serviceRoleKey);
+}
 
 const organizerApplicationSchema = z.object({
   company: z.string().min(2),
@@ -18,6 +27,12 @@ const organizerApplicationSchema = z.object({
 export async function POST(req: Request) {
   try {
     const sessionClient = await createServerClient();
+    const supabase = getSupabase();
+
+    if (!supabase) {
+      return NextResponse.json({ error: 'Supabase admin credentials are not configured' }, { status: 500 });
+    }
+
     const {
       data: { user },
       error: authError,
