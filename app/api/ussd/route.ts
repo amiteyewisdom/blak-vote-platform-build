@@ -101,6 +101,12 @@ function parseMenu(text: string) {
     .filter((part) => part.length > 0)
 }
 
+function stripSignaturePrefix(signature: string) {
+  return signature.startsWith('sha256=')
+    ? signature.slice('sha256='.length)
+    : signature
+}
+
 function isValidUssdSignature(rawBody: string, signature: string | null) {
   const secret = process.env.USSD_WEBHOOK_SECRET
   if (!secret) {
@@ -111,15 +117,19 @@ function isValidUssdSignature(rawBody: string, signature: string | null) {
     return false
   }
 
-  const expected = crypto.createHmac('sha256', secret).update(rawBody).digest('hex')
-  const expectedBuffer = Buffer.from(expected, 'hex')
-  const receivedBuffer = Buffer.from(signature, 'hex')
+  try {
+    const expected = crypto.createHmac('sha256', secret).update(rawBody).digest('hex')
+    const expectedBuffer = Buffer.from(expected, 'hex')
+    const receivedBuffer = Buffer.from(stripSignaturePrefix(signature.trim()), 'hex')
 
-  if (expectedBuffer.length !== receivedBuffer.length) {
+    if (expectedBuffer.length !== receivedBuffer.length) {
+      return false
+    }
+
+    return crypto.timingSafeEqual(expectedBuffer, receivedBuffer)
+  } catch {
     return false
   }
-
-  return crypto.timingSafeEqual(expectedBuffer, receivedBuffer)
 }
 
 async function getEventByCode(code: string): Promise<EventRecord | null> {
@@ -579,7 +589,9 @@ async function handleUssdRequest(request: Request) {
     }
 
     const signature =
-      request.headers.get('x-ussd-signature') || request.headers.get('x-signature')
+      request.headers.get('x-ussd-signature') ||
+      request.headers.get('x-signature') ||
+      request.headers.get('x-webhook-signature')
 
     if (!isValidUssdSignature(rawBody, signature)) {
       return end('Invalid USSD signature')

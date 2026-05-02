@@ -244,6 +244,40 @@ function mapPaymentErrorToStatus(message: string) {
   return 400
 }
 
+async function createPaymentRecordWithSchemaFallback(
+  supabase: any,
+  payload: Record<string, unknown>
+) {
+  const mutablePayload: Record<string, unknown> = { ...payload }
+
+  for (let attempt = 0; attempt < 10; attempt += 1) {
+    const { data, error } = await supabase
+      .from('payments')
+      .insert(mutablePayload)
+      .select('id')
+      .single()
+
+    if (!error && data?.id) {
+      return { id: data.id as string }
+    }
+
+    const message = String(error?.message || '')
+    const missingColumnMatch = message.match(/Could not find the '([^']+)' column/)
+
+    if (missingColumnMatch) {
+      const missingColumn = missingColumnMatch[1]
+      if (Object.prototype.hasOwnProperty.call(mutablePayload, missingColumn)) {
+        delete mutablePayload[missingColumn]
+        continue
+      }
+    }
+
+    throw new Error(message || 'Unable to create payment record')
+  }
+
+  throw new Error('Unable to create payment record')
+}
+
 async function verifyEventAndCandidate(
   eventId: string,
   candidateId: string,
@@ -713,39 +747,30 @@ export async function initializeVotePayment(input: PaymentInitInput | unknown) {
     const reference = `PAY-${crypto.randomUUID()}`
     const callbackUrl = `${getSiteBaseUrl()}/payment/success`
 
-    const { data: payment, error: paymentError } = await supabase
-      .from('payments')
-      .insert({
-        reference,
-        event_id: ticket.event_id,
-        organizer_id: ticketEvent?.organizer_id ?? null,
-        candidate_id: null,
+    const payment = await createPaymentRecordWithSchemaFallback(supabase, {
+      reference,
+      event_id: ticket.event_id,
+      organizer_id: ticketEvent?.organizer_id ?? null,
+      candidate_id: null,
+      quantity,
+      voter_email: buyerEmail,
+      voter_phone: buyerPhone,
+      amount: Number((ticketPrice * quantity).toFixed(2)),
+      status: 'pending',
+      payment_method: 'paystack',
+      provider: 'paystack',
+      gateway_status: 'initialized',
+      payment_context: 'ticket',
+      metadata: {
+        paymentFor: 'ticket',
+        eventId: ticket.event_id,
+        ticketId: ticket.id,
         quantity,
-        voter_email: buyerEmail,
-        voter_phone: buyerPhone,
-        amount: Number((ticketPrice * quantity).toFixed(2)),
-        currency: 'GHS',
-        status: 'pending',
-        payment_method: 'paystack',
-        provider: 'paystack',
-        gateway_status: 'initialized',
-        payment_context: 'ticket',
-        metadata: {
-          paymentFor: 'ticket',
-          eventId: ticket.event_id,
-          ticketId: ticket.id,
-          quantity,
-          buyerName,
-          buyerEmail,
-          buyerPhone,
-        },
-      })
-      .select('id')
-      .single()
-
-    if (paymentError || !payment) {
-      throw new Error(paymentError?.message || 'Unable to create payment record')
-    }
+        buyerName,
+        buyerEmail,
+        buyerPhone,
+      },
+    })
 
     const response = await fetch('https://api.paystack.co/transaction/initialize', {
       method: 'POST',
@@ -916,43 +941,34 @@ export async function initializeVotePayment(input: PaymentInitInput | unknown) {
   const reference = `PAY-${crypto.randomUUID()}`
   const callbackUrl = `${getSiteBaseUrl()}/payment/success`
 
-  const { data: payment, error: paymentError } = await supabase
-    .from('payments')
-    .insert({
-      reference,
-      event_id: eventId,
-      organizer_id: organizerId,
-      candidate_id: candidateId,
+  const payment = await createPaymentRecordWithSchemaFallback(supabase, {
+    reference,
+    event_id: eventId,
+    organizer_id: organizerId,
+    candidate_id: candidateId,
+    quantity,
+    voter_email: email ?? null,
+    voter_phone: phone ?? null,
+    amount: totalAmount,
+    status: 'pending',
+    payment_method: 'paystack',
+    provider: 'paystack',
+    gateway_status: 'initialized',
+    metadata: {
+      paymentFor: 'vote',
+      eventId,
+      candidateId,
       quantity,
-      voter_email: email ?? null,
-      voter_phone: phone ?? null,
       amount: totalAmount,
-      currency: 'GHS',
-      status: 'pending',
-      payment_method: 'paystack',
-      provider: 'paystack',
-      gateway_status: 'initialized',
-      metadata: {
-        paymentFor: 'vote',
-        eventId,
-        candidateId,
-        quantity,
-        amount: totalAmount,
-        bulkPackageId: appliedBulkPackageId,
-        email: email ?? null,
-        phone: phone ?? null,
-        votePrice,
-        unitPrice,
-        baseAmount,
-        savings,
-      },
-    })
-    .select('id')
-    .single()
-
-  if (paymentError || !payment) {
-    throw new Error(paymentError?.message || 'Unable to create payment record')
-  }
+      bulkPackageId: appliedBulkPackageId,
+      email: email ?? null,
+      phone: phone ?? null,
+      votePrice,
+      unitPrice,
+      baseAmount,
+      savings,
+    },
+  })
 
   const response = await fetch('https://api.paystack.co/transaction/initialize', {
     method: 'POST',

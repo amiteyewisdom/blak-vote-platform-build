@@ -256,6 +256,10 @@ type InitiateMoMoPaymentInput = {
   description?: string | null
 }
 
+const NALO_CONFIRMED_STATUSES = ['success', 'paid', 'completed', 'processed']
+const NALO_PENDING_STATUSES = ['pending', 'processing', 'queued', 'initiated', 'in_progress']
+const NALO_FAILED_STATUSES = ['failed', 'cancelled', 'canceled', 'abandoned', 'expired', 'rejected']
+
 function readResponseMessage(payload: unknown) {
   if (!payload || typeof payload !== 'object') {
     return null
@@ -596,17 +600,54 @@ export async function initiateMoMoPayment(input: InitiateMoMoPaymentInput) {
   }
 }
 
-async function parseNaloWebhookPayload(request: Request) {
-  const contentType = request.headers.get('content-type') || ''
+function normalizeWebhookStatus(status: string | null | undefined) {
+  return String(status || '').trim().toLowerCase()
+}
 
-  if (contentType.includes('application/json')) {
-    return (await request.json().catch(() => ({}))) as Record<string, unknown>
+function stripSignaturePrefix(signature: string) {
+  return signature.startsWith('sha256=')
+    ? signature.slice('sha256='.length)
+    : signature
+}
+
+function isValidNaloWebhookSignature(rawBody: string, signature: string | null) {
+  const secret = process.env.NALO_WEBHOOK_SECRET?.trim()
+  if (!secret) {
+    return true
   }
 
-  const rawBody = await request.text()
+  if (!signature) {
+    return false
+  }
 
+  const normalizedSignature = stripSignaturePrefix(signature.trim())
+
+  try {
+    const expected = crypto.createHmac('sha256', secret).update(rawBody).digest('hex')
+    const expectedBuffer = Buffer.from(expected, 'hex')
+    const receivedBuffer = Buffer.from(normalizedSignature, 'hex')
+
+    if (expectedBuffer.length !== receivedBuffer.length) {
+      return false
+    }
+
+    return crypto.timingSafeEqual(expectedBuffer, receivedBuffer)
+  } catch {
+    return false
+  }
+}
+
+function parseNaloWebhookPayload(rawBody: string, contentType: string) {
   if (!rawBody.trim()) {
     return {}
+  }
+
+  if (contentType.includes('application/json')) {
+    try {
+      return JSON.parse(rawBody) as Record<string, unknown>
+    } catch {
+      return {}
+    }
   }
 
   if (contentType.includes('application/x-www-form-urlencoded')) {
@@ -622,14 +663,58 @@ async function parseNaloWebhookPayload(request: Request) {
 
 export async function handleNaloWebhookRequest(request: Request) {
   try {
-    const payload = await parseNaloWebhookPayload(request)
+    const contentType = request.headers.get('content-type') || ''
+    const rawBody = await request.text()
+    const signature =
+      request.headers.get('x-nalo-signature') ||
+      request.headers.get('x-signature') ||
+      request.headers.get('x-webhook-signature')
+
+    if (!isValidNaloWebhookSignature(rawBody, signature)) {
+      return NextResponse.json({ error: 'Invalid webhook signature' }, { status: 401 })
+    }
+
+    const payload = parseNaloWebhookPayload(rawBody, contentType)
     const verification = await paymentService.verifyPayment({
       provider: 'nalo',
       payload,
     })
 
-    const result = await paymentService.handleSuccess(verification)
-    return NextResponse.json(result.body, { status: result.status })
+    const normalizedStatus = normalizeWebhookStatus(verification.status)
+
+    if (NALO_CONFIRMED_STATUSES.includes(normalizedStatus)) {
+      const result = await paymentService.handleSuccess(verification)
+      return NextResponse.json(result.body, { status: result.status })
+    }
+
+    if (NALO_PENDING_STATUSES.includes(normalizedStatus)) {
+      await updateUssdPendingTransaction(verification.reference, {
+        status: 'pending',
+        gatewayStatus: normalizedStatus,
+      })
+
+      return NextResponse.json(
+        { received: true, status: normalizedStatus, action: 'awaiting_confirmation' },
+        { status: 202 }
+      )
+    }
+
+    if (NALO_FAILED_STATUSES.includes(normalizedStatus)) {
+      await updateUssdPendingTransaction(verification.reference, {
+        status: 'failed',
+        gatewayStatus: normalizedStatus,
+      })
+
+      return NextResponse.json(
+        { received: true, status: normalizedStatus, action: 'payment_failed' },
+        { status: 200 }
+      )
+    }
+
+    return NextResponse.json(
+      { received: true, status: normalizedStatus || 'unknown', action: 'ignored' },
+      { status: 202 }
+    )
   } catch (error: any) {
     console.error('Nalo webhook error:', error?.message || error)
     return NextResponse.json(

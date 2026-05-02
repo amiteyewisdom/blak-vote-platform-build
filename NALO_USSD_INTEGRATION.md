@@ -4,7 +4,7 @@ This project already includes an offline USSD endpoint at:
 
 - POST/GET /api/ussd
 
-Use this guide to connect Nalo Solutions to your USSD flow for both voting and ticketing.
+Use this guide to connect Nalo Solutions to your USSD flow for both voting and ticketing, including paid Mobile Money confirmation.
 
 ## 1) Nalo Dashboard Configuration
 
@@ -99,7 +99,25 @@ The endpoint responds in standard USSD text format:
 
 Your aggregator must pass these responses through directly to the USSD session.
 
-## 5) Security (Optional but Recommended)
+## 5) Payment Callback (Required for Paid USSD)
+
+Paid flows use a second callback endpoint for payment status updates:
+
+- POST /api/nalo/webhook
+
+Set your Nalo MoMo callback URL to:
+
+- https://YOUR_DOMAIN/api/nalo/webhook
+
+Expected behavior:
+
+- `success/paid/completed/processed` => backend verifies and creates vote or ticket
+- `pending/processing/queued/initiated` => backend keeps payment pending
+- `failed/cancelled/expired/rejected` => backend marks payment failed
+
+Nalo callback payload can be JSON or form data. The backend accepts reference and status from root fields, nested `data`, and `extra_data`.
+
+## 6) Security (Optional but Recommended)
 
 Set this env var if you want signed callbacks:
 
@@ -116,7 +134,24 @@ Signature algorithm expected:
 
 If USSD_WEBHOOK_SECRET is not set, signature checks are skipped.
 
-## 6) Quick Test Before Going Live
+For Nalo payment webhooks, you can enable signed callbacks with:
+
+- NALO_WEBHOOK_SECRET=your_shared_secret
+
+Supported signature headers for payment webhook:
+
+- x-nalo-signature
+- x-signature
+- x-webhook-signature
+
+Signature format supported:
+
+- plain hex digest
+- `sha256=<hex digest>`
+
+If NALO_WEBHOOK_SECRET is not set, Nalo payment webhook signature checks are skipped.
+
+## 7) Quick Test Before Going Live
 
 Send a test callback to your endpoint with sample values and verify you receive CON/END responses.
 
@@ -140,7 +175,9 @@ Expected ticket result:
 
 - END Ticket issued. Code: XXXXXXXX
 
-## 7) Notes
+After confirming the MoMo prompt on your phone for a paid flow, expect the Nalo webhook to complete the payment and issue the vote/ticket.
+
+## 8) Notes
 
 - Voting only works when event status is active.
 - Candidate code must belong to the selected event.
@@ -148,11 +185,11 @@ Expected ticket result:
 - The user selects a ticket plan by menu number, not by ticket UUID.
 - Free voting can complete on USSD only when the vote price resolves to 0.
 - Free tickets can be issued directly on USSD.
-- Paid voting is not enabled on USSD yet in the current backend.
-- Paid tickets are not enabled on USSD yet in the current backend. They still require a separate verified payment integration.
+- Paid voting on USSD is enabled through Nalo MoMo collection plus webhook confirmation.
+- Paid ticketing on USSD is enabled through Nalo MoMo collection plus webhook confirmation.
 - Duplicate callback retries are handled via deterministic transaction IDs per session/action.
 
-## 8) Where Money Goes
+## 9) Where Money Goes
 
 The USSD endpoint only handles menu navigation and backend actions after a confirmed payment event. It does not decide where collected money settles.
 

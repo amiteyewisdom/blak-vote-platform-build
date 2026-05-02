@@ -1,12 +1,18 @@
 import { createServerClient } from "@supabase/ssr"
 import { cookies } from "next/headers"
+import { getSupabaseBrowserConfig, MISSING_SUPABASE_ENV_MESSAGE } from "@/lib/supabase/client-config"
 
 export async function createClient() {
   const cookieStore = await cookies()
+  const config = getSupabaseBrowserConfig()
+
+  if (!config) {
+    throw new Error(MISSING_SUPABASE_ENV_MESSAGE)
+  }
 
   return createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
+    config.url,
+    config.publishableKey,
     {
       cookies: {
         get(name: string) {

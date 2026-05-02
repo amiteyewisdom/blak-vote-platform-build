@@ -48,6 +48,8 @@ const state: {
 class Builder {
   private table: string
   private filters: Record<string, unknown> = {}
+  private inFilters: Record<string, unknown[]> = {}
+  private notEqualFilters: Record<string, unknown> = {}
   private nullFilters: string[] = []
   private ltFilters: Record<string, string> = {}
   private updatePayload: Record<string, unknown> | null = null
@@ -62,6 +64,16 @@ class Builder {
 
   eq(column: string, value: unknown) {
     this.filters[column] = value
+    return this
+  }
+
+  in(column: string, values: unknown[]) {
+    this.inFilters[column] = values
+    return this
+  }
+
+  neq(column: string, value: unknown) {
+    this.notEqualFilters[column] = value
     return this
   }
 
@@ -95,15 +107,39 @@ class Builder {
   }
 
   async maybeSingle() {
+    if (this.table === 'events') {
+      if (this.filters.id === state.payment.event_id) {
+        return {
+          data: {
+            id: state.payment.event_id,
+            title: 'Event',
+            status: 'active',
+            start_date: new Date(Date.now() - 60_000).toISOString(),
+            end_date: new Date(Date.now() + 60_000).toISOString(),
+            vote_price: 10,
+            cost_per_vote: null,
+            voting_fee: null,
+          },
+          error: null,
+        }
+      }
+
+      return { data: null, error: null }
+    }
+
     if (this.table === 'payments' && this.updatePayload) {
       const matchesReference = this.filters.reference === state.payment.reference
-      const matchesPending =
-        this.filters.status == null || this.filters.status === state.payment.status
+      const matchesStatus =
+        (this.filters.status == null || this.filters.status === state.payment.status) &&
+        (this.inFilters.status == null || this.inFilters.status.includes(state.payment.status))
+      const matchesNotEqualFilters = Object.entries(this.notEqualFilters).every(
+        ([column, value]) => (state.payment as Record<string, unknown>)[column] !== value
+      )
       const requiresNullVote =
         this.nullFilters.length === 0 ||
         this.nullFilters.every((column) => (state.payment as Record<string, unknown>)[column] === null)
 
-      if (matchesReference && matchesPending && requiresNullVote) {
+      if (matchesReference && matchesStatus && matchesNotEqualFilters && requiresNullVote) {
         Object.assign(state.payment, this.updatePayload)
         await new Promise((resolve) => setTimeout(resolve, 15))
         return { data: { id: state.payment.id }, error: null }
@@ -198,6 +234,7 @@ vi.mock('@/lib/event-pricing', () => ({
 
 vi.mock('@/lib/event-status', () => ({
   isLiveEventStatus: () => true,
+  isVotingOpenStatus: () => true,
 }))
 
 vi.mock('@/lib/audit-logging', () => ({

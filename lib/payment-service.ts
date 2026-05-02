@@ -16,6 +16,54 @@ type ProviderVerificationInput = {
   payload?: Record<string, unknown>
 }
 
+const NALO_CONFIRMED_STATUSES = ['success', 'paid', 'completed', 'processed']
+
+function toLowerCaseKeys(payload: Record<string, unknown>) {
+  return Object.fromEntries(
+    Object.entries(payload).map(([key, value]) => [key.toLowerCase(), value])
+  ) as Record<string, unknown>
+}
+
+function parseStructuredValue(value: unknown) {
+  if (!value) {
+    return null
+  }
+
+  if (typeof value === 'object' && !Array.isArray(value)) {
+    return value as Record<string, unknown>
+  }
+
+  if (typeof value !== 'string') {
+    return null
+  }
+
+  const trimmed = value.trim()
+  if (!trimmed) {
+    return null
+  }
+
+  try {
+    const parsed = JSON.parse(trimmed)
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      return parsed as Record<string, unknown>
+    }
+  } catch {
+    // Continue to URL-encoded parsing fallback.
+  }
+
+  const params = new URLSearchParams(trimmed)
+  const entries = Array.from(params.entries())
+  if (entries.length === 0) {
+    return null
+  }
+
+  return Object.fromEntries(entries)
+}
+
+function isConfirmedNaloStatus(status: string) {
+  return NALO_CONFIRMED_STATUSES.includes(status)
+}
+
 function readString(payload: Record<string, unknown>, keys: string[]) {
   for (const key of keys) {
     const value = payload[key]
@@ -102,20 +150,20 @@ export class PaymentService {
   }
 
   normalizeNaloCallback(payload: Record<string, unknown>) {
-    const lowered = Object.fromEntries(
-      Object.entries(payload).map(([key, value]) => [key.toLowerCase(), value])
+    const lowered = toLowerCaseKeys(payload)
+
+    const loweredData = toLowerCaseKeys(
+      parseStructuredValue(lowered['data'] ?? lowered['payload'] ?? lowered['result']) ?? {}
     )
 
-    const extraDataValue = lowered['extra_data'] ?? lowered['extradata']
-    const loweredExtraData =
-      extraDataValue && typeof extraDataValue === 'object'
-        ? Object.fromEntries(
-            Object.entries(extraDataValue as Record<string, unknown>).map(([key, value]) => [
-              key.toLowerCase(),
-              value,
-            ])
-          )
-        : {}
+    const loweredExtraData = toLowerCaseKeys(
+      parseStructuredValue(
+        lowered['extra_data'] ??
+          lowered['extradata'] ??
+          loweredData['extra_data'] ??
+          loweredData['extradata']
+      ) ?? {}
+    )
 
     const reference =
       readString(loweredExtraData, [
@@ -126,6 +174,17 @@ export class PaymentService {
         'clientreference',
         'client_reference',
         'externalreference',
+      ]) ||
+      readString(loweredData, [
+        'reference',
+        'reference_id',
+        'transactionid',
+        'transaction_id',
+        'clientreference',
+        'client_reference',
+        'externalreference',
+        'order_id',
+        'orderid',
       ]) ||
       readString(lowered, [
         'reference',
@@ -143,20 +202,28 @@ export class PaymentService {
       throw new Error('Nalo callback missing payment reference')
     }
 
-    const amount = readNumber(lowered, ['amount', 'amountpaid', 'paidamount'])
-    if (!Number.isFinite(Number(amount))) {
-      throw new Error('Nalo callback missing amount')
+    const status = normalizeProviderStatus(
+      readString(loweredData, ['status', 'paymentstatus', 'transactionstatus', 'state']) ||
+        readString(lowered, ['status', 'paymentstatus', 'transactionstatus', 'state'])
+    )
+
+    if (!status) {
+      throw new Error('Nalo callback missing status')
     }
 
-    const status = normalizeProviderStatus(
-      readString(lowered, ['status', 'paymentstatus', 'transactionstatus', 'state'])
-    )
+    const amount =
+      readNumber(loweredData, ['amount', 'amountpaid', 'paidamount']) ??
+      readNumber(lowered, ['amount', 'amountpaid', 'paidamount'])
+
+    if ((amount == null || !Number.isFinite(Number(amount))) && isConfirmedNaloStatus(status)) {
+      throw new Error('Nalo callback missing amount')
+    }
 
     return buildNormalizedVerification({
       provider: 'nalo',
       paymentMethod: 'momo',
       reference,
-      amount: Number(amount),
+      amount: amount != null && Number.isFinite(Number(amount)) ? Number(amount) : 0,
       status,
       metadata: payload,
     })

@@ -1,14 +1,24 @@
 import { createServerClient } from "@supabase/ssr";
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse, type NextRequest } from "next/server";
+import { getSupabaseBrowserConfig } from "./lib/supabase/client-config";
 
 export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
   const isDashboardRoute = pathname.startsWith("/admin") || pathname.startsWith("/organizer");
   const isMaintenancePage = pathname === "/maintenance";
 
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-  const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!;
+  const config = getSupabaseBrowserConfig();
+
+  if (!config) {
+    if (isDashboardRoute) {
+      return NextResponse.redirect(new URL("/", req.url));
+    }
+
+    return NextResponse.next();
+  }
+
+  const { url: supabaseUrl, publishableKey: supabaseKey } = config;
 
   const res = NextResponse.next();
 

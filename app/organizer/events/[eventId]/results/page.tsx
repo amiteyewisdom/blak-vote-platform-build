@@ -107,7 +107,6 @@ export default function ResultsPage() {
           .eq('event_id', eventId)
 
         if (!result.error) {
-          console.log(`✓ Votes query succeeded with columns: ${query.name}`, result.data?.length, 'rows')
           return ((result.data ?? []) as any[]).map((row) => ({
             candidate_id: row.candidate_id ?? null,
             vote_type: row.vote_type ?? 'free',
@@ -115,8 +114,6 @@ export default function ResultsPage() {
             amount_paid: row.amount_paid ? Number(row.amount_paid) : 0,
           }))
         }
-        
-        console.log(`✗ Votes query failed with columns: ${query.name}`, result.error)
       } catch (err) {
         console.error(`✗ Votes query exception with columns: ${query.name}`, err)
       }
@@ -145,53 +142,16 @@ export default function ResultsPage() {
       }
 
       const data = await res.json()
-      const eventResult = { data: data.event, error: null }
-      const categoriesResult = { data: data.categories, error: null }
-      const nominationsResult = { data: data.nominations, error: null }
+      const event = data.event
+      const categoriesData = (data.categories ?? []) as ResultCategory[]
+      const nominationsData = data.nominations ?? []
       const voteRows = (data.votes ?? []) as VoteRow[]
 
-      console.log('Results data fetched:', {
-        event: eventResult.data?.title,
-        categories: categoriesResult.data?.length,
-        nominations: nominationsResult.data?.length,
-        votes: voteRows.length,
-      })
-      // Check for critical errors
-      if (eventResult.error) {
-        console.error('Event fetch error:', {
-          message: eventResult.error?.message,
-          details: eventResult.error?.details,
-          hint: eventResult.error?.hint,
-        })
-      } else {
-        console.log('Event fetched successfully:', eventResult.data)
-      }
-      
-      if (categoriesResult.error) {
-        console.error('Categories fetch error:', {
-          message: categoriesResult.error?.message,
-          details: categoriesResult.error?.details,
-        })
-      } else {
-        console.log('Categories fetched successfully:', categoriesResult.data?.length, 'items')
-      }
-      
-      if (nominationsResult.error) {
-        console.error('Nominations fetch error:', {
-          message: nominationsResult.error?.message,
-          details: nominationsResult.error?.details,
-        })
-      } else {
-        console.log('Nominations fetched successfully:', nominationsResult.data?.length, 'items')
-      }
-      
-      console.log('Vote rows fetched:', voteRows.length, 'items')
-
-      if (eventResult.data?.title) {
-        setEventTitle(eventResult.data.title)
+      if (event?.title) {
+        setEventTitle(event.title)
       }
 
-    setCategories((categoriesResult.data ?? []) as ResultCategory[])
+    setCategories(categoriesData)
 
     const breakdownMap = new Map<
       string,
@@ -225,7 +185,7 @@ export default function ResultsPage() {
       breakdownMap.set(candidateId, current)
     }
 
-    const mergedCandidates: ResultCandidate[] = ((nominationsResult.data ?? []) as any[]).map((candidate) => {
+    const mergedCandidates: ResultCandidate[] = (nominationsData as any[]).map((candidate) => {
       const breakdown = breakdownMap.get(String(candidate.id)) ?? {
         paidVotes: 0,
         manualVotes: 0,
@@ -248,7 +208,7 @@ export default function ResultsPage() {
       }
     })
 
-    const nextGroups = buildCategoryGroups((categoriesResult.data ?? []) as ResultCategory[], mergedCandidates)
+    const nextGroups = buildCategoryGroups(categoriesData, mergedCandidates)
     const nextRankMap = nextGroups.reduce<Record<string, number>>((acc, group) => {
       for (const candidate of group.candidates) {
         acc[candidate.id] = candidate.rank

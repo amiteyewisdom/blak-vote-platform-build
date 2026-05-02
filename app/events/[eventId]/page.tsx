@@ -44,10 +44,15 @@ export default function EventPage() {
   const [selectedVoteQuantity, setSelectedVoteQuantity] = useState(1)
   const [selectedBulkPackageId, setSelectedBulkPackageId] = useState<string | null>(null)
   const [selectedVoteAmount, setSelectedVoteAmount] = useState<number | null>(null)
+  const [customVoteQuantity, setCustomVoteQuantity] = useState<string>('1')
   const { toast } = useToast()
 
   const votePrice = resolveEventVotePrice(event)
   const votingOpen = isVotingOpenStatus(event?.status)
+  const parsedCustomVoteQuantity = Number.parseInt(customVoteQuantity, 10)
+  const isValidCustomVoteQuantity =
+    Number.isFinite(parsedCustomVoteQuantity) && parsedCustomVoteQuantity >= 1 && parsedCustomVoteQuantity <= 1000
+  const effectiveCustomVoteQuantity = isValidCustomVoteQuantity ? parsedCustomVoteQuantity : 1
 
   useEffect(() => {
     if (eventCode) {
@@ -108,6 +113,15 @@ export default function EventPage() {
     amount?: number | null
   }) => {
     if (!selectedCandidate || !votingOpen) return
+    const requestedQuantity = options?.quantity ?? 1
+    if (requestedQuantity > 1000) {
+      toast({
+        title: 'Vote limit exceeded',
+        description: 'You can purchase a maximum of 1000 votes per transaction.',
+        variant: 'destructive',
+      })
+      return
+    }
     setSelectedVoteQuantity(options?.quantity ?? 1)
     setSelectedBulkPackageId(options?.bulkPackageId ?? null)
     setSelectedVoteAmount(options?.amount ?? null)
@@ -562,23 +576,47 @@ export default function EventPage() {
                     </div>
                   </div>
 
-                  <button
-                    onClick={() => handleVote({ quantity: 1, bulkPackageId: null, amount: null })}
-                    disabled={voting || !votingOpen}
-                    className="w-full py-4 rounded-2xl bg-gradient-to-br from-[hsl(var(--gold))] to-[hsl(var(--gold-deep))] text-black font-semibold hover:brightness-110 hover:shadow-[0_4px_24px_hsl(var(--gold)/0.35)] active:scale-[0.97] transition-all duration-200 shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--gold))] focus-visible:ring-offset-2 focus-visible:ring-offset-[hsl(var(--legacy-bg-base))] disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100"
-                  >
-                    {voting ? (
-                      <div className="flex items-center justify-center gap-2">
-                        <div className="w-4 h-4 border-2 border-black/30 border-t-black rounded-full animate-spin"></div>
-                        Processing...
+                  <div className="space-y-3">
+                    <div className="p-4 bg-[hsl(var(--gold))]/8 border border-[hsl(var(--gold))]/25 rounded-2xl">
+                      <label className="block text-sm text-foreground/70 mb-3">Number of Votes to Purchase</label>
+                      <input
+                        type="number"
+                        min="1"
+                        max="1000"
+                        value={customVoteQuantity}
+                        onChange={(e) => setCustomVoteQuantity(e.target.value || '1')}
+                        className="w-full bg-[hsl(var(--legacy-bg-input))] border border-[hsl(var(--gold))]/40 rounded-xl px-4 py-3 text-foreground placeholder-white/40 focus:border-[hsl(var(--gold))] focus:outline-none transition text-lg font-semibold"
+                        placeholder="1"
+                      />
+                      {!isValidCustomVoteQuantity && customVoteQuantity.trim().length > 0 && (
+                        <p className="mt-2 text-xs text-red-400">Enter a value between 1 and 1000.</p>
+                      )}
+                      <div className="mt-3 p-3 bg-surface/70 rounded-lg border border-border/50">
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-muted-foreground">Total Cost:</span>
+                          <span className="text-[hsl(var(--gold))] font-bold text-lg">GHS {Number((effectiveCustomVoteQuantity * votePrice)).toFixed(2)}</span>
+                        </div>
                       </div>
-                    ) : (
-                      <div className="flex items-center justify-center gap-2">
-                        <Vote className="w-4 h-4" />
-                        {votingOpen ? 'Vote Now' : 'Voting Closed'}
-                      </div>
-                    )}
-                  </button>
+                    </div>
+
+                    <button
+                      onClick={() => handleVote({ quantity: effectiveCustomVoteQuantity, bulkPackageId: null, amount: null })}
+                      disabled={voting || !votingOpen || !isValidCustomVoteQuantity}
+                      className="w-full py-4 rounded-2xl bg-gradient-to-br from-[hsl(var(--gold))] to-[hsl(var(--gold-deep))] text-black font-semibold hover:brightness-110 hover:shadow-[0_4px_24px_hsl(var(--gold)/0.35)] active:scale-[0.97] transition-all duration-200 shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--gold))] focus-visible:ring-offset-2 focus-visible:ring-offset-[hsl(var(--legacy-bg-base))] disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100"
+                    >
+                      {voting ? (
+                        <div className="flex items-center justify-center gap-2">
+                          <div className="w-4 h-4 border-2 border-black/30 border-t-black rounded-full animate-spin"></div>
+                          Processing...
+                        </div>
+                      ) : (
+                        <div className="flex items-center justify-center gap-2">
+                          <Vote className="w-4 h-4" />
+                          {votingOpen ? 'Continue to Payment' : 'Voting Closed'}
+                        </div>
+                      )}
+                    </button>
+                  </div>
 
                   {bulkPackages.length > 0 && (
                     <div className="p-4 bg-[hsl(var(--gold))]/8 border border-[hsl(var(--gold))]/25 rounded-2xl space-y-3">
