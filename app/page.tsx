@@ -64,8 +64,8 @@ export default async function HomePage() {
     }
   }
 
-  const primaryCtaHref = isAppHost ? '/auth/sign-in' : '/sign-up'
-  const primaryCtaLabel = isAppHost ? 'Sign In' : 'Get Started'
+  const primaryCtaHref = isAppHost ? '/auth/sign-up' : '/sign-up'
+  const primaryCtaLabel = isAppHost ? 'Sign Up' : 'Get Started'
   const secondaryCtaHref = isAppHost ? '/auth/sign-in' : '/sign-up'
   const secondaryCtaLabel = isAppHost ? 'Go to Login' : 'Create Your Account'
 
