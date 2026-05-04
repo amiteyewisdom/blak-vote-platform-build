@@ -4,7 +4,6 @@ import { redirect } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import PublicNav from '@/components/PublicNav'
-import EventsPage from '@/app/events/page'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { ArrowRight, CheckCircle, Lock, BarChart3, Users } from 'lucide-react'
 
@@ -51,10 +50,10 @@ export default async function HomePage() {
   const isAppHost = hostname.startsWith('app.')
 
   if (!isAppHost) {
-    return <EventsPage />
+    redirect('/events')
   }
 
-  if (isAppHost && REDIRECT_AUTHENTICATED_APP_USERS) {
+  if (REDIRECT_AUTHENTICATED_APP_USERS) {
     const supabase = await createServerClient()
     const {
       data: { user },
