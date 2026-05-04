@@ -1,93 +1,69 @@
-'use client'
-
-import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { supabase } from '@/lib/supabaseClient'
+import { headers } from 'next/headers'
+import { redirect } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
-import BrandLogo from '@/components/BrandLogo'
 import PublicNav from '@/components/PublicNav'
+import { createClient as createServerClient } from '@/lib/supabase/server'
 import { ArrowRight, CheckCircle, Lock, BarChart3, Users } from 'lucide-react'
 
-export default function Home() {
-  const router = useRouter()
-  const [loading, setLoading] = useState(true)
-  const features = [
-    {
-      icon: Lock,
-      title: 'Military-Grade Security',
-      description:
-        'End-to-end encrypted votes with verification controls designed for regulated, high-trust elections.',
-    },
-    {
-      icon: Users,
-      title: 'Multi-Role Support',
-      description:
-        'Dedicated admin, organizer, and voter journeys with consistent permissions and guardrails.',
-    },
-    {
-      icon: BarChart3,
-      title: 'Real-Time Analytics',
-      description:
-        'Live dashboards surface turnout, revenue, and result movement without overwhelming the operator.',
-    },
-    {
-      icon: CheckCircle,
-      title: 'Fraud Detection',
-      description:
-        'Payment verification, device checks, and operational safeguards reduce abuse without slowing the flow.',
-    },
-  ]
+export const dynamic = 'force-dynamic'
 
-  useEffect(() => {
-    const checkAuth = async () => {
-      try {
-        const {
-          data: { session },
-          error: sessionError,
-        } = await supabase.auth.getSession()
+const REDIRECT_AUTHENTICATED_APP_USERS = false
 
-        if (sessionError || !session?.user) {
-          setLoading(false)
-          return
-        }
+const features = [
+  {
+    icon: Lock,
+    title: 'Military-Grade Security',
+    description:
+      'End-to-end encrypted votes with verification controls designed for regulated, high-trust elections.',
+  },
+  {
+    icon: Users,
+    title: 'Multi-Role Support',
+    description:
+      'Dedicated admin, organizer, and voter journeys with consistent permissions and guardrails.',
+  },
+  {
+    icon: BarChart3,
+    title: 'Real-Time Analytics',
+    description:
+      'Live dashboards surface turnout, revenue, and result movement without overwhelming the operator.',
+  },
+  {
+    icon: CheckCircle,
+    title: 'Fraud Detection',
+    description:
+      'Payment verification, device checks, and operational safeguards reduce abuse without slowing the flow.',
+  },
+]
 
-        const { data: userData, error: userError } = await supabase
-          .from('users')
-          .select('role')
-          .eq('id', session.user.id)
-          .single()
+function getRequestHostname(headerValue: string | null) {
+  return headerValue?.split(',')[0]?.trim().toLowerCase() ?? ''
+}
 
-        if (userError || !userData) {
-          setLoading(false)
-          return
-        }
+export default async function HomePage() {
+  const requestHeaders = await headers()
+  const hostname = getRequestHostname(
+    requestHeaders.get('x-forwarded-host') ?? requestHeaders.get('host')
+  )
+  const isAppHost = hostname.startsWith('app.')
 
-        if (userData?.role === 'admin') {
-          router.push('/admin')
-        } else if (userData?.role === 'organizer') {
-          router.push('/organizer')
-        } else {
-          router.push('/auth/sign-in')
-        }
-      } catch (error) {
-        console.error('[v0] Auth check error:', error)
-      } finally {
-        setLoading(false)
-      }
+  if (isAppHost && REDIRECT_AUTHENTICATED_APP_USERS) {
+    const supabase = await createServerClient()
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+
+    if (user) {
+      redirect('/organizer')
     }
-
-    checkAuth()
-  }, [router])
-
-  if (loading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-background">
-        <div className="h-12 w-12 animate-spin rounded-full border-4 border-gold/20 border-t-gold" />
-      </div>
-    )
   }
+
+  const primaryCtaHref = isAppHost ? '/auth/sign-in' : '/sign-up'
+  const primaryCtaLabel = isAppHost ? 'Sign In' : 'Get Started'
+  const secondaryCtaHref = isAppHost ? '/auth/sign-in' : '/sign-up'
+  const secondaryCtaLabel = isAppHost ? 'Go to Login' : 'Create Your Account'
 
   return (
     <div className="flex min-h-screen flex-col bg-background text-foreground">
@@ -98,7 +74,7 @@ export default function Home() {
               <Link href="/auth/sign-in">Sign In</Link>
             </Button>
             <Button asChild size="sm" className="w-full sm:w-auto">
-              <Link href="/auth/sign-up">Get Started</Link>
+              <Link href={primaryCtaHref}>{primaryCtaLabel}</Link>
             </Button>
           </div>
         }
@@ -121,17 +97,12 @@ export default function Home() {
           </p>
           <div className="flex flex-col justify-center gap-5 sm:flex-row">
             <Button asChild size="lg" className="text-lg">
-              <Link href="/auth/sign-up">
-                Get Started <ArrowRight className="h-5 w-5" />
+              <Link href={primaryCtaHref}>
+                {primaryCtaLabel} <ArrowRight className="h-5 w-5" />
               </Link>
             </Button>
-            <Button
-              variant="secondary"
-              size="lg"
-              className="text-lg"
-              onClick={() => document.getElementById('features')?.scrollIntoView({ behavior: 'smooth' })}
-            >
-              Learn More
+            <Button asChild variant="secondary" size="lg" className="text-lg">
+              <Link href="#features">Learn More</Link>
             </Button>
           </div>
         </div>
@@ -169,7 +140,7 @@ export default function Home() {
             Launch secure paid or free voting experiences with cleaner operations and clearer participant trust.
           </p>
           <Button asChild size="lg" className="text-lg">
-            <Link href="/auth/sign-up">Create Your Account</Link>
+            <Link href={secondaryCtaHref}>{secondaryCtaLabel}</Link>
           </Button>
         </Card>
       </section>
