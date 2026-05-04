@@ -66,8 +66,8 @@ export default async function HomePage() {
 
   const primaryCtaHref = isAppHost ? '/auth/sign-up' : '/sign-up'
   const primaryCtaLabel = isAppHost ? 'Sign Up' : 'Get Started'
-  const secondaryCtaHref = isAppHost ? '/auth/sign-in' : '/sign-up'
-  const secondaryCtaLabel = isAppHost ? 'Go to Login' : 'Create Your Account'
+  const secondaryCtaHref = isAppHost ? '/auth/sign-up' : '/sign-up'
+  const secondaryCtaLabel = isAppHost ? 'Create Your Account' : 'Create Your Account'
 
   return (
     <div className="flex min-h-screen flex-col bg-background text-foreground">
