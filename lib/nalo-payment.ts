@@ -1,6 +1,7 @@
 import crypto from 'crypto'
 import { NextResponse } from 'next/server'
 import { paymentService } from '@/lib/payment-service'
+import { getAllowedIps, isRequestFromAllowedIps } from '@/lib/server-security'
 import { getSupabaseAdminClient } from '@/lib/server-security'
 
 type UssdTransactionStatus = 'pending' | 'paid' | 'failed'
@@ -604,6 +605,8 @@ function normalizeWebhookStatus(status: string | null | undefined) {
   return String(status || '').trim().toLowerCase()
 }
 
+const NALO_DEFAULT_ALLOWED_IPS = ['136.243.56.160']
+
 function stripSignaturePrefix(signature: string) {
   return signature.startsWith('sha256=')
     ? signature.slice('sha256='.length)
@@ -663,6 +666,12 @@ function parseNaloWebhookPayload(rawBody: string, contentType: string) {
 
 export async function handleNaloWebhookRequest(request: Request) {
   try {
+    const allowedIps = getAllowedIps('NALO_ALLOWED_IPS', NALO_DEFAULT_ALLOWED_IPS)
+
+    if (!isRequestFromAllowedIps(request, allowedIps)) {
+      return NextResponse.json({ error: 'Unauthorized source IP' }, { status: 403 })
+    }
+
     const contentType = request.headers.get('content-type') || ''
     const rawBody = await request.text()
     const signature =

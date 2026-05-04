@@ -8,7 +8,7 @@ import {
   initiateMoMoPayment,
   updateUssdPendingTransaction,
 } from '@/lib/nalo-payment'
-import { getSupabaseAdminClient } from '@/lib/server-security'
+import { getAllowedIps, getSupabaseAdminClient, isRequestFromAllowedIps } from '@/lib/server-security'
 
 type NormalizedUssdRequest = {
   sessionId: string
@@ -39,6 +39,7 @@ type TicketPlanRecord = {
 
 const MAX_VOTE_QUANTITY = 50
 const MAX_USSD_TICKET_QUANTITY = 3
+const NALO_DEFAULT_ALLOWED_IPS = ['136.243.56.160']
 
 function trimToPhoneIdentifier(phone: string) {
   return String(phone || '').trim().slice(0, 20)
@@ -571,6 +572,12 @@ export async function GET(request: Request) {
 
 async function handleUssdRequest(request: Request) {
   try {
+    const allowedIps = getAllowedIps('NALO_ALLOWED_IPS', NALO_DEFAULT_ALLOWED_IPS)
+
+    if (!isRequestFromAllowedIps(request, allowedIps)) {
+      return end('Unauthorized source IP')
+    }
+
     const contentType = request.headers.get('content-type') || ''
     let parsedInput: GenericInput = {}
     let rawBody = ''

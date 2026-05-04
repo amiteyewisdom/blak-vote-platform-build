@@ -75,6 +75,28 @@ export function extractClientIp(request: Request): string {
   return realIp?.trim() || 'unknown'
 }
 
+export function getAllowedIps(envName: string, fallbackIps: string[] = []): string[] {
+  const configured = process.env[envName]
+
+  if (!configured) {
+    return fallbackIps
+  }
+
+  return configured
+    .split(',')
+    .map((value) => value.trim())
+    .filter((value) => value.length > 0)
+}
+
+export function isRequestFromAllowedIps(request: Request, allowedIps: string[]): boolean {
+  if (allowedIps.length === 0) {
+    return true
+  }
+
+  const clientIp = extractClientIp(request)
+  return allowedIps.includes(clientIp)
+}
+
 export function isValidPaystackSignature(rawBody: string, signature: string | null): boolean {
   if (!signature) {
     return false

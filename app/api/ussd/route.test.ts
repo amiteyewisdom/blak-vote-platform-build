@@ -2,6 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mockIsVotingOpenStatus = vi.fn((status: string | null | undefined) => Boolean(status) || true)
 const mockGetSupabaseAdminClient = vi.fn()
+const mockGetAllowedIps = vi.fn(() => ['136.243.56.160'])
+const mockIsRequestFromAllowedIps = vi.fn(() => true)
 
 vi.mock('@/lib/event-pricing', () => ({
   resolveEventVotePrice: vi.fn(() => 0),
@@ -20,6 +22,8 @@ vi.mock('@/lib/nalo-payment', () => ({
 
 vi.mock('@/lib/server-security', () => ({
   getSupabaseAdminClient: () => mockGetSupabaseAdminClient(),
+  getAllowedIps: (...args: unknown[]) => mockGetAllowedIps(...args),
+  isRequestFromAllowedIps: (...args: unknown[]) => mockIsRequestFromAllowedIps(...args),
 }))
 
 type QueryResult = {
@@ -101,6 +105,8 @@ describe('USSD route', () => {
     vi.resetModules()
     mockGetSupabaseAdminClient.mockReturnValue(createMockSupabase())
     mockIsVotingOpenStatus.mockReturnValue(true)
+    mockGetAllowedIps.mockReturnValue(['136.243.56.160'])
+    mockIsRequestFromAllowedIps.mockReturnValue(true)
     delete process.env.USSD_WEBHOOK_SECRET
   })
 
@@ -181,5 +187,30 @@ describe('USSD route', () => {
 
     expect(response.status).toBe(200)
     expect(body).toBe('END Invalid USSD signature')
+  })
+
+  it('rejects requests from unauthorized source IPs', async () => {
+    mockIsRequestFromAllowedIps.mockReturnValue(false)
+    const { POST } = await import('@/app/api/ussd/route')
+
+    const response = await POST(
+      new Request('http://localhost:3000/api/ussd', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'x-forwarded-for': '10.0.0.1',
+        },
+        body: new URLSearchParams({
+          sessionId: 'session-4',
+          phoneNumber: '233501234567',
+          text: '',
+        }).toString(),
+      })
+    )
+
+    const body = await response.text()
+
+    expect(response.status).toBe(200)
+    expect(body).toBe('END Unauthorized source IP')
   })
 })
