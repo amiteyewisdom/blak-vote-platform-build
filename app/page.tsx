@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import PublicNav from '@/components/PublicNav'
+import EventsPage from '@/app/events/page'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { ArrowRight, CheckCircle, Lock, BarChart3, Users } from 'lucide-react'
 
@@ -48,6 +49,10 @@ export default async function HomePage() {
     requestHeaders.get('x-forwarded-host') ?? requestHeaders.get('host')
   )
   const isAppHost = hostname.startsWith('app.')
+
+  if (!isAppHost) {
+    return <EventsPage />
+  }
 
   if (isAppHost && REDIRECT_AUTHENTICATED_APP_USERS) {
     const supabase = await createServerClient()
