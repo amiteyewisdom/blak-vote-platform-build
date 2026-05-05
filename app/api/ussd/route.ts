@@ -39,7 +39,14 @@ type TicketPlanRecord = {
 
 const MAX_VOTE_QUANTITY = 50
 const MAX_USSD_TICKET_QUANTITY = 3
-const NALO_DEFAULT_ALLOWED_IPS = ['136.243.56.160']
+const NALO_DEFAULT_USSD_ALLOWED_IPS = ['136.243.56.160']
+
+function getAllowedUssdIps() {
+  return getAllowedIps(
+    'NALO_USSD_ALLOWED_IPS',
+    getAllowedIps('NALO_ALLOWED_IPS', NALO_DEFAULT_USSD_ALLOWED_IPS)
+  )
+}
 
 function trimToPhoneIdentifier(phone: string) {
   return String(phone || '').trim().slice(0, 20)
@@ -572,7 +579,7 @@ export async function GET(request: Request) {
 
 async function handleUssdRequest(request: Request) {
   try {
-    const allowedIps = getAllowedIps('NALO_ALLOWED_IPS', NALO_DEFAULT_ALLOWED_IPS)
+    const allowedIps = getAllowedUssdIps()
 
     if (!isRequestFromAllowedIps(request, allowedIps)) {
       return end('Unauthorized source IP')

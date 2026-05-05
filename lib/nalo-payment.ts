@@ -605,7 +605,14 @@ function normalizeWebhookStatus(status: string | null | undefined) {
   return String(status || '').trim().toLowerCase()
 }
 
-const NALO_DEFAULT_ALLOWED_IPS = ['136.243.56.160']
+const NALO_DEFAULT_WEBHOOK_ALLOWED_IPS = ['135.181.194.193']
+
+function getAllowedNaloWebhookIps() {
+  return getAllowedIps(
+    'NALO_WEBHOOK_ALLOWED_IPS',
+    getAllowedIps('NALO_ALLOWED_IPS', NALO_DEFAULT_WEBHOOK_ALLOWED_IPS)
+  )
+}
 
 function stripSignaturePrefix(signature: string) {
   return signature.startsWith('sha256=')
@@ -666,7 +673,7 @@ function parseNaloWebhookPayload(rawBody: string, contentType: string) {
 
 export async function handleNaloWebhookRequest(request: Request) {
   try {
-    const allowedIps = getAllowedIps('NALO_ALLOWED_IPS', NALO_DEFAULT_ALLOWED_IPS)
+    const allowedIps = getAllowedNaloWebhookIps()
 
     if (!isRequestFromAllowedIps(request, allowedIps)) {
       return NextResponse.json({ error: 'Unauthorized source IP' }, { status: 403 })

@@ -105,7 +105,13 @@ describe('USSD route', () => {
     vi.resetModules()
     mockGetSupabaseAdminClient.mockReturnValue(createMockSupabase())
     mockIsVotingOpenStatus.mockReturnValue(true)
-    mockGetAllowedIps.mockReturnValue(['136.243.56.160'])
+    mockGetAllowedIps.mockImplementation((envName: unknown, fallbackIps?: unknown) => {
+      if (envName === 'NALO_USSD_ALLOWED_IPS') {
+        return ['136.243.56.160']
+      }
+
+      return Array.isArray(fallbackIps) ? fallbackIps : ['136.243.56.160']
+    })
     mockIsRequestFromAllowedIps.mockReturnValue(true)
     delete process.env.USSD_WEBHOOK_SECRET
   })
