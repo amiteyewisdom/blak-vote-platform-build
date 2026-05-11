@@ -88,13 +88,18 @@ export default function SignInPage() {
         throw new Error('User role not assigned')
       }
 
+      if (!user.email_confirmed_at) {
+        await supabase.auth.signOut()
+        throw new Error('Verify your email before signing in')
+      }
+
       // 4️⃣ Hard redirect (middleware-safe)
       if (userData.role === 'admin') {
         window.location.href = '/admin'
       } else if (userData.role === 'organizer') {
         window.location.href = '/organizer'
       } else if (userData.role === 'voter') {
-        window.location.href = '/events'
+        window.location.href = '/voter'
       } else {
         throw new Error('User role not supported')
       }

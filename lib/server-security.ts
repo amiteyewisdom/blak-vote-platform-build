@@ -75,6 +75,23 @@ export function extractClientIp(request: Request): string {
   return realIp?.trim() || 'unknown'
 }
 
+function normalizeIpValue(value: string): string {
+  const trimmed = value.trim().toLowerCase()
+
+  if (!trimmed) {
+    return ''
+  }
+
+  const withoutIpv6Prefix = trimmed.startsWith('::ffff:') ? trimmed.slice(7) : trimmed
+  const unwrapped = withoutIpv6Prefix.replace(/^\[|\]$/g, '')
+
+  if (unwrapped.includes('.') && unwrapped.includes(':')) {
+    return unwrapped.slice(0, unwrapped.lastIndexOf(':'))
+  }
+
+  return unwrapped
+}
+
 export function getAllowedIps(envName: string, fallbackIps: string[] = []): string[] {
   const configured = process.env[envName]
 
@@ -93,8 +110,10 @@ export function isRequestFromAllowedIps(request: Request, allowedIps: string[]):
     return true
   }
 
-  const clientIp = extractClientIp(request)
-  return allowedIps.includes(clientIp)
+  const clientIp = normalizeIpValue(extractClientIp(request))
+  const normalizedAllowedIps = allowedIps.map(normalizeIpValue).filter(Boolean)
+
+  return normalizedAllowedIps.includes(clientIp)
 }
 
 export function isValidPaystackSignature(rawBody: string, signature: string | null): boolean {

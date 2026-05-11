@@ -9,11 +9,17 @@ interface Withdrawal {
   organizer_id?: string
   amount_requested?: number
   method?: string
+  account_details?: Record<string, unknown> | null
   status: string
   platform_fee_amount?: number
   net_amount?: number
   admin_note?: string
   created_at: string
+  approved_at?: string | null
+  processed_at?: string | null
+  payout_provider?: string | null
+  payout_reference?: string | null
+  payout_failure_reason?: string | null
 }
 
 interface AdminEarning {
@@ -54,6 +60,8 @@ export default function AdminWithdrawalsPage() {
   })
   const [loading, setLoading] = useState(true)
   const [processingId, setProcessingId] = useState<string | null>(null)
+  const [processingPayoutId, setProcessingPayoutId] = useState<string | null>(null)
+  const [retryingPayoutId, setRetryingPayoutId] = useState<string | null>(null)
   const [submittingPlatformWithdrawal, setSubmittingPlatformWithdrawal] = useState(false)
   const [processingPlatformId, setProcessingPlatformId] = useState<number | null>(null)
   const [platformAmount, setPlatformAmount] = useState("")
@@ -127,8 +135,10 @@ export default function AdminWithdrawalsPage() {
       }
 
       toast({
-        title: "Organizer withdrawal approved",
-        description: "The organizer request is now marked as approved.",
+        title: payload?.payoutStatus === 'processed' ? 'Organizer payout sent' : 'Organizer withdrawal approved',
+        description:
+          payload?.message ||
+          'The organizer request is approved and remains reserved until payout is completed.',
       })
 
       await fetchWithdrawals()
@@ -141,6 +151,101 @@ export default function AdminWithdrawalsPage() {
     } finally {
       setProcessingId(null)
     }
+  }
+
+  const processWithdrawal = async (id: string) => {
+    setProcessingPayoutId(id)
+
+    try {
+      const response = await fetch('/api/admin/process-withdrawal', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ withdrawalId: id }),
+      })
+
+      const payload = await response.json().catch(() => ({}))
+      if (!response.ok) {
+        throw new Error(payload?.error || 'Failed to mark withdrawal processed')
+      }
+
+      toast({
+        title: 'Organizer payout processed',
+        description: 'The organizer withdrawal is now marked as paid out.',
+      })
+
+      await fetchWithdrawals()
+    } catch (error: any) {
+      toast({
+        title: 'Processing failed',
+        description: error?.message || 'Unable to mark organizer payout as processed.',
+        variant: 'destructive',
+      })
+    } finally {
+      setProcessingPayoutId(null)
+    }
+  }
+
+  const retryWithdrawal = async (id: string) => {
+    setRetryingPayoutId(id)
+
+    try {
+      const response = await fetch('/api/admin/retry-withdrawal', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ withdrawalId: id }),
+      })
+
+      const payload = await response.json().catch(() => ({}))
+      if (!response.ok) {
+        throw new Error(payload?.error || 'Failed to retry withdrawal payout')
+      }
+
+      toast({
+        title: payload?.payoutStatus === 'processed' ? 'Organizer payout sent' : 'Payout retry submitted',
+        description: payload?.message || 'The payout retry has been submitted.',
+      })
+
+      await fetchWithdrawals()
+    } catch (error: any) {
+      toast({
+        title: 'Retry failed',
+        description: error?.message || 'Unable to retry the organizer payout.',
+        variant: 'destructive',
+      })
+    } finally {
+      setRetryingPayoutId(null)
+    }
+  }
+
+  const readAccountDetail = (details: Record<string, unknown> | null | undefined, keys: string[]) => {
+    if (!details || typeof details !== 'object') {
+      return null
+    }
+
+    for (const key of keys) {
+      const value = details[key]
+      if (typeof value === 'string' && value.trim().length > 0) {
+        return value.trim()
+      }
+    }
+
+    return null
+  }
+
+  const maskValue = (value: string | null) => {
+    if (!value) {
+      return null
+    }
+
+    if (value.length <= 4) {
+      return value
+    }
+
+    return `${'*'.repeat(Math.max(value.length - 4, 0))}${value.slice(-4)}`
   }
 
   const requestPlatformWithdrawal = async () => {
@@ -256,7 +361,9 @@ export default function AdminWithdrawalsPage() {
   }
 
   const pendingCount = withdrawals.filter((w) => w.status === "pending").length
-  const approvedCount = withdrawals.filter((w) => w.status === "approved").length
+  const approvedCount = withdrawals.filter((w) => w.status === "approved" && !w.processed_at).length
+  const pendingFundsCount = withdrawals.filter((w) => w.status === 'pending_funds' && !w.processed_at).length
+  const processedCount = withdrawals.filter((w) => Boolean(w.processed_at)).length
   const totalPlatformIncome = earnings.reduce((sum, earning) => sum + Number(earning.platform_fee_amount || 0), 0)
 
   return (
@@ -266,7 +373,7 @@ export default function AdminWithdrawalsPage() {
         <p className="mt-1 text-sm text-muted-foreground">Review organizer requests and manage admin payouts from platform earnings.</p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
         <div className="rounded-xl border border-border bg-card p-5">
           <p className="text-sm text-muted-foreground">Pending Requests</p>
           <p className="text-2xl font-semibold mt-1">{pendingCount}</p>
@@ -274,6 +381,14 @@ export default function AdminWithdrawalsPage() {
         <div className="rounded-xl border border-border bg-card p-5">
           <p className="text-sm text-muted-foreground">Approved Requests</p>
           <p className="text-2xl font-semibold mt-1">{approvedCount}</p>
+        </div>
+        <div className="rounded-xl border border-amber-500/30 bg-card p-5">
+          <p className="text-sm text-muted-foreground">Waiting For Funds</p>
+          <p className="text-2xl font-semibold mt-1 text-amber-300">{pendingFundsCount}</p>
+        </div>
+        <div className="rounded-xl border border-border bg-card p-5">
+          <p className="text-sm text-muted-foreground">Processed Requests</p>
+          <p className="text-2xl font-semibold mt-1">{processedCount}</p>
         </div>
         <div className="rounded-xl border border-gold/30 bg-card p-5">
           <p className="text-sm text-muted-foreground">Platform Income (Fees)</p>
@@ -300,7 +415,7 @@ export default function AdminWithdrawalsPage() {
       <section className="space-y-4">
         <div>
           <h2 className="text-xl md:text-2xl font-semibold">Organizer Requests</h2>
-          <p className="text-sm text-muted-foreground">Approve organizer withdrawals after validating the payout.</p>
+          <p className="text-sm text-muted-foreground">Approve withdrawals after validating funds. Approval now tries Paystack immediately, and low-balance cases stay queued as pending funds until cron can retry them.</p>
         </div>
 
         {withdrawals.length === 0 && (
@@ -320,11 +435,32 @@ export default function AdminWithdrawalsPage() {
                   Method: {w.method || "N/A"}
                 </p>
                 <div className="mt-3">
-                  <WithdrawalStatus status={w.status} />
+                  <WithdrawalStatus status={w.processed_at ? 'processed' : w.status} />
                 </div>
                 <p className="text-sm text-muted-foreground">
                   Platform Fee: GHS {Number(w.platform_fee_amount || 0).toFixed(2)}
                 </p>
+                {w.approved_at && (
+                  <p className="text-xs text-emerald-400">Approved: {new Date(w.approved_at).toLocaleString()}</p>
+                )}
+                {w.processed_at && (
+                  <p className="text-xs text-emerald-400">Processed: {new Date(w.processed_at).toLocaleString()}</p>
+                )}
+                {w.payout_provider && (
+                  <p className="text-xs text-muted-foreground uppercase">Provider: {w.payout_provider}</p>
+                )}
+                {readAccountDetail(w.account_details, ['account_name', 'name']) && (
+                  <p className="text-xs text-muted-foreground">Recipient: {readAccountDetail(w.account_details, ['account_name', 'name'])}</p>
+                )}
+                {readAccountDetail(w.account_details, ['bank_code']) && (
+                  <p className="text-xs text-muted-foreground">Destination: {readAccountDetail(w.account_details, ['bank_code'])} / {maskValue(readAccountDetail(w.account_details, ['account_number'])) || 'N/A'}</p>
+                )}
+                {w.payout_reference && (
+                  <p className="text-xs text-muted-foreground break-all">Reference: {w.payout_reference}</p>
+                )}
+                {w.payout_failure_reason && !w.processed_at && (
+                  <p className="text-xs text-amber-300 max-w-xl">{w.payout_failure_reason}</p>
+                )}
               </div>
 
               <div className="text-left md:text-right md:min-w-[220px]">
@@ -332,11 +468,11 @@ export default function AdminWithdrawalsPage() {
                   GHS {Number(w.amount_requested ?? 0).toFixed(2)}
                 </div>
 
-                {w.status === 'approved' && (
-                  <p className="text-xs text-emerald-400 mb-2">Approved</p>
+                {w.processed_at && (
+                  <p className="text-xs text-emerald-400 mb-2">Processed</p>
                 )}
 
-                {w.status !== "approved" && (
+                {w.status === "pending" && (
                   <button
                     onClick={() => approveWithdrawal(w.id)}
                     disabled={processingId === w.id}
@@ -345,6 +481,28 @@ export default function AdminWithdrawalsPage() {
                     {processingId === w.id ? "Approving..." : "Approve"}
                   </button>
                 )}
+
+                <div className="flex flex-col gap-2 md:items-end">
+                  {(w.status === 'approved' || w.status === 'pending_funds') && !w.processed_at && (
+                    <button
+                      onClick={() => retryWithdrawal(w.id)}
+                      disabled={retryingPayoutId === w.id}
+                      className="min-h-10 bg-gradient-to-br from-gold to-gold-deep text-gold-foreground px-4 py-2 rounded-xl font-semibold hover:brightness-110 active:scale-[0.97] transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {retryingPayoutId === w.id ? 'Retrying...' : 'Retry Paystack Payout'}
+                    </button>
+                  )}
+
+                  {(w.status === 'approved' || w.status === 'pending_funds') && !w.processed_at && (
+                    <button
+                      onClick={() => processWithdrawal(w.id)}
+                      disabled={processingPayoutId === w.id}
+                      className="min-h-10 border border-border bg-secondary text-secondary-foreground px-4 py-2 rounded-xl font-semibold hover:bg-secondary/80 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {processingPayoutId === w.id ? 'Processing...' : 'Mark Processed'}
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
           </div>
@@ -458,6 +616,10 @@ export default function AdminWithdrawalsPage() {
 function WithdrawalStatus({ status }: { status: string }) {
   if (status === 'approved') {
     return <span className="px-3 py-1 rounded-full text-xs font-semibold border bg-emerald-500/20 text-emerald-300 border-emerald-500/30">APPROVED</span>
+  }
+
+  if (status === 'pending_funds') {
+    return <span className="px-3 py-1 rounded-full text-xs font-semibold border bg-amber-500/20 text-amber-300 border-amber-500/30">PENDING FUNDS</span>
   }
 
   if (status === 'processed') {

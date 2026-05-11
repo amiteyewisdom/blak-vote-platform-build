@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { requireRole } from "@/lib/api-auth"
+import { attemptPaystackOrganizerWithdrawalPayout } from '@/lib/paystack-payouts'
 
 export async function POST(req: Request) {
   const supabase = await createClient()
@@ -10,7 +11,9 @@ export async function POST(req: Request) {
     return auth.response
   }
 
-  const { withdrawalId } = await req.json()
+  const body = await req.json().catch(() => ({}))
+  const withdrawalId = body.withdrawalId
+  const adminNote = typeof body.adminNote === 'string' ? body.adminNote.trim() : ''
 
   if (!withdrawalId) {
     return NextResponse.json({ error: "Missing withdrawalId" }, { status: 400 })
@@ -30,33 +33,12 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Invalid state" }, { status: 400 })
   }
 
-  const { data: override } = await supabase
-    .from('organizer_fee_overrides')
-    .select('platform_fee_percent')
-    .eq('organizer_user_id', withdrawal.organizer_id)
-    .maybeSingle()
-
-  const { data: settings, error: settingsError } = await supabase
-    .from("platform_settings")
-    .select("platform_fee_percent")
-    .single()
-
-  if (settingsError || !settings) {
-    return NextResponse.json({ error: "Platform settings missing" }, { status: 500 })
-  }
-
-  const effectivePercent = Number(override?.platform_fee_percent ?? settings.platform_fee_percent ?? 10)
-
-  const fee = (Number(withdrawal.amount_requested) * effectivePercent) / 100
-  const net = Number(withdrawal.amount_requested) - fee
-
   const { error: updateError } = await supabase
     .from("organizer_withdrawals")
     .update({
       status: "approved",
-      platform_fee_amount: fee,
-      net_amount: net,
       approved_at: new Date().toISOString(),
+      admin_note: adminNote || withdrawal.admin_note || null,
     })
     .eq("id", withdrawalId)
 
@@ -64,5 +46,24 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: updateError.message }, { status: 400 })
   }
 
-  return NextResponse.json({ success: true })
+  try {
+    const payout = await attemptPaystackOrganizerWithdrawalPayout({
+      supabase,
+      withdrawal: {
+        ...withdrawal,
+        status: 'approved',
+        admin_note: adminNote || withdrawal.admin_note || null,
+      },
+      trigger: 'approval',
+    })
+
+    return NextResponse.json({ success: true, payoutStatus: payout.status, message: payout.message })
+  } catch (error) {
+    console.error('Organizer payout attempt failed after approval:', error)
+    return NextResponse.json({
+      success: true,
+      payoutStatus: 'approved',
+      message: 'Withdrawal approved, but the Paystack payout attempt failed. Cron retry or manual review is still available.',
+    })
+  }
 }

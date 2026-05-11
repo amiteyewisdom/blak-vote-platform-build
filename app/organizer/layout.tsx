@@ -52,6 +52,8 @@ export default function OrganizerLayout({ children }: { children: React.ReactNod
           user={user}
           onToggleSidebar={() => setSidebarOpen((open) => !open)}
           sidebarOpen={sidebarOpen}
+          homeHref="/organizer"
+          settingsHref="/organizer/settings"
         />
 
         <div className={`fixed inset-0 z-40 md:hidden ${sidebarOpen ? 'pointer-events-auto' : 'pointer-events-none'}`}>

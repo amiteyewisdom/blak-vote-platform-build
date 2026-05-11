@@ -4,7 +4,11 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
 
-export default function OrganizerApplicationForm() {
+type OrganizerApplicationFormProps = {
+  successHref?: string;
+};
+
+export default function OrganizerApplicationForm({ successHref = '/voter' }: OrganizerApplicationFormProps) {
   const router = useRouter();
   const { toast } = useToast();
   const [company, setCompany] = useState('');
@@ -39,7 +43,7 @@ export default function OrganizerApplicationForm() {
     }
 
     toast({ title: 'Application submitted', description: 'Your application will be reviewed by admin.' });
-    router.push('/events');
+    router.push(successHref);
   };
 
   return (

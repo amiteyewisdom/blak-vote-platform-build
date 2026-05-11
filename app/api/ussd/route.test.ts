@@ -2,8 +2,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mockIsVotingOpenStatus = vi.fn((status: string | null | undefined) => Boolean(status) || true)
 const mockGetSupabaseAdminClient = vi.fn()
-const mockGetAllowedIps = vi.fn(() => ['136.243.56.160'])
-const mockIsRequestFromAllowedIps = vi.fn(() => true)
+const mockGetAllowedIps = vi.fn<(envName: string, fallbackIps?: string[]) => string[]>(
+  (_envName, fallbackIps) => fallbackIps ?? ['136.243.56.160']
+)
+const mockIsRequestFromAllowedIps = vi.fn<(request: Request, allowedIps: string[]) => boolean>(() => true)
 
 vi.mock('@/lib/event-pricing', () => ({
   resolveEventVotePrice: vi.fn(() => 0),
@@ -22,8 +24,8 @@ vi.mock('@/lib/nalo-payment', () => ({
 
 vi.mock('@/lib/server-security', () => ({
   getSupabaseAdminClient: () => mockGetSupabaseAdminClient(),
-  getAllowedIps: (...args: unknown[]) => mockGetAllowedIps(...args),
-  isRequestFromAllowedIps: (...args: unknown[]) => mockIsRequestFromAllowedIps(...args),
+  getAllowedIps: (envName: string, fallbackIps?: string[]) => mockGetAllowedIps(envName, fallbackIps),
+  isRequestFromAllowedIps: (request: Request, allowedIps: string[]) => mockIsRequestFromAllowedIps(request, allowedIps),
 }))
 
 type QueryResult = {
@@ -105,7 +107,7 @@ describe('USSD route', () => {
     vi.resetModules()
     mockGetSupabaseAdminClient.mockReturnValue(createMockSupabase())
     mockIsVotingOpenStatus.mockReturnValue(true)
-    mockGetAllowedIps.mockImplementation((envName: unknown, fallbackIps?: unknown) => {
+    mockGetAllowedIps.mockImplementation((envName: string, fallbackIps?: string[]) => {
       if (envName === 'NALO_USSD_ALLOWED_IPS') {
         return ['136.243.56.160']
       }

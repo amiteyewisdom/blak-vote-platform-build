@@ -315,9 +315,13 @@ function getSiteBaseUrl() {
   const raw =
     process.env.NEXT_PUBLIC_BASE_URL ||
     process.env.NEXT_PUBLIC_SITE_URL ||
-    process.env.SITE_URL
+    process.env.SITE_URL ||
+    process.env.APP_URL ||
+    process.env.VERCEL_URL
 
-  if (!raw || !raw.trim().toLowerCase().startsWith('http')) {
+  const trimmed = raw?.trim()
+
+  if (!trimmed) {
     if (process.env.NODE_ENV !== 'production') {
       return 'http://localhost:3000'
     }
@@ -325,7 +329,18 @@ function getSiteBaseUrl() {
     throw new Error('Invalid callback base URL')
   }
 
-  return raw.trim().replace(/\/$/, '')
+  const normalized = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`
+
+  try {
+    const parsed = new URL(normalized)
+    return parsed.toString().replace(/\/$/, '')
+  } catch {
+    if (process.env.NODE_ENV !== 'production') {
+      return 'http://localhost:3000'
+    }
+
+    throw new Error('Invalid callback base URL')
+  }
 }
 
 function getNaloCallbackUrl() {

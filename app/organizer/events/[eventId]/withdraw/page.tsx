@@ -11,6 +11,7 @@ export default function WithdrawPage() {
 
   const [withdraws, setWithdraws] = useState<any[]>([])
   const [event, setEvent] = useState<any>(null)
+  const [wallet, setWallet] = useState<any>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -25,6 +26,8 @@ export default function WithdrawPage() {
       .single()
 
     const { data: { user } } = await supabase.auth.getUser()
+    const walletResponse = user ? await fetch('/api/organizer/wallet') : null
+    const walletPayload = walletResponse && walletResponse.ok ? await walletResponse.json() : null
 
     const { data: withdrawData } = user
       ? await supabase
@@ -36,6 +39,7 @@ export default function WithdrawPage() {
 
     if (eventData) setEvent(eventData)
     if (withdrawData) setWithdraws(withdrawData)
+    if (walletPayload) setWallet(walletPayload)
 
     setLoading(false)
   }
@@ -48,12 +52,9 @@ export default function WithdrawPage() {
     )
   }
 
-  const totalRevenue = event?.total_revenue || 0
-  const totalWithdrawn = withdraws
-    .filter(w => w.status === 'approved')
-    .reduce((sum, w) => sum + Number(w.amount_requested), 0)
-
-  const availableBalance = totalRevenue - totalWithdrawn
+  const totalRevenue = Number(event?.total_revenue || 0)
+  const totalWithdrawn = Number(wallet?.pending_withdrawals || 0)
+  const availableBalance = Number(wallet?.available_balance || 0)
 
   return (
     <div className="flex-1 p-4 sm:p-8 md:p-12 space-y-8 md:space-y-12">
@@ -73,7 +74,7 @@ export default function WithdrawPage() {
           Withdrawals
         </h1>
         <p className="text-muted-foreground mt-3">
-          Manage event withdrawals and track payout history.
+          Review this event's revenue alongside your organizer-wide payout history. Actual payout availability is tracked at wallet level, not per event.
         </p>
       </div>
 
@@ -81,15 +82,17 @@ export default function WithdrawPage() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
 
         <div className="bg-[hsl(var(--legacy-bg-card))] border border-border/70 rounded-3xl p-5 sm:p-8">
+          <div className="text-sm text-muted-foreground mb-2">Gross Event Revenue</div>
           <div className="text-3xl font-bold">GHS {totalRevenue.toFixed(2)}</div>
         </div>
 
         <div className="bg-[hsl(var(--legacy-bg-card))] border border-border/70 rounded-3xl p-5 sm:p-8">
+          <div className="text-sm text-muted-foreground mb-2">Organizer Reserved Payouts</div>
           <div className="text-3xl font-bold">GHS {totalWithdrawn.toFixed(2)}</div>
         </div>
 
         <div className="bg-[hsl(var(--legacy-bg-card))] border border-[hsl(var(--gold))]/20 rounded-3xl p-5 sm:p-8 shadow-[0_0_40px_hsl(var(--gold)/0.1)]">
-          <div className="text-sm text-muted-foreground mb-2">Available Balance</div>
+          <div className="text-sm text-muted-foreground mb-2">Available To Request</div>
           <div className="text-3xl font-bold text-[hsl(var(--gold))]">
             GHS {availableBalance.toFixed(2)}
           </div>
@@ -148,14 +151,18 @@ export default function WithdrawPage() {
               <span
                 className={`px-4 py-1 rounded-full text-xs font-semibold uppercase tracking-wide
                   ${
-                    w.status === 'approved'
+                    w.processed_at
+                      ? 'bg-emerald-500/20 text-emerald-400'
+                      : w.status === 'pending_funds'
+                      ? 'bg-amber-500/20 text-amber-300'
+                      : w.status === 'approved'
                       ? 'bg-[hsl(var(--gold))] text-black'
                       : w.status === 'rejected'
                       ? 'bg-red-500/20 text-red-400'
                       : 'bg-surface/80 text-muted-foreground'
                   }`}
               >
-                {w.status || 'pending'}
+                {w.processed_at ? 'processed' : w.status || 'pending'}
               </span>
             </div>
           </div>

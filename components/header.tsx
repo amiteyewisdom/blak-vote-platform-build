@@ -21,9 +21,19 @@ export interface HeaderProps {
   }
   onToggleSidebar?: () => void
   sidebarOpen?: boolean
+  homeHref?: string
+  settingsHref?: string
+  settingsLabel?: string
 }
 
-export function Header({ user, onToggleSidebar, sidebarOpen }: HeaderProps) {
+export function Header({
+  user,
+  onToggleSidebar,
+  sidebarOpen,
+  homeHref,
+  settingsHref,
+  settingsLabel = 'Settings',
+}: HeaderProps) {
   const pathname = usePathname()
   const [mounted, setMounted] = useState(false)
 
@@ -39,7 +49,10 @@ export function Header({ user, onToggleSidebar, sidebarOpen }: HeaderProps) {
   const displayName = user?.firstName
     ? `${user.firstName} ${user.lastName || ''}`.trim()
     : user?.email
-  const homeHref = pathname.startsWith('/admin') ? '/admin' : '/organizer'
+  const resolvedHomeHref =
+    homeHref || (pathname.startsWith('/admin') ? '/admin' : pathname.startsWith('/voter') ? '/voter' : '/organizer')
+  const resolvedSettingsHref =
+    settingsHref || (pathname.startsWith('/admin') ? '/admin' : pathname.startsWith('/voter') ? '/voter' : '/organizer/settings')
 
   return (
     <header className="sticky top-0 z-30 w-full border-b border-border bg-background/80 backdrop-blur-xl">
@@ -53,7 +66,7 @@ export function Header({ user, onToggleSidebar, sidebarOpen }: HeaderProps) {
             {sidebarOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
           </button>
 
-          <Link href={homeHref} aria-label="Go to dashboard home" className="group flex items-center gap-3 md:gap-4">
+          <Link href={resolvedHomeHref} aria-label="Go to dashboard home" className="group flex items-center gap-3 md:gap-4">
             <BrandLogo size="md" className="transition-all duration-300 group-hover:scale-[1.02]" />
           </Link>
         </div>
@@ -75,11 +88,11 @@ export function Header({ user, onToggleSidebar, sidebarOpen }: HeaderProps) {
             >
               <DropdownMenuItem asChild>
                 <Link
-                  href="/organizer/settings"
+                  href={resolvedSettingsHref}
                   className="flex items-center gap-3 rounded-lg px-3 py-2 transition-all hover:bg-muted"
                 >
                   <Settings className="h-4 w-4 text-gold" />
-                  Settings
+                  {settingsLabel}
                 </Link>
               </DropdownMenuItem>
 

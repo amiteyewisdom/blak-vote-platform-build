@@ -3,6 +3,11 @@ import { createClient } from '@/lib/supabase/server'
 import { requireRole } from '@/lib/api-auth'
 import { getSupabaseAdminClient } from '@/lib/server-security'
 
+function readTrimmedString(record: Record<string, unknown>, key: string) {
+  const value = record[key]
+  return typeof value === 'string' ? value.trim() : ''
+}
+
 export async function GET(request: NextRequest) {
   try {
     const supabase = await createClient()
@@ -57,9 +62,38 @@ export async function POST(request: NextRequest) {
     const accountDetails = body.accountDetails && typeof body.accountDetails === 'object'
       ? body.accountDetails
       : {}
+    const detailsRecord = accountDetails as Record<string, unknown>
+    const accountName = readTrimmedString(detailsRecord, 'name') || readTrimmedString(detailsRecord, 'account_name')
+    const accountNumber = readTrimmedString(detailsRecord, 'account_number')
+    const bankCode = readTrimmedString(detailsRecord, 'bank_code')
 
     if (!Number.isFinite(amount) || amount <= 0) {
       return NextResponse.json({ error: 'Amount must be greater than zero' }, { status: 400 })
+    }
+
+    if (method !== 'bank_transfer' && method !== 'mobile_money') {
+      return NextResponse.json({ error: 'Unsupported withdrawal method' }, { status: 400 })
+    }
+
+    if (!accountName) {
+      return NextResponse.json({ error: 'Account name is required' }, { status: 400 })
+    }
+
+    if (!accountNumber) {
+      return NextResponse.json({ error: method === 'mobile_money' ? 'Mobile money number is required' : 'Bank account number is required' }, { status: 400 })
+    }
+
+    if (!bankCode) {
+      return NextResponse.json({ error: method === 'mobile_money' ? 'Mobile money provider is required' : 'Bank selection is required' }, { status: 400 })
+    }
+
+    const normalizedAccountDetails = {
+      ...detailsRecord,
+      name: accountName,
+      account_name: accountName,
+      account_number: accountNumber,
+      bank_code: bankCode,
+      currency: 'GHS',
     }
 
     const adminSupabase = getSupabaseAdminClient()
@@ -68,7 +102,7 @@ export async function POST(request: NextRequest) {
       p_organizer_id: auth.userId,
       p_amount: amount,
       p_method: method,
-      p_account_details: accountDetails,
+      p_account_details: normalizedAccountDetails,
     })
 
     if (error) {

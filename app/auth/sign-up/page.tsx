@@ -8,7 +8,6 @@ import { useToast } from '@/hooks/use-toast'
 import { DSInput } from '@/components/ui/design-system'
 import { Button } from '@/components/ui/button'
 import BrandLogo from '@/components/BrandLogo'
-import { Sparkles } from 'lucide-react'
 
 export default function SignUpPage() {
   const router = useRouter()
@@ -46,6 +45,7 @@ export default function SignUpPage() {
       email,
       password,
       options: {
+        emailRedirectTo: `${window.location.origin}/auth/sign-in`,
         data: { role, first_name: firstName, last_name: lastName, phone_number: phone },
       },
     })
@@ -68,8 +68,15 @@ export default function SignUpPage() {
       })
     }
 
+    if (data.session) {
+      await supabase.auth.signOut()
+    }
+
     setLoading(false)
-    toast({ title: 'Account created!', description: 'Welcome to BlakVote. Sign in to continue.' })
+    toast({
+      title: 'Verify your email',
+      description: 'We sent a verification link to your email. Confirm it before signing in to your voter account.',
+    })
     router.push('/auth/sign-in')
   }
 
@@ -90,18 +97,6 @@ export default function SignUpPage() {
           </button>
           <h1 className="mt-6 text-3xl font-semibold tracking-tight text-foreground">Create Voter Account</h1>
           <p className="mt-2 text-sm text-muted-foreground">Join BlakVote to vote in events and nominate candidates</p>
-        </div>
-
-        <div className="mb-6 flex items-start gap-3 rounded-2xl border border-gold/20 bg-gold/10 p-4">
-          <Sparkles className="mt-0.5 h-5 w-5 flex-shrink-0 text-gold" />
-          <div>
-            <p className="text-sm font-medium text-gold">Want to organize events?</p>
-            <p className="mt-0.5 text-xs text-muted-foreground">
-              Create a voter account first, then{' '}
-              <Link href="/apply-organizer" className="text-gold underline">apply to be an organizer</Link>.
-              Admin approval is required.
-            </p>
-          </div>
         </div>
 
         <div className="space-y-4">

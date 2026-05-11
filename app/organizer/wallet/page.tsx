@@ -4,7 +4,12 @@ import { useEffect, useState } from 'react'
 import MetricCard from '@/components/ui/metric-card'
 import { Button } from '@/components/ui/button'
 import { useToast } from '@/hooks/use-toast'
-import { DSInput, DSSelect, DSTextarea } from '@/components/ui/design-system'
+import { DSInput, DSSelect } from '@/components/ui/design-system'
+
+interface TransferOption {
+  code: string
+  name: string
+}
 
 interface WalletSummary {
   total_revenue: number
@@ -36,8 +41,56 @@ interface WithdrawalHistoryItem {
   platform_fee_amount: number
   net_amount: number
   method: string
+  account_details?: Record<string, unknown> | null
   status: string
   requested_at: string
+  approved_at?: string | null
+  processed_at?: string | null
+  payout_provider?: string | null
+  payout_reference?: string | null
+  payout_attempted_at?: string | null
+  payout_failure_reason?: string | null
+}
+
+type VerifiedBankAccount = {
+  accountNumber: string
+  bankCode: string
+  accountName: string
+}
+
+function readAccountDetail(details: Record<string, unknown> | null | undefined, keys: string[]) {
+  if (!details || typeof details !== 'object') {
+    return null
+  }
+
+  for (const key of keys) {
+    const value = details[key]
+    if (typeof value === 'string' && value.trim().length > 0) {
+      return value.trim()
+    }
+  }
+
+  return null
+}
+
+function maskValue(value: string | null) {
+  if (!value) {
+    return null
+  }
+
+  if (value.length <= 4) {
+    return value
+  }
+
+  return `${'*'.repeat(Math.max(value.length - 4, 0))}${value.slice(-4)}`
+}
+
+function getWithdrawalDisplayStatus(item: WithdrawalHistoryItem) {
+  if (item.processed_at) {
+    return 'processed'
+  }
+
+  return item.status || 'pending'
 }
 
 export default function OrganizerWalletPage() {
@@ -48,7 +101,16 @@ export default function OrganizerWalletPage() {
   const [withdrawals, setWithdrawals] = useState<WithdrawalHistoryItem[]>([])
   const [withdrawAmount, setWithdrawAmount] = useState('')
   const [withdrawMethod, setWithdrawMethod] = useState('bank_transfer')
-  const [accountDetails, setAccountDetails] = useState('')
+  const [accountName, setAccountName] = useState('')
+  const [bankAccountNumber, setBankAccountNumber] = useState('')
+  const [selectedBankCode, setSelectedBankCode] = useState('')
+  const [mobileMoneyNumber, setMobileMoneyNumber] = useState('')
+  const [selectedMobileMoneyCode, setSelectedMobileMoneyCode] = useState('')
+  const [bankOptions, setBankOptions] = useState<TransferOption[]>([])
+  const [mobileMoneyOptions, setMobileMoneyOptions] = useState<TransferOption[]>([])
+  const [loadingOptions, setLoadingOptions] = useState(true)
+  const [verifyingBankAccount, setVerifyingBankAccount] = useState(false)
+  const [verifiedBankAccount, setVerifiedBankAccount] = useState<VerifiedBankAccount | null>(null)
   const [submittingWithdraw, setSubmittingWithdraw] = useState(false)
   const [loading, setLoading] = useState(true)
 
@@ -79,6 +141,14 @@ export default function OrganizerWalletPage() {
         }
         const withdrawalsData = await withdrawalsRes.json()
         setWithdrawals(withdrawalsData.withdrawals || [])
+
+        const optionsRes = await fetch('/api/organizer/wallet/withdrawal-options')
+        if (!optionsRes.ok) {
+          throw new Error('Failed to fetch withdrawal options')
+        }
+        const optionsData = await optionsRes.json()
+        setBankOptions(Array.isArray(optionsData.banks) ? optionsData.banks : [])
+        setMobileMoneyOptions(Array.isArray(optionsData.mobileMoney) ? optionsData.mobileMoney : [])
       } catch (error: any) {
         toast({
           title: 'Error',
@@ -87,6 +157,7 @@ export default function OrganizerWalletPage() {
         })
       } finally {
         setLoading(false)
+        setLoadingOptions(false)
       }
     }
 
@@ -123,18 +194,59 @@ export default function OrganizerWalletPage() {
       return
     }
 
-    let parsedAccountDetails: Record<string, unknown> = {}
-    if (accountDetails.trim()) {
-      try {
-        parsedAccountDetails = JSON.parse(accountDetails)
-      } catch {
-        toast({
-          title: 'Invalid Account Details',
-          description: 'Account details must be valid JSON',
-          variant: 'destructive',
-        })
-        return
-      }
+    const trimmedAccountName = accountName.trim()
+    if (!trimmedAccountName) {
+      toast({
+        title: 'Missing Account Name',
+        description: 'Enter the recipient name for this withdrawal.',
+        variant: 'destructive',
+      })
+      return
+    }
+
+    const isMobileMoney = withdrawMethod === 'mobile_money'
+    const destinationNumber = (isMobileMoney ? mobileMoneyNumber : bankAccountNumber).trim()
+    const destinationCode = (isMobileMoney ? selectedMobileMoneyCode : selectedBankCode).trim()
+
+    if (!destinationNumber) {
+      toast({
+        title: isMobileMoney ? 'Missing Mobile Money Number' : 'Missing Account Number',
+        description: isMobileMoney ? 'Enter the mobile money number to receive the payout.' : 'Enter the bank account number to receive the payout.',
+        variant: 'destructive',
+      })
+      return
+    }
+
+    if (!destinationCode) {
+      toast({
+        title: isMobileMoney ? 'Missing Mobile Money Provider' : 'Missing Bank',
+        description: isMobileMoney ? 'Select the mobile money network for this payout.' : 'Select the destination bank for this payout.',
+        variant: 'destructive',
+      })
+      return
+    }
+
+    if (
+      !isMobileMoney &&
+      (!verifiedBankAccount ||
+        verifiedBankAccount.accountNumber !== destinationNumber ||
+        verifiedBankAccount.bankCode !== destinationCode)
+    ) {
+      toast({
+        title: 'Verify Account First',
+        description: 'Verify the bank account before submitting this withdrawal request.',
+        variant: 'destructive',
+      })
+      return
+    }
+
+    const parsedAccountDetails: Record<string, unknown> = {
+      name: isMobileMoney ? trimmedAccountName : verifiedBankAccount?.accountName || trimmedAccountName,
+      account_name: isMobileMoney ? trimmedAccountName : verifiedBankAccount?.accountName || trimmedAccountName,
+      account_number: destinationNumber,
+      bank_code: destinationCode,
+      currency: 'GHS',
+      ...(isMobileMoney ? { paystackRecipientType: 'mobile_money' } : { paystackRecipientType: 'ghipss' }),
     }
 
     try {
@@ -163,7 +275,12 @@ export default function OrganizerWalletPage() {
       })
 
       setWithdrawAmount('')
-      setAccountDetails('')
+      setAccountName('')
+      setBankAccountNumber('')
+      setSelectedBankCode('')
+      setMobileMoneyNumber('')
+      setSelectedMobileMoneyCode('')
+      setVerifiedBankAccount(null)
 
       const [walletRes, withdrawalsRes] = await Promise.all([
         fetch('/api/organizer/wallet'),
@@ -187,6 +304,60 @@ export default function OrganizerWalletPage() {
       })
     } finally {
       setSubmittingWithdraw(false)
+    }
+  }
+
+  const verifyBankAccount = async () => {
+    const accountNumber = bankAccountNumber.trim()
+    const bankCode = selectedBankCode.trim()
+
+    if (!accountNumber || !bankCode) {
+      toast({
+        title: 'Missing Bank Details',
+        description: 'Enter an account number and choose a bank before verifying.',
+        variant: 'destructive',
+      })
+      return
+    }
+
+    try {
+      setVerifyingBankAccount(true)
+      const response = await fetch('/api/organizer/wallet/resolve-account', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ accountNumber, bankCode }),
+      })
+
+      const payload = await response.json().catch(() => ({}))
+      if (!response.ok) {
+        throw new Error(payload.error || 'Unable to verify bank account')
+      }
+
+      const resolvedAccountName = typeof payload.accountName === 'string' ? payload.accountName.trim() : ''
+      setVerifiedBankAccount({
+        accountNumber,
+        bankCode,
+        accountName: resolvedAccountName || accountName.trim(),
+      })
+      if (resolvedAccountName) {
+        setAccountName(resolvedAccountName)
+      }
+
+      toast({
+        title: 'Bank Account Verified',
+        description: resolvedAccountName ? `Account verified as ${resolvedAccountName}.` : 'Bank account verified successfully.',
+      })
+    } catch (error: any) {
+      setVerifiedBankAccount(null)
+      toast({
+        title: 'Verification Failed',
+        description: error.message || 'Unable to verify bank account.',
+        variant: 'destructive',
+      })
+    } finally {
+      setVerifyingBankAccount(false)
     }
   }
 
@@ -214,10 +385,11 @@ export default function OrganizerWalletPage() {
 
       {wallet && (
         <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
-          <MetricCard title="Total Revenue" value={formatCurrency(wallet.total_revenue)} />
+          <MetricCard title="Gross Revenue" value={formatCurrency(wallet.total_revenue)} />
           <MetricCard title="Platform Fees" value={formatCurrency(wallet.platform_fees_deducted)} />
-          <MetricCard title="Net Balance" value={formatCurrency(wallet.net_balance)} />
-          <MetricCard title="Available" value={formatCurrency(wallet.available_balance)} />
+          <MetricCard title="Net Earnings" value={formatCurrency(wallet.net_balance)} />
+          <MetricCard title="Reserved" value={formatCurrency(wallet.pending_withdrawals)} />
+          <MetricCard title="Available to Request" value={formatCurrency(wallet.available_balance)} />
           <MetricCard title="Paid Votes" value={wallet.total_paid_votes.toLocaleString()} />
           <MetricCard
             title="Your Platform Fee"
@@ -235,6 +407,9 @@ export default function OrganizerWalletPage() {
           <span className="font-semibold text-foreground">Current Fee Rule:</span>{' '}
           {Number(wallet.effective_platform_fee_percent || 0).toFixed(2)}%{' '}
           {wallet.fee_source === 'custom' ? '(custom fee set by admin for your account)' : '(default platform fee)'}
+          <div className="mt-2">
+            Available to request = net earnings minus withdrawals already requested and still under review or settlement.
+          </div>
         </div>
       )}
 
@@ -242,10 +417,10 @@ export default function OrganizerWalletPage() {
         <div className="space-y-4 rounded-xl border border-border bg-card p-5 sm:p-6">
           <div className="space-y-2">
             <h2 className="text-2xl font-bold">Withdraw Funds</h2>
-            <p className="text-muted-foreground"> {formatCurrency(wallet.available_balance)}
+            <p className="text-muted-foreground">Available to request now: {formatCurrency(wallet.available_balance)}
             </p>
             <p className="text-xs text-muted-foreground">
-              Platform fee is deducted automatically from each request at your current rate of {Number(wallet.effective_platform_fee_percent || 0).toFixed(2)}%.
+              Requests stay pending until admin validates them. After approval the system attempts a Paystack payout immediately, and low-balance cases wait in pending funds until they can be retried.
             </p>
           </div>
 
@@ -270,18 +445,90 @@ export default function OrganizerWalletPage() {
             <Button
               onClick={handleWithdraw}
               className="w-full"
-              disabled={submittingWithdraw}
+              disabled={submittingWithdraw || loadingOptions}
             >
               {submittingWithdraw ? 'Submitting...' : 'Request Withdrawal'}
             </Button>
           </div>
 
-          <DSTextarea
-            value={accountDetails}
-            onChange={(e) => setAccountDetails(e.target.value)}
-            placeholder='Account details JSON (optional), e.g. {"bank":"GTB","account_number":"0123456789"}'
-            className="h-24 rounded-lg px-3 py-2.5 text-sm"
-          />
+          <div className="grid gap-3 md:grid-cols-2">
+            <DSInput
+              value={accountName}
+              onChange={(e) => setAccountName(e.target.value)}
+              placeholder="Recipient name"
+              className="rounded-lg px-3 text-sm"
+            />
+
+            {withdrawMethod === 'bank_transfer' ? (
+              <>
+                <DSInput
+                  value={bankAccountNumber}
+                  onChange={(e) => {
+                    setBankAccountNumber(e.target.value)
+                    setVerifiedBankAccount(null)
+                  }}
+                  placeholder="Bank account number"
+                  className="rounded-lg px-3 text-sm"
+                />
+                <DSSelect
+                  value={selectedBankCode}
+                  onChange={(e) => {
+                    setSelectedBankCode(e.target.value)
+                    setVerifiedBankAccount(null)
+                  }}
+                  className="rounded-lg px-3 text-sm"
+                  disabled={loadingOptions}
+                >
+                  <option value="">{loadingOptions ? 'Loading banks...' : 'Select bank'}</option>
+                  {bankOptions.map((option) => (
+                    <option key={option.code} value={option.code}>
+                      {option.name}
+                    </option>
+                  ))}
+                </DSSelect>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={verifyBankAccount}
+                  disabled={loadingOptions || verifyingBankAccount}
+                  className="md:col-span-2"
+                >
+                  {verifyingBankAccount ? 'Verifying account...' : 'Verify Bank Account'}
+                </Button>
+                {verifiedBankAccount && (
+                  <div className="md:col-span-2 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-200">
+                    Verified account: {verifiedBankAccount.accountName} ({maskValue(verifiedBankAccount.accountNumber)})
+                  </div>
+                )}
+              </>
+            ) : (
+              <>
+                <DSInput
+                  value={mobileMoneyNumber}
+                  onChange={(e) => setMobileMoneyNumber(e.target.value)}
+                  placeholder="Mobile money number"
+                  className="rounded-lg px-3 text-sm"
+                />
+                <DSSelect
+                  value={selectedMobileMoneyCode}
+                  onChange={(e) => setSelectedMobileMoneyCode(e.target.value)}
+                  className="rounded-lg px-3 text-sm"
+                  disabled={loadingOptions}
+                >
+                  <option value="">{loadingOptions ? 'Loading networks...' : 'Select mobile money network'}</option>
+                  {mobileMoneyOptions.map((option) => (
+                    <option key={option.code} value={option.code}>
+                      {option.name}
+                    </option>
+                  ))}
+                </DSSelect>
+              </>
+            )}
+          </div>
+
+          <p className="text-xs text-muted-foreground">
+            The system stores the recipient name, destination number, and Paystack bank or telco code for automatic payout after admin approval.
+          </p>
         </div>
       )}
 
@@ -312,8 +559,18 @@ export default function OrganizerWalletPage() {
                     <td className="py-3 text-orange-400">{formatCurrency(Number(item.platform_fee_amount || 0))}</td>
                     <td className="py-3 text-emerald-400">{formatCurrency(Number(item.net_amount || 0))}</td>
                     <td className="py-3 capitalize">{(item.method || 'bank_transfer').replace('_', ' ')}</td>
-                    <td className="py-3 uppercase text-xs">{item.status || 'pending'}</td>
-                    <td className="py-3">{new Date(item.requested_at).toLocaleString()}</td>
+                    <td className="py-3 uppercase text-xs">{getWithdrawalDisplayStatus(item)}</td>
+                    <td className="py-3">
+                      {new Date(item.requested_at).toLocaleString()}
+                      {readAccountDetail(item.account_details, ['account_name', 'name']) ? <div className="text-xs text-muted-foreground">Recipient: {readAccountDetail(item.account_details, ['account_name', 'name'])}</div> : null}
+                      {readAccountDetail(item.account_details, ['bank_code']) ? <div className="text-xs text-muted-foreground">Destination: {readAccountDetail(item.account_details, ['bank_code'])} / {maskValue(readAccountDetail(item.account_details, ['account_number'])) || 'N/A'}</div> : null}
+                      {item.approved_at ? <div className="text-xs text-muted-foreground">Approved: {new Date(item.approved_at).toLocaleString()}</div> : null}
+                      {item.payout_attempted_at ? <div className="text-xs text-muted-foreground">Last attempt: {new Date(item.payout_attempted_at).toLocaleString()}</div> : null}
+                      {item.processed_at ? <div className="text-xs text-emerald-400">Paid out: {new Date(item.processed_at).toLocaleString()}</div> : null}
+                      {item.payout_provider ? <div className="text-xs text-muted-foreground uppercase">Provider: {item.payout_provider}</div> : null}
+                      {item.payout_reference ? <div className="text-xs text-muted-foreground break-all">Reference: {item.payout_reference}</div> : null}
+                      {item.payout_failure_reason && !item.processed_at ? <div className="text-xs text-amber-300">{item.payout_failure_reason}</div> : null}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -385,13 +642,19 @@ export default function OrganizerWalletPage() {
           <li className="flex gap-3">
             <span className="text-green-500">•</span>
             <span>
-              <strong>Net Balance:</strong> Available for withdrawal
+              <strong>Net Earnings:</strong> Lifetime organizer earnings after platform fees
             </span>
           </li>
           <li className="flex gap-3">
             <span className="text-blue-500">•</span>
             <span>
-              <strong>Pending:</strong> Funds requested but not yet transferred
+              <strong>Reserved:</strong> Withdrawal requests already created and still being reviewed, waiting for Paystack funds, or being settled
+            </span>
+          </li>
+          <li className="flex gap-3">
+            <span className="text-gold">•</span>
+            <span>
+              <strong>Available to Request:</strong> What remains after reserved withdrawals are removed from net earnings
             </span>
           </li>
         </ul>
