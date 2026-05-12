@@ -8,7 +8,7 @@ import {
   initiateMoMoPayment,
   updateUssdPendingTransaction,
 } from '@/lib/nalo-payment'
-import { getAllowedIps, getSupabaseAdminClient, isRequestFromAllowedIps } from '@/lib/server-security'
+import { extractClientIp, getAllowedIps, getSupabaseAdminClient, isRequestFromAllowedIps } from '@/lib/server-security'
 
 type NormalizedUssdRequest = {
   sessionId: string
@@ -39,13 +39,8 @@ type TicketPlanRecord = {
 
 const MAX_VOTE_QUANTITY = 50
 const MAX_USSD_TICKET_QUANTITY = 3
-const NALO_DEFAULT_USSD_ALLOWED_IPS = ['136.243.56.160']
-
 function getAllowedUssdIps() {
-  return getAllowedIps(
-    'NALO_USSD_ALLOWED_IPS',
-    getAllowedIps('NALO_ALLOWED_IPS', NALO_DEFAULT_USSD_ALLOWED_IPS)
-  )
+  return getAllowedIps('NALO_USSD_ALLOWED_IPS', getAllowedIps('NALO_ALLOWED_IPS', []))
 }
 
 function trimToPhoneIdentifier(phone: string) {
@@ -582,6 +577,10 @@ async function handleUssdRequest(request: Request) {
     const allowedIps = getAllowedUssdIps()
 
     if (!isRequestFromAllowedIps(request, allowedIps)) {
+      console.warn('[USSD_ROUTE_BLOCKED_IP]', {
+        clientIp: extractClientIp(request),
+        allowedIps,
+      })
       return end('Unauthorized source IP')
     }
 

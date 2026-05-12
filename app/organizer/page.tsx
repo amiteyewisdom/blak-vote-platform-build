@@ -158,6 +158,7 @@ export default function OrganizerDashboard() {
               <div className="relative h-60 w-full overflow-hidden">
                 <img
                   src={event.image_url}
+                  alt={event.title || 'Event image'}
                   className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent" />

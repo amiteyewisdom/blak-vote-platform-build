@@ -226,9 +226,17 @@ export default function PublicVotePage() {
             return (
               <div key={candidate.id} className="bg-background/40 hover:bg-foreground/[0.03] transition-colors">
                 {/* Row Header */}
-                <button
+                <div
                   className="w-full px-4 sm:px-6 py-4 sm:py-5 flex items-center justify-between gap-4 group text-left"
+                  role="button"
+                  tabIndex={0}
                   onClick={() => setExpandedCandidateId(isExpanded ? null : candidate.id)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault()
+                      setExpandedCandidateId(isExpanded ? null : candidate.id)
+                    }
+                  }}
                 >
                   <div className="flex items-center gap-3 sm:gap-4 flex-1 min-w-0">
                     {candidate.photo_url ? (
@@ -253,6 +261,7 @@ export default function PublicVotePage() {
                   </div>
 
                   <button
+                    type="button"
                     className="inline-flex h-9 items-center justify-center rounded-md px-4 text-sm font-medium border border-border/70 text-foreground/80 hover:border-foreground/30 hover:text-foreground hover:bg-foreground/[0.035] transition-colors flex-shrink-0"
                     onClick={(e) => {
                       e.stopPropagation()
@@ -274,7 +283,7 @@ export default function PublicVotePage() {
                       <ChevronDown className="w-5 h-5" />
                     )}
                   </div>
-                </button>
+                </div>
 
                 {/* Expanded Details */}
                 {isExpanded && (
