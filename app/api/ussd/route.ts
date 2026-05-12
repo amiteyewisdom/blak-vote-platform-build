@@ -2,12 +2,6 @@ import crypto from 'crypto'
 import { NextResponse } from 'next/server'
 import { resolveEventVotePrice } from '@/lib/event-pricing'
 import { isVotingOpenStatus } from '@/lib/event-status'
-import {
-  buildUssdTransactionId,
-  createOrReuseUssdPendingTransaction,
-  initiateMoMoPayment,
-  updateUssdPendingTransaction,
-} from '@/lib/nalo-payment'
 import { extractClientIp, getAllowedIps, getSupabaseAdminClient, isRequestFromAllowedIps } from '@/lib/server-security'
 
 type NormalizedUssdRequest = {
@@ -108,6 +102,10 @@ function parseMenu(text: string) {
     .split('*')
     .map((part) => part.trim())
     .filter((part) => part.length > 0)
+}
+
+async function getNaloPaymentUtils() {
+  return import('@/lib/nalo-payment')
 }
 
 function stripSignaturePrefix(signature: string) {
@@ -316,6 +314,13 @@ async function handleVoteFlow(params: {
     return end('Unable to read your phone number from network. Please try again.')
   }
 
+  const {
+    buildUssdTransactionId,
+    createOrReuseUssdPendingTransaction,
+    initiateMoMoPayment,
+    updateUssdPendingTransaction,
+  } = await getNaloPaymentUtils()
+
   const transactionId = buildUssdTransactionId(
     `USSD:${sessionId}:${event.id}:${candidate.id}:${quantity}:${trimToPhoneIdentifier(phoneNumber)}`
   )
@@ -500,6 +505,13 @@ async function handleTicketFlow(params: {
     return end('Unable to read your phone number from network. Please try again.')
   }
 
+  const {
+    buildUssdTransactionId,
+    createOrReuseUssdPendingTransaction,
+    initiateMoMoPayment,
+    updateUssdPendingTransaction,
+  } = await getNaloPaymentUtils()
+
   if (totalAmount <= 0) {
     const issued = await issueFreeTickets({
       planId: plan.id,
@@ -589,6 +601,19 @@ export async function GET(request: Request) {
 async function handleUssdRequest(request: Request) {
   try {
     const ussdDebugEnabled = process.env.USSD_DEBUG_LOGS === 'true'
+    const ussdSafeModeEnabled = process.env.USSD_SAFE_MODE === 'true'
+
+    if (ussdSafeModeEnabled) {
+      if (ussdDebugEnabled) {
+        console.info('[USSD_DEBUG_SAFE_MODE]', {
+          method: request.method,
+          url: request.url,
+        })
+      }
+
+      return con('Welcome to BlakVote\n1. Vote\n2. Ticketing')
+    }
+
     const allowedIps = getAllowedUssdIps()
     const clientIp = extractClientIp(request)
 
