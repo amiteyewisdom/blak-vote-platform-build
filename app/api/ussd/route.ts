@@ -54,14 +54,20 @@ function toUpperCode(value: string) {
 function con(message: string) {
   return new NextResponse(`CON ${message}`, {
     status: 200,
-    headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+    headers: {
+      'Content-Type': 'text/plain',
+      'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
+    },
   })
 }
 
 function end(message: string) {
   return new NextResponse(`END ${message}`, {
     status: 200,
-    headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+    headers: {
+      'Content-Type': 'text/plain',
+      'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
+    },
   })
 }
 
@@ -306,6 +312,10 @@ async function handleVoteFlow(params: {
     return end('Invalid confirmation option.')
   }
 
+  if (!phoneNumber) {
+    return end('Unable to read your phone number from network. Please try again.')
+  }
+
   const transactionId = buildUssdTransactionId(
     `USSD:${sessionId}:${event.id}:${candidate.id}:${quantity}:${trimToPhoneIdentifier(phoneNumber)}`
   )
@@ -486,6 +496,10 @@ async function handleTicketFlow(params: {
     return end('Invalid confirmation option.')
   }
 
+  if (!phoneNumber) {
+    return end('Unable to read your phone number from network. Please try again.')
+  }
+
   if (totalAmount <= 0) {
     const issued = await issueFreeTickets({
       planId: plan.id,
@@ -574,11 +588,28 @@ export async function GET(request: Request) {
 
 async function handleUssdRequest(request: Request) {
   try {
+    const ussdDebugEnabled = process.env.USSD_DEBUG_LOGS === 'true'
     const allowedIps = getAllowedUssdIps()
+    const clientIp = extractClientIp(request)
+
+    if (ussdDebugEnabled) {
+      console.info('[USSD_DEBUG_REQUEST]', {
+        method: request.method,
+        url: request.url,
+        clientIp,
+        contentType: request.headers.get('content-type') || null,
+        hasSignatureHeader: Boolean(
+          request.headers.get('x-ussd-signature') ||
+            request.headers.get('x-signature') ||
+            request.headers.get('x-webhook-signature')
+        ),
+        allowedIps,
+      })
+    }
 
     if (!isRequestFromAllowedIps(request, allowedIps)) {
       console.warn('[USSD_ROUTE_BLOCKED_IP]', {
-        clientIp: extractClientIp(request),
+        clientIp,
         allowedIps,
       })
       return end('Unauthorized source IP')
@@ -601,6 +632,13 @@ async function handleUssdRequest(request: Request) {
       parsedInput = Object.fromEntries(params.entries())
     }
 
+    if (ussdDebugEnabled) {
+      console.info('[USSD_DEBUG_PARSED_INPUT]', {
+        rawBodyLength: rawBody.length,
+        parsedKeys: Object.keys(parsedInput),
+      })
+    }
+
     const signature =
       request.headers.get('x-ussd-signature') ||
       request.headers.get('x-signature') ||
@@ -612,8 +650,12 @@ async function handleUssdRequest(request: Request) {
 
     const { sessionId, phoneNumber, text } = normalizeBody(parsedInput)
 
-    if (!phoneNumber) {
-      return end('Phone number missing from USSD provider payload')
+    if (ussdDebugEnabled) {
+      console.info('[USSD_DEBUG_NORMALIZED]', {
+        sessionIdPresent: Boolean(sessionId),
+        phonePresent: Boolean(phoneNumber),
+        text,
+      })
     }
 
     const steps = parseMenu(text)
