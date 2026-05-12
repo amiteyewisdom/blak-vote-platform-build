@@ -1,5 +1,4 @@
 import crypto from 'crypto'
-import { NextResponse } from 'next/server'
 import { resolveEventVotePrice } from '@/lib/event-pricing'
 import { isVotingOpenStatus } from '@/lib/event-status'
 import { extractClientIp, getAllowedIps, getSupabaseAdminClient, isRequestFromAllowedIps } from '@/lib/server-security'
@@ -46,21 +45,23 @@ function toUpperCode(value: string) {
 }
 
 function con(message: string) {
-  return new NextResponse(`CON ${message}`, {
+  const body = `CON ${message}`
+  return new Response(body, {
     status: 200,
     headers: {
       'Content-Type': 'text/plain',
-      'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
+      'Content-Length': String(new TextEncoder().encode(body).length),
     },
   })
 }
 
 function end(message: string) {
-  return new NextResponse(`END ${message}`, {
+  const body = `END ${message}`
+  return new Response(body, {
     status: 200,
     headers: {
       'Content-Type': 'text/plain',
-      'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
+      'Content-Length': String(new TextEncoder().encode(body).length),
     },
   })
 }
