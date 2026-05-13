@@ -87,7 +87,7 @@ export default function ResetPasswordPage() {
         description: 'You can now sign in with your new password.',
       })
 
-      router.replace('/auth/sign-in')
+      router.replace('/auth/login')
     } catch (err: any) {
       setError(err.message || 'Failed to update password')
     } finally {

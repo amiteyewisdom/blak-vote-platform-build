@@ -2,52 +2,51 @@
 
 import { FormEvent, useState } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
-import { AlertCircle, ArrowRight, Mail } from 'lucide-react'
+import { AlertCircle, Eye, EyeOff, LogIn } from 'lucide-react'
 import BrandLogo from '@/components/BrandLogo'
 import { Button } from '@/components/ui/button'
-import { supabase } from '@/lib/auth'
-
-const AUTH_CALLBACK_URL =
-  process.env.NEXT_PUBLIC_AUTH_CALLBACK_URL ?? 'https://app.blakvote.com/auth/callback'
+import { supabase } from '@/lib/supabaseClient'
+import { getAuthenticatedUserRole, getRedirectPathForRole } from '@/lib/auth/role-routing'
 
 export default function LoginPage() {
-  const router = useRouter()
   const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [successMessage, setSuccessMessage] = useState<string | null>(null)
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
+    setError(null)
 
     const normalizedEmail = email.trim().toLowerCase()
-    if (!normalizedEmail) {
-      setError('Enter your email address to receive a verification code.')
+    if (!normalizedEmail || !password) {
+      setError('Email and password are required.')
       return
     }
 
-    setError(null)
-    setSuccessMessage(null)
     setLoading(true)
 
     try {
-      const { error: otpError } = await supabase.auth.signInWithOtp({
+      const { error: authError } = await supabase.auth.signInWithPassword({
         email: normalizedEmail,
-        options: {
-          shouldCreateUser: false,
-          emailRedirectTo: AUTH_CALLBACK_URL,
-        },
+        password,
       })
 
-      if (otpError) {
-        throw otpError
-      }
+      if (authError) throw authError
 
-      setSuccessMessage('A verification code has been sent to your inbox.')
-      router.push(`/auth/verify?email=${encodeURIComponent(normalizedEmail)}`)
-    } catch (authError) {
-      const message = authError instanceof Error ? authError.message : 'Failed to send verification code.'
+      const {
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser()
+
+      if (userError || !user) throw new Error('Session not established.')
+
+      const role = await getAuthenticatedUserRole(supabase, user)
+      const nextPath = getRedirectPathForRole(role)
+      window.location.replace(nextPath)
+    } catch (loginError) {
+      const message = loginError instanceof Error ? loginError.message : 'Failed to sign in.'
       setError(message)
     } finally {
       setLoading(false)
@@ -62,52 +61,79 @@ export default function LoginPage() {
       <div className="relative w-full max-w-md rounded-3xl border border-border/70 bg-card/95 p-6 shadow-[0_24px_80px_hsl(var(--foreground)/0.12)] sm:p-10">
         <div className="mb-10 flex flex-col items-center text-center">
           <BrandLogo size="lg" centered />
-          <h1 className="mt-6 text-3xl font-semibold tracking-tight text-foreground">Sign in with OTP</h1>
-          <p className="mt-2 text-sm text-muted-foreground">Get a one-time code sent to your email.</p>
+          <h1 className="mt-6 text-3xl font-semibold tracking-tight text-foreground">Welcome back</h1>
+          <p className="mt-2 text-sm text-muted-foreground">Sign in to continue to BlakVote</p>
         </div>
 
         {error ? (
           <div className="mb-6 flex items-start gap-3 rounded-xl border border-destructive/20 bg-destructive/10 p-4 text-sm text-destructive">
-            <AlertCircle size={18} className="mt-0.5" />
+            <AlertCircle size={18} className="mt-0.5 shrink-0" />
             <span>{error}</span>
           </div>
         ) : null}
 
-        {successMessage ? (
-          <div className="mb-6 rounded-xl border border-emerald-400/20 bg-emerald-500/10 p-4 text-sm text-emerald-300">
-            {successMessage}
-          </div>
-        ) : null}
-
-        <form onSubmit={handleSubmit} className="space-y-6">
+        <form onSubmit={handleSubmit} className="space-y-5">
           <div>
             <label htmlFor="email" className="mb-2 block text-sm text-foreground/70">
               Email
             </label>
+            <input
+              id="email"
+              type="email"
+              autoComplete="email"
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+              className="h-12 w-full rounded-2xl border border-border bg-background/70 px-4 text-foreground outline-none transition focus-visible:ring-2 focus-visible:ring-ring"
+              placeholder="name@company.com"
+            />
+          </div>
+
+          <div>
+            <label htmlFor="password" className="mb-2 block text-sm text-foreground/70">
+              Password
+            </label>
             <div className="relative">
-              <Mail size={18} className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground" />
               <input
-                id="email"
-                type="email"
-                autoComplete="email"
-                value={email}
-                onChange={(event) => setEmail(event.target.value)}
-                className="h-12 w-full rounded-2xl border border-border bg-background/70 pl-11 pr-4 text-foreground outline-none transition focus-visible:ring-2 focus-visible:ring-ring"
-                placeholder="name@company.com"
+                id="password"
+                type={showPassword ? 'text' : 'password'}
+                autoComplete="current-password"
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                className="h-12 w-full rounded-2xl border border-border bg-background/70 px-4 pr-12 text-foreground outline-none transition focus-visible:ring-2 focus-visible:ring-ring"
               />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground transition hover:text-foreground"
+                aria-label={showPassword ? 'Hide password' : 'Show password'}
+              >
+                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
             </div>
           </div>
 
+          <div className="flex justify-end">
+            <Link href="/auth/forgot-password" className="text-sm text-gold transition hover:opacity-80">
+              Forgot password?
+            </Link>
+          </div>
+
           <Button type="submit" disabled={loading} className="h-12 w-full">
-            {loading ? 'Sending code...' : 'Send verification code'}
-            {!loading ? <ArrowRight size={18} className="ml-2" /> : null}
+            {loading ? (
+              'Signing in...'
+            ) : (
+              <span className="inline-flex items-center gap-2">
+                <LogIn size={18} />
+                Sign in
+              </span>
+            )}
           </Button>
         </form>
 
         <div className="mt-8 text-center text-sm text-muted-foreground">
-          Prefer password sign in?{' '}
-          <Link href="/auth/sign-in" className="font-medium text-gold transition hover:opacity-80">
-            Use password login
+          Don&apos;t have an account?{' '}
+          <Link href="/auth/signup" className="font-medium text-gold transition hover:opacity-80">
+            Create account
           </Link>
         </div>
       </div>
