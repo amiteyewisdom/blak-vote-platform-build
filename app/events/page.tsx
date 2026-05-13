@@ -89,7 +89,7 @@ export default function EventsPage() {
       </div>
 
       <PublicNav />
-      <div className="relative z-10 max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-14 sm:py-20">
+      <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-14 sm:py-20">
         <div className="max-w-3xl rounded-2xl border border-border bg-card/90 px-5 py-6 shadow-[0_12px_28px_hsl(var(--foreground)/0.12)] backdrop-blur-sm dark:border-white/10 dark:bg-[linear-gradient(180deg,rgba(17,24,39,0.75),rgba(15,23,42,0.45))] dark:shadow-[0_20px_50px_rgba(2,6,23,0.35)] sm:px-7 sm:py-7">
           <p className="text-[11px] uppercase tracking-[0.2em] text-gold/85">Discover</p>
           <h1 className="mt-2 text-3xl sm:text-4xl font-semibold tracking-[-0.02em] text-foreground dark:bg-gradient-to-r dark:from-white dark:via-slate-100 dark:to-gold dark:bg-clip-text dark:text-transparent">Public Events</h1>
@@ -108,7 +108,7 @@ export default function EventsPage() {
           />
         </div>
 
-        <div className="mt-5 grid max-w-2xl grid-cols-3 gap-2 sm:gap-3">
+        <div className="mt-5 grid w-fit grid-cols-3 gap-2 sm:gap-3">
           <div className="rounded-lg border border-emerald-500/35 bg-emerald-500/10 px-3 py-2">
             <p className="text-[10px] uppercase tracking-[0.12em] text-emerald-700 dark:text-emerald-200/90">Live</p>
             <p className="mt-1 text-base font-semibold text-emerald-800 dark:text-emerald-100">{summary.live}</p>
@@ -136,7 +136,7 @@ export default function EventsPage() {
               <p className="inline-flex items-center rounded-full border border-sky-400/30 bg-sky-400/10 px-2.5 py-1 text-xs sm:text-sm text-sky-700 dark:text-sky-200">{filteredEvents.length} total</p>
             </div>
 
-            <div className="mt-3 divide-y divide-border overflow-hidden rounded-2xl border border-border bg-card/90 shadow-[0_10px_26px_hsl(var(--foreground)/0.12)] dark:divide-white/10 dark:border-white/10 dark:bg-slate-950/45 dark:shadow-[0_14px_36px_rgba(2,6,23,0.28)]">
+            <div className="mt-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
               {filteredEvents.map((event) => {
                 const publicEventCode = event.short_code || event.event_code || event.id
                 const nominees = eventNominees.find((en) => en.event.id === event.id)?.nominees || []
@@ -146,65 +146,74 @@ export default function EventsPage() {
                 const eventTimeLabel = eventDate ? eventDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Time not set'
                 const startTs = event.start_date ? new Date(event.start_date).getTime() : NaN
                 const endTs = event.end_date ? new Date(event.end_date).getTime() : NaN
+                const coverImage = event.image_url || event.banner_url || null
 
                 const status = (!Number.isNaN(startTs) && startTs > nowTs)
-                  ? { label: 'Upcoming', className: 'border-sky-500/35 bg-sky-500/10 text-sky-700 dark:text-sky-200' }
+                  ? { label: 'Upcoming', className: 'border-sky-500/50 bg-sky-500/15 text-sky-700 dark:text-sky-200' }
                   : (!Number.isNaN(endTs) && endTs < nowTs)
-                    ? { label: 'Closed', className: 'border-slate-400/35 bg-slate-400/10 text-slate-700 dark:text-slate-300' }
-                    : { label: 'Live', className: 'border-emerald-500/35 bg-emerald-500/10 text-emerald-700 dark:text-emerald-200' }
+                    ? { label: 'Closed', className: 'border-slate-400/50 bg-slate-400/15 text-slate-700 dark:text-slate-300' }
+                    : { label: 'Live', className: 'border-emerald-500/50 bg-emerald-500/15 text-emerald-700 dark:text-emerald-200' }
 
                 return (
                   <Link
                     key={event.id}
                     href={`/events/${publicEventCode}`}
-                    className="no-transition block px-3 py-5 sm:px-4 sm:py-6"
+                    className="no-transition group flex flex-col overflow-hidden rounded-2xl border border-border bg-card/90 shadow-[0_4px_18px_hsl(var(--foreground)/0.08)] transition-shadow hover:shadow-[0_8px_28px_hsl(var(--foreground)/0.16)] dark:border-white/10 dark:bg-slate-950/60"
                   >
-                    <div className="flex flex-col gap-4 sm:grid sm:grid-cols-[minmax(0,1fr)_11.5rem_6rem] sm:items-center sm:gap-6">
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2">
-                          <h3 className="text-[15px] sm:text-[17px] font-semibold leading-tight tracking-[-0.01em] truncate">
-                            {event.title || 'Untitled event'}
-                          </h3>
-                          <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.08em] ${status.className}`}>
-                            {status.label}
-                          </span>
+                    {/* Cover image */}
+                    <div className="relative h-40 w-full shrink-0 overflow-hidden bg-gradient-to-br from-gold/20 via-slate-800/40 to-slate-900/60">
+                      {coverImage ? (
+                        <img
+                          src={coverImage}
+                          alt={event.title || 'Event cover'}
+                          className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+                        />
+                      ) : (
+                        <div className="flex h-full w-full items-center justify-center">
+                          <Vote className="w-10 h-10 text-gold/40" />
                         </div>
-                        <p className="mt-1.5 text-[13px] sm:text-sm text-foreground/60 line-clamp-1 leading-relaxed">
-                          {event.description || event.category || 'Public voting event'}
-                        </p>
-                        <div className="mt-2.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs sm:text-[13px] text-foreground/55">
-                          <span className="inline-flex items-center gap-1.5">
-                            <Calendar className="w-3.5 h-3.5 text-foreground/45" />
-                            {eventDateLabel}
-                          </span>
-                          <span className="inline-flex items-center gap-1.5">
-                            <Clock className="w-3.5 h-3.5 text-foreground/45" />
-                            {eventTimeLabel}
-                          </span>
-                        </div>
+                      )}
+                      {/* Status badge overlay */}
+                      <span className={`absolute top-3 right-3 rounded-full border px-2.5 py-0.5 text-[10px] font-medium uppercase tracking-[0.08em] backdrop-blur-sm ${status.className}`}>
+                        {status.label}
+                      </span>
+                    </div>
+
+                    {/* Card body */}
+                    <div className="flex flex-1 flex-col p-4 sm:p-5">
+                      <h3 className="text-[15px] sm:text-[16px] font-semibold leading-snug tracking-[-0.01em] line-clamp-2 text-foreground">
+                        {event.title || 'Untitled event'}
+                      </h3>
+                      <p className="mt-1.5 text-[12px] sm:text-[13px] text-foreground/55 line-clamp-2 leading-relaxed">
+                        {event.description || event.category || 'Public voting event'}
+                      </p>
+
+                      <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] sm:text-xs text-foreground/50">
+                        <span className="inline-flex items-center gap-1">
+                          <Calendar className="w-3 h-3" />
+                          {eventDateLabel}
+                        </span>
+                        <span className="inline-flex items-center gap-1">
+                          <Clock className="w-3 h-3" />
+                          {eventTimeLabel}
+                        </span>
                       </div>
 
-                      <div className="flex items-center justify-between sm:justify-end">
-                        <div className="grid grid-cols-2 gap-6 text-right w-full sm:w-auto">
-                          <div>
-                            <p className="text-[10px] uppercase tracking-[0.08em] text-amber-700 dark:text-amber-200/75">Votes</p>
-                            <p className="mt-1 text-sm font-semibold tabular-nums inline-flex items-center gap-1.5 justify-end min-w-[4.5rem] text-amber-700 dark:text-amber-100">
-                              <Vote className="w-3.5 h-3.5 text-amber-600 dark:text-amber-300/90" />
-                              {totalVotes.toLocaleString()}
-                            </p>
-                          </div>
-                          <div>
-                            <p className="text-[10px] uppercase tracking-[0.08em] text-emerald-700 dark:text-emerald-200/75">Candidates</p>
-                            <p className="mt-1 text-sm font-semibold tabular-nums inline-flex items-center gap-1.5 justify-end min-w-[4.5rem] text-emerald-700 dark:text-emerald-100">
-                              <Users className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-300/85" />
-                              {nominees.length}
-                            </p>
-                          </div>
+                      {/* Stats + CTA */}
+                      <div className="mt-auto pt-4 flex items-center justify-between">
+                        <div className="flex items-center gap-4 text-[12px]">
+                          <span className="inline-flex items-center gap-1 text-amber-700 dark:text-amber-200/80">
+                            <Vote className="w-3.5 h-3.5" />
+                            <span className="font-semibold tabular-nums">{totalVotes.toLocaleString()}</span>
+                            <span className="text-foreground/45">votes</span>
+                          </span>
+                          <span className="inline-flex items-center gap-1 text-emerald-700 dark:text-emerald-200/80">
+                            <Users className="w-3.5 h-3.5" />
+                            <span className="font-semibold tabular-nums">{nominees.length}</span>
+                            <span className="text-foreground/45">nominees</span>
+                          </span>
                         </div>
-                      </div>
-
-                      <div className="flex sm:justify-end">
-                        <span className="inline-flex h-9 items-center justify-center rounded-md px-4 text-sm font-medium border border-gold/30 bg-gold/10 text-gold">
+                        <span className="inline-flex h-8 items-center justify-center rounded-md px-3.5 text-xs font-medium border border-gold/35 bg-gold/10 text-gold transition-colors group-hover:bg-gold/20">
                           Open
                         </span>
                       </div>
