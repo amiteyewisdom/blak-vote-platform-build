@@ -16,7 +16,7 @@ type ProviderVerificationInput = {
   payload?: Record<string, unknown>
 }
 
-const NALO_CONFIRMED_STATUSES = ['success', 'paid', 'completed', 'processed']
+const NALO_CONFIRMED_STATUSES = ['success', 'successful', 'paid', 'completed', 'processed']
 
 function toLowerCaseKeys(payload: Record<string, unknown>) {
   return Object.fromEntries(

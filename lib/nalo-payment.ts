@@ -257,7 +257,7 @@ type InitiateMoMoPaymentInput = {
   description?: string | null
 }
 
-const NALO_CONFIRMED_STATUSES = ['success', 'paid', 'completed', 'processed']
+const NALO_CONFIRMED_STATUSES = ['success', 'successful', 'paid', 'completed', 'processed']
 const NALO_PENDING_STATUSES = ['pending', 'processing', 'queued', 'initiated', 'in_progress']
 const NALO_FAILED_STATUSES = ['failed', 'cancelled', 'canceled', 'abandoned', 'expired', 'rejected']
 

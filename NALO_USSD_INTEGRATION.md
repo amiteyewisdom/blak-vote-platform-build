@@ -111,7 +111,7 @@ Set your Nalo MoMo callback URL to:
 
 Expected behavior:
 
-- `success/paid/completed/processed` => backend verifies and creates vote or ticket
+- `success/successful/paid/completed/processed` => backend verifies and creates vote or ticket
 - `pending/processing/queued/initiated` => backend keeps payment pending
 - `failed/cancelled/expired/rejected` => backend marks payment failed
 
