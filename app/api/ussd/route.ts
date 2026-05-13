@@ -3,6 +3,10 @@ import { resolveEventVotePrice } from '@/lib/event-pricing'
 import { isVotingOpenStatus } from '@/lib/event-status'
 import { extractClientIp, getAllowedIps, getSupabaseAdminClient, isRequestFromAllowedIps } from '@/lib/server-security'
 
+export const runtime = 'nodejs'
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
+
 type NormalizedUssdRequest = {
   sessionId: string
   phoneNumber: string
@@ -32,8 +36,10 @@ type TicketPlanRecord = {
 
 const MAX_VOTE_QUANTITY = 50
 const MAX_USSD_TICKET_QUANTITY = 3
+const NALO_DEFAULT_USSD_ALLOWED_IPS = ['136.243.56.160']
+
 function getAllowedUssdIps() {
-  return getAllowedIps('NALO_USSD_ALLOWED_IPS', getAllowedIps('NALO_ALLOWED_IPS', []))
+  return getAllowedIps('NALO_USSD_ALLOWED_IPS', NALO_DEFAULT_USSD_ALLOWED_IPS)
 }
 
 function trimToPhoneIdentifier(phone: string) {
@@ -603,6 +609,7 @@ async function handleUssdRequest(request: Request) {
   try {
     const ussdDebugEnabled = process.env.USSD_DEBUG_LOGS === 'true'
     const ussdSafeModeEnabled = process.env.USSD_SAFE_MODE === 'true'
+    const ussdDisableIpCheck = process.env.USSD_DISABLE_IP_CHECK === 'true'
 
     if (ussdSafeModeEnabled) {
       if (ussdDebugEnabled) {
@@ -633,12 +640,16 @@ async function handleUssdRequest(request: Request) {
       })
     }
 
-    if (!isRequestFromAllowedIps(request, allowedIps)) {
+    if (!ussdDisableIpCheck && !isRequestFromAllowedIps(request, allowedIps)) {
       console.warn('[USSD_ROUTE_BLOCKED_IP]', {
         clientIp,
         allowedIps,
       })
       return end('Unauthorized source IP')
+    }
+
+    if (ussdDisableIpCheck && ussdDebugEnabled) {
+      console.warn('[USSD_DEBUG_IP_CHECK_DISABLED]', { clientIp, allowedIps })
     }
 
     const contentType = request.headers.get('content-type') || ''
