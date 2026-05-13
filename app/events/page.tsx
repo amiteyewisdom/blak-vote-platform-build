@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { Calendar, Users, Vote, Clock } from 'lucide-react'
+import { Calendar, Users, Clock } from 'lucide-react'
 import PublicNav from '@/components/PublicNav'
 
 interface Nominee {
@@ -43,6 +43,9 @@ export default function EventsPage() {
   }
 
   const filteredEvents = events.filter(event => {
+    const endTs = event.end_date ? new Date(event.end_date).getTime() : NaN
+    if (!Number.isNaN(endTs) && endTs < nowTs) return false
+
     const title = String(event.title || '').toLowerCase()
     const description = String(event.description || '').toLowerCase()
     const query = searchTerm.toLowerCase()
@@ -54,19 +57,16 @@ export default function EventsPage() {
   const summary = filteredEvents.reduce(
     (acc, event) => {
       const startTs = event.start_date ? new Date(event.start_date).getTime() : NaN
-      const endTs = event.end_date ? new Date(event.end_date).getTime() : NaN
 
       if (!Number.isNaN(startTs) && startTs > nowTs) {
         acc.upcoming += 1
-      } else if (!Number.isNaN(endTs) && endTs < nowTs) {
-        acc.closed += 1
       } else {
         acc.live += 1
       }
 
       return acc
     },
-    { live: 0, upcoming: 0, closed: 0 }
+    { live: 0, upcoming: 0 }
   )
 
   if (loading) {
@@ -108,7 +108,7 @@ export default function EventsPage() {
           />
         </div>
 
-        <div className="mt-5 grid w-fit grid-cols-3 gap-2 sm:gap-3">
+        <div className="mt-5 grid w-fit grid-cols-2 gap-2 sm:gap-3">
           <div className="rounded-lg border border-emerald-500/35 bg-emerald-500/10 px-3 py-2">
             <p className="text-[10px] uppercase tracking-[0.12em] text-emerald-700 dark:text-emerald-200/90">Live</p>
             <p className="mt-1 text-base font-semibold text-emerald-800 dark:text-emerald-100">{summary.live}</p>
@@ -116,10 +116,6 @@ export default function EventsPage() {
           <div className="rounded-lg border border-sky-500/35 bg-sky-500/10 px-3 py-2">
             <p className="text-[10px] uppercase tracking-[0.12em] text-sky-700 dark:text-sky-200/90">Upcoming</p>
             <p className="mt-1 text-base font-semibold text-sky-800 dark:text-sky-100">{summary.upcoming}</p>
-          </div>
-          <div className="rounded-lg border border-slate-400/35 bg-slate-400/10 px-3 py-2">
-            <p className="text-[10px] uppercase tracking-[0.12em] text-slate-700 dark:text-slate-200/90">Closed</p>
-            <p className="mt-1 text-base font-semibold text-slate-800 dark:text-slate-100">{summary.closed}</p>
           </div>
         </div>
 
@@ -140,7 +136,6 @@ export default function EventsPage() {
               {filteredEvents.map((event) => {
                 const publicEventCode = event.short_code || event.event_code || event.id
                 const nominees = eventNominees.find((en) => en.event.id === event.id)?.nominees || []
-                const totalVotes = nominees.reduce((sum, nominee) => sum + Number(nominee.vote_count || 0), 0)
                 const eventDate = event.start_date ? new Date(event.start_date) : null
                 const eventDateLabel = eventDate ? eventDate.toLocaleDateString() : 'Date not set'
                 const eventTimeLabel = eventDate ? eventDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Time not set'
@@ -170,7 +165,7 @@ export default function EventsPage() {
                         />
                       ) : (
                         <div className="flex h-full w-full items-center justify-center">
-                          <Vote className="w-10 h-10 text-gold/40" />
+                          <Calendar className="w-10 h-10 text-gold/40" />
                         </div>
                       )}
                       {/* Status badge overlay */}
@@ -202,11 +197,6 @@ export default function EventsPage() {
                       {/* Stats + CTA */}
                       <div className="mt-auto pt-4 flex items-center justify-between">
                         <div className="flex items-center gap-4 text-[12px]">
-                          <span className="inline-flex items-center gap-1 text-amber-700 dark:text-amber-200/80">
-                            <Vote className="w-3.5 h-3.5" />
-                            <span className="font-semibold tabular-nums">{totalVotes.toLocaleString()}</span>
-                            <span className="text-foreground/45">votes</span>
-                          </span>
                           <span className="inline-flex items-center gap-1 text-emerald-700 dark:text-emerald-200/80">
                             <Users className="w-3.5 h-3.5" />
                             <span className="font-semibold tabular-nums">{nominees.length}</span>
