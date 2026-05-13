@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { Suspense, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import type { EmailOtpType } from '@supabase/supabase-js'
@@ -26,7 +26,7 @@ function isEmailOtpType(value: string | null): value is EmailOtpType {
   return VALID_OTP_TYPES.some((otpType) => otpType === value)
 }
 
-export default function AuthCallbackPage() {
+function AuthCallbackContent() {
   const searchParams = useSearchParams()
   const [error, setError] = useState<string | null>(null)
 
@@ -121,5 +121,19 @@ export default function AuthCallbackPage() {
         )}
       </div>
     </div>
+  )
+}
+
+export default function AuthCallbackPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="relative flex min-h-screen items-center justify-center bg-background">
+          <Loader2 size={24} className="animate-spin text-muted-foreground" />
+        </div>
+      }
+    >
+      <AuthCallbackContent />
+    </Suspense>
   )
 }

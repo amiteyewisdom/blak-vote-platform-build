@@ -1,9 +1,9 @@
 'use client'
 
-import { FormEvent, useMemo, useState } from 'react'
+import { FormEvent, Suspense, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
-import { AlertCircle, ShieldCheck } from 'lucide-react'
+import { AlertCircle, Loader2, ShieldCheck } from 'lucide-react'
 import BrandLogo from '@/components/BrandLogo'
 import { Button } from '@/components/ui/button'
 import { supabase } from '@/lib/auth'
@@ -12,7 +12,7 @@ import { getAuthenticatedUserRole, getRedirectPathForRole } from '@/lib/auth/rol
 const AUTH_CALLBACK_URL =
   process.env.NEXT_PUBLIC_AUTH_CALLBACK_URL ?? 'https://app.blakvote.com/auth/callback'
 
-export default function VerifyOtpPage() {
+function VerifyOtpContent() {
   const searchParams = useSearchParams()
   const email = useMemo(() => (searchParams.get('email') ?? '').trim().toLowerCase(), [searchParams])
 
@@ -176,5 +176,19 @@ export default function VerifyOtpPage() {
         </div>
       </div>
     </div>
+  )
+}
+
+export default function VerifyOtpPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="relative flex min-h-screen items-center justify-center bg-background">
+          <Loader2 size={24} className="animate-spin text-muted-foreground" />
+        </div>
+      }
+    >
+      <VerifyOtpContent />
+    </Suspense>
   )
 }
