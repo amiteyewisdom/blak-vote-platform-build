@@ -42,6 +42,8 @@ export default function EventsPage() {
     setLoading(false)
   }
 
+  const nowTs = Date.now()
+
   const filteredEvents = events.filter(event => {
     const endTs = event.end_date ? new Date(event.end_date).getTime() : NaN
     if (!Number.isNaN(endTs) && endTs < nowTs) return false
@@ -53,7 +55,6 @@ export default function EventsPage() {
     return title.includes(query) || description.includes(query)
   })
 
-  const nowTs = Date.now()
   const summary = filteredEvents.reduce(
     (acc, event) => {
       const startTs = event.start_date ? new Date(event.start_date).getTime() : NaN
