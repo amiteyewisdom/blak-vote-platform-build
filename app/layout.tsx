@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next"
 import { ToastProvider, ToastViewport } from "@/components/ui/toast"
 import { ThemeProvider } from "@/components/theme-provider"
 import { ThemeToggle } from "@/components/theme-toggle"
+import AuthSessionListener from "@/components/AuthSessionListener"
 import "./globals.css"
 
 export const metadata: Metadata = {
@@ -34,6 +35,7 @@ export default function RootLayout({
           enableSystem
           storageKey="blakvote-theme"
         >
+          <AuthSessionListener />
           <ToastProvider>
             {/* Premium Background */}
             <div className="fixed inset-0 -z-10 bg-[radial-gradient(circle_at_20%_20%,hsl(var(--gold)/0.16),transparent_35%),radial-gradient(circle_at_80%_80%,hsl(var(--gold)/0.12),transparent_35%)]" />

@@ -3,16 +3,22 @@ import { createClient } from "@supabase/supabase-js";
 import { NextResponse, type NextRequest } from "next/server";
 import { getSupabaseBrowserConfig } from "./lib/supabase/client-config";
 
+function toLoginRedirect(req: NextRequest) {
+  const loginUrl = new URL("/auth/login", req.url);
+  loginUrl.searchParams.set("redirectTo", req.nextUrl.pathname);
+  return NextResponse.redirect(loginUrl);
+}
+
 export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
-  const isDashboardRoute = pathname.startsWith("/admin") || pathname.startsWith("/organizer");
+  const isProtectedRoute = pathname.startsWith("/admin") || pathname.startsWith("/organizer");
   const isMaintenancePage = pathname === "/maintenance";
 
   const config = getSupabaseBrowserConfig();
 
   if (!config) {
-    if (isDashboardRoute) {
-      return NextResponse.redirect(new URL("/", req.url));
+    if (isProtectedRoute) {
+      return toLoginRedirect(req);
     }
 
     return NextResponse.next();
@@ -89,24 +95,23 @@ export async function proxy(req: NextRequest) {
     return NextResponse.redirect(new URL("/", req.url));
   }
 
-  if (!isDashboardRoute) {
-    return NextResponse.next();
+  if (!isProtectedRoute) {
+    return res;
   }
 
   if (userError || !user) {
-    return NextResponse.redirect(new URL("/auth/sign-in", req.url));
+    return toLoginRedirect(req);
   }
 
   if (!role) {
-    return NextResponse.redirect(new URL("/auth/sign-in", req.url));
+    return toLoginRedirect(req);
   }
 
-  // Role protection
-  if (pathname.startsWith('/admin') && role !== 'admin') {
-    return NextResponse.redirect(new URL('/', req.url));
+  if (pathname.startsWith("/admin") && role !== "admin") {
+    return NextResponse.redirect(new URL("/", req.url));
   }
 
-  if (pathname.startsWith('/organizer') && role !== 'organizer') {
+  if (pathname.startsWith("/organizer") && role !== "organizer") {
     return NextResponse.redirect(new URL("/", req.url));
   }
 
