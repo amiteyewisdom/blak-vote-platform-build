@@ -37,6 +37,7 @@ type TicketPlanRecord = {
 const MAX_VOTE_QUANTITY = 50
 const MAX_USSD_TICKET_QUANTITY = 3
 const NALO_DEFAULT_USSD_ALLOWED_IPS = ['136.243.56.160']
+const DEFAULT_USSD_SHORTCODE = '*920*377#'
 
 type UssdResponseMode = 'plain-text' | 'nalo-json'
 
@@ -167,14 +168,36 @@ function normalizeBody(raw: Record<string, unknown>): NormalizedUssdRequest {
 }
 
 function parseMenu(text: string) {
-  if (!text) {
+  const rawText = String(text || '').trim()
+  if (!rawText) {
     return [] as string[]
   }
 
-  return text
+  const configuredShortcode =
+    process.env.NALO_USSD_SHORTCODE?.trim() || process.env.USSD_SHORTCODE?.trim() || DEFAULT_USSD_SHORTCODE
+
+  const shortcodeTokens = configuredShortcode
+    .replace(/#$/, '')
     .split('*')
     .map((part) => part.trim())
     .filter((part) => part.length > 0)
+
+  let menuTokens = rawText
+    .replace(/#$/, '')
+    .split('*')
+    .map((part) => part.trim())
+    .filter((part) => part.length > 0)
+
+  if (
+    rawText.startsWith('*') &&
+    shortcodeTokens.length > 0 &&
+    menuTokens.length >= shortcodeTokens.length &&
+    shortcodeTokens.every((token, index) => menuTokens[index] === token)
+  ) {
+    menuTokens = menuTokens.slice(shortcodeTokens.length)
+  }
+
+  return menuTokens
 }
 
 async function getNaloPaymentUtils() {
