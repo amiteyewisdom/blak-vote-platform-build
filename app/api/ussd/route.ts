@@ -176,7 +176,9 @@ function parseMenu(text: string) {
   const configuredShortcode =
     process.env.NALO_USSD_SHORTCODE?.trim() || process.env.USSD_SHORTCODE?.trim() || DEFAULT_USSD_SHORTCODE
 
-  const normalizedShortcode = configuredShortcode.replace(/[#*\s]+$/g, '')
+  const normalizedShortcode = configuredShortcode
+    .replace(/^[#*\s]+/g, '')
+    .replace(/[#*\s]+$/g, '')
 
   let normalizedText = rawText.replace(/^[#*\s]+/g, '')
 
