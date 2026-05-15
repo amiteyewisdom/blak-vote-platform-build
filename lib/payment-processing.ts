@@ -1129,12 +1129,19 @@ export async function processConfirmedPayment(verification: PaymentVerificationP
     }
   }
 
-  const paymentContext = metadata.paymentFor
+  const paymentContext =
+    metadata.paymentFor ?? (String(payment.payment_context || '').toLowerCase() === 'ticket' ? 'ticket' : 'vote')
   const effectiveEventId = String(payment.event_id || metadata.eventId || '')
   const effectiveCandidateId = String(payment.candidate_id || metadata.candidateId || '')
   const effectiveQuantity = Number(payment.quantity || metadata.quantity || 0)
+  const expectedEventId = String(metadata.eventId || effectiveEventId)
+  const expectedCandidateId = String(metadata.candidateId || effectiveCandidateId)
+  const expectedQuantity = Number(metadata.quantity || effectiveQuantity)
 
-  if (paymentContext === 'vote' && (!metadata.candidateId || !metadata.quantity)) {
+  if (
+    paymentContext === 'vote' &&
+    (!effectiveCandidateId || !Number.isFinite(effectiveQuantity) || effectiveQuantity < 1)
+  ) {
     console.error('[PAYMENT_VERIFY_FAIL] Missing candidate or quantity:', { reference: verification.reference })
     await logPaymentVerificationFailure(verification.reference, 'Missing candidate or quantity')
     return {
@@ -1187,12 +1194,12 @@ export async function processConfirmedPayment(verification: PaymentVerificationP
 
   if (
     (paymentContext === 'vote' && (
-      effectiveEventId !== String(metadata.eventId || '') ||
-      effectiveCandidateId !== String(metadata.candidateId || '') ||
-      effectiveQuantity !== metadata.quantity
+      effectiveEventId !== expectedEventId ||
+      effectiveCandidateId !== expectedCandidateId ||
+      effectiveQuantity !== expectedQuantity
     )) ||
     (paymentContext === 'ticket' && (
-      effectiveEventId !== String(metadata.eventId || '') ||
+      effectiveEventId !== expectedEventId ||
       !metadata.ticketId
     ))
   ) {
