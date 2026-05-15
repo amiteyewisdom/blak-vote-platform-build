@@ -176,26 +176,20 @@ function parseMenu(text: string) {
   const configuredShortcode =
     process.env.NALO_USSD_SHORTCODE?.trim() || process.env.USSD_SHORTCODE?.trim() || DEFAULT_USSD_SHORTCODE
 
-  const shortcodeTokens = configuredShortcode
-    .replace(/#$/, '')
-    .split('*')
-    .map((part) => part.trim())
-    .filter((part) => part.length > 0)
+  const normalizedShortcode = configuredShortcode.replace(/[#*\s]+$/g, '')
 
-  let menuTokens = rawText
-    .replace(/#$/, '')
-    .split('*')
-    .map((part) => part.trim())
-    .filter((part) => part.length > 0)
+  let normalizedText = rawText.replace(/^[#*\s]+/g, '')
 
-  if (
-    rawText.startsWith('*') &&
-    shortcodeTokens.length > 0 &&
-    menuTokens.length >= shortcodeTokens.length &&
-    shortcodeTokens.every((token, index) => menuTokens[index] === token)
-  ) {
-    menuTokens = menuTokens.slice(shortcodeTokens.length)
+  if (normalizedShortcode && normalizedText.startsWith(normalizedShortcode)) {
+    normalizedText = normalizedText.slice(normalizedShortcode.length)
   }
+
+  normalizedText = normalizedText.replace(/^[#*\s]+/g, '').replace(/[#*\s]+$/g, '')
+
+  const menuTokens = normalizedText
+    .split('*')
+    .map((part) => part.trim())
+    .filter((part) => part.length > 0)
 
   return menuTokens
 }
