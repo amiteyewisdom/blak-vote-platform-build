@@ -1100,22 +1100,55 @@ export async function processConfirmedPayment(verification: PaymentVerificationP
 
   const parsedStoredPaymentMetadata = normalizedPaystackMetadataSchema.safeParse(payment.metadata ?? {})
 
-  // Nalo webhooks usually omit vote/ticket metadata fields; prefer stored pending-payment metadata.
-  const shouldPreferStoredMetadata = verification.provider === 'nalo'
+  // For NALO, always prefer stored payment metadata; webhook payload lacks vote fields.
+  // Fall back to raw payment.metadata object when Zod schema parse fails.
+  const rawStoredMeta = (payment.metadata && typeof payment.metadata === 'object' ? payment.metadata : {}) as Record<string, unknown>
 
-  const metadata = shouldPreferStoredMetadata
-    ? parsedStoredPaymentMetadata.success
-      ? parsedStoredPaymentMetadata.data
-      : parsedVerificationMetadata.success
-        ? parsedVerificationMetadata.data
-        : null
+  const metadata = parsedStoredPaymentMetadata.success
+    ? parsedStoredPaymentMetadata.data
     : parsedVerificationMetadata.success
       ? parsedVerificationMetadata.data
-      : parsedStoredPaymentMetadata.success
-        ? parsedStoredPaymentMetadata.data
-        : null
+      : null
 
-  if (!metadata) {
+  // Derive vote fields directly from all available sources in priority order.
+  const paymentContext =
+    (metadata?.paymentFor as string | undefined) ??
+    (rawStoredMeta.paymentFor as string | undefined) ??
+    (String(payment.payment_context || '').toLowerCase() === 'ticket' ? 'ticket' : 'vote')
+
+  const effectiveCandidateId = String(
+    payment.candidate_id ||
+    metadata?.candidateId ||
+    rawStoredMeta.candidateId ||
+    ''
+  )
+  const effectiveEventId = String(
+    payment.event_id ||
+    metadata?.eventId ||
+    rawStoredMeta.eventId ||
+    ''
+  )
+  const effectiveQuantity = Number(
+    payment.quantity ||
+    metadata?.quantity ||
+    rawStoredMeta.quantity ||
+    0
+  )
+
+  console.info('[PAYMENT_VERIFY_DEBUG]', {
+    reference: verification.reference,
+    provider: verification.provider,
+    paymentContext,
+    candidate_id_col: payment.candidate_id,
+    quantity_col: payment.quantity,
+    metadata_candidateId: rawStoredMeta.candidateId,
+    metadata_quantity: rawStoredMeta.quantity,
+    parsedStoredSuccess: parsedStoredPaymentMetadata.success,
+    effectiveCandidateId,
+    effectiveQuantity,
+  })
+
+  if (!metadata && !rawStoredMeta.candidateId && !payment.candidate_id) {
     console.error('[PAYMENT_VERIFY_FAIL] Invalid metadata schema:', {
       reference: verification.reference,
       verificationMetadataValid: parsedVerificationMetadata.success,
@@ -1129,20 +1162,20 @@ export async function processConfirmedPayment(verification: PaymentVerificationP
     }
   }
 
-  const paymentContext =
-    metadata.paymentFor ?? (String(payment.payment_context || '').toLowerCase() === 'ticket' ? 'ticket' : 'vote')
-  const effectiveEventId = String(payment.event_id || metadata.eventId || '')
-  const effectiveCandidateId = String(payment.candidate_id || metadata.candidateId || '')
-  const effectiveQuantity = Number(payment.quantity || metadata.quantity || 0)
-  const expectedEventId = String(metadata.eventId || effectiveEventId)
-  const expectedCandidateId = String(metadata.candidateId || effectiveCandidateId)
-  const expectedQuantity = Number(metadata.quantity || effectiveQuantity)
+  const expectedEventId = String(metadata?.eventId || rawStoredMeta.eventId || effectiveEventId)
+  const expectedCandidateId = String(metadata?.candidateId || rawStoredMeta.candidateId || effectiveCandidateId)
+  const expectedQuantity = Number(metadata?.quantity || rawStoredMeta.quantity || effectiveQuantity)
 
   if (
     paymentContext === 'vote' &&
     (!effectiveCandidateId || !Number.isFinite(effectiveQuantity) || effectiveQuantity < 1)
   ) {
-    console.error('[PAYMENT_VERIFY_FAIL] Missing candidate or quantity:', { reference: verification.reference })
+    console.error('[PAYMENT_VERIFY_FAIL] Missing candidate or quantity:', {
+      reference: verification.reference,
+      effectiveCandidateId,
+      effectiveQuantity,
+      rawKeys: Object.keys(rawStoredMeta),
+    })
     await logPaymentVerificationFailure(verification.reference, 'Missing candidate or quantity')
     return {
       ok: false as const,
@@ -1200,7 +1233,7 @@ export async function processConfirmedPayment(verification: PaymentVerificationP
     )) ||
     (paymentContext === 'ticket' && (
       effectiveEventId !== expectedEventId ||
-      !metadata.ticketId
+      !(metadata?.ticketId || rawStoredMeta.ticketId)
     ))
   ) {
     console.error('[PAYMENT_VERIFY_FAIL] Metadata mismatch:', { reference: verification.reference, payment, metadata })
@@ -1366,7 +1399,7 @@ export async function processConfirmedPayment(verification: PaymentVerificationP
     const { data: ticket, error: ticketError } = await supabase
       .from('tickets')
       .select('id, event_id, name, price, admin_fee, quantity, sold_count, ticket_kind, ticket_type')
-      .eq('id', metadata.ticketId)
+      .eq('id', (metadata?.ticketId ?? rawStoredMeta.ticketId) as string)
       .maybeSingle()
 
     if (ticketError || !ticket) {
@@ -1445,9 +1478,9 @@ export async function processConfirmedPayment(verification: PaymentVerificationP
     const { data: issuedTickets, error: updateTicketError } = await supabase.rpc('issue_ticket_purchase', {
       p_plan_id: ticket.id,
       p_payment_reference: verification.reference,
-      p_buyer_name: metadata.buyerName,
-      p_buyer_email: metadata.buyerEmail ?? payment.voter_email,
-      p_buyer_phone: metadata.buyerPhone ?? payment.voter_phone,
+      p_buyer_name: metadata?.buyerName ?? (rawStoredMeta.buyerName as string | undefined),
+      p_buyer_email: (metadata?.buyerEmail ?? rawStoredMeta.buyerEmail as string | undefined) ?? payment.voter_email,
+      p_buyer_phone: (metadata?.buyerPhone ?? rawStoredMeta.buyerPhone as string | undefined) ?? payment.voter_phone,
       p_quantity: requestedQuantity,
     })
 
@@ -1465,9 +1498,9 @@ export async function processConfirmedPayment(verification: PaymentVerificationP
           supabase,
           planId: String(ticket.id),
           paymentReference: verification.reference,
-          buyerName: metadata.buyerName,
-          buyerEmail: metadata.buyerEmail ?? payment.voter_email,
-          buyerPhone: metadata.buyerPhone ?? payment.voter_phone,
+          buyerName: metadata?.buyerName ?? (rawStoredMeta.buyerName as string | undefined),
+          buyerEmail: (metadata?.buyerEmail ?? rawStoredMeta.buyerEmail as string | undefined) ?? payment.voter_email,
+          buyerPhone: (metadata?.buyerPhone ?? rawStoredMeta.buyerPhone as string | undefined) ?? payment.voter_phone,
           quantity: requestedQuantity,
         })
 
@@ -1565,9 +1598,9 @@ export async function processConfirmedPayment(verification: PaymentVerificationP
 
   const voterPhoneOrIdentifier = getGuestVoterIdentifier(
     payment.voter_phone,
-    metadata.phone,
+    (metadata?.phone ?? rawStoredMeta.phone) as string | null,
     payment.voter_email,
-    metadata.email
+    (metadata?.email ?? rawStoredMeta.email) as string | null
   )
 
   const amountPaid = Number.isFinite(Number(payment.amount))
