@@ -1100,11 +1100,20 @@ export async function processConfirmedPayment(verification: PaymentVerificationP
 
   const parsedStoredPaymentMetadata = normalizedPaystackMetadataSchema.safeParse(payment.metadata ?? {})
 
-  const metadata = parsedVerificationMetadata.success
-    ? parsedVerificationMetadata.data
-    : parsedStoredPaymentMetadata.success
+  // Nalo webhooks usually omit vote/ticket metadata fields; prefer stored pending-payment metadata.
+  const shouldPreferStoredMetadata = verification.provider === 'nalo'
+
+  const metadata = shouldPreferStoredMetadata
+    ? parsedStoredPaymentMetadata.success
       ? parsedStoredPaymentMetadata.data
-      : null
+      : parsedVerificationMetadata.success
+        ? parsedVerificationMetadata.data
+        : null
+    : parsedVerificationMetadata.success
+      ? parsedVerificationMetadata.data
+      : parsedStoredPaymentMetadata.success
+        ? parsedStoredPaymentMetadata.data
+        : null
 
   if (!metadata) {
     console.error('[PAYMENT_VERIFY_FAIL] Invalid metadata schema:', {

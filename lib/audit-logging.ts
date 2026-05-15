@@ -113,7 +113,7 @@ export async function checkSuspiciousActivity(
     .from('audit_logs')
     .select('id')
     .eq('action', pattern)
-    .gte('timestamp', since)
+    .gte('created_at', since)
 
   if (userId) {
     query.eq('user_id', userId)
