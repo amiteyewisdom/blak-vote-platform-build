@@ -38,6 +38,8 @@ const MAX_VOTE_QUANTITY = 50
 const MAX_USSD_TICKET_QUANTITY = 3
 const NALO_DEFAULT_USSD_ALLOWED_IPS = ['136.243.56.160']
 
+type UssdResponseMode = 'plain-text' | 'nalo-json'
+
 function getAllowedUssdIps() {
   return getAllowedIps('NALO_USSD_ALLOWED_IPS', NALO_DEFAULT_USSD_ALLOWED_IPS)
 }
@@ -50,13 +52,77 @@ function toUpperCode(value: string) {
   return String(value || '').trim().toUpperCase()
 }
 
+function toLowerCaseKeys(raw: Record<string, unknown>) {
+  return Object.fromEntries(
+    Object.entries(raw).map(([key, value]) => [key.toLowerCase(), value])
+  ) as Record<string, unknown>
+}
+
+function readInputString(raw: Record<string, unknown>, keys: string[]) {
+  const lowered = toLowerCaseKeys(raw)
+
+  for (const key of keys) {
+    const value = lowered[key.toLowerCase()]
+    if (value != null && String(value).trim().length > 0) {
+      return String(value).trim()
+    }
+  }
+
+  return ''
+}
+
+function detectUssdResponseMode(contentType: string, parsedInput: Record<string, unknown>): UssdResponseMode {
+  const keys = Object.keys(toLowerCaseKeys(parsedInput))
+  const hasNaloJsonMarkers = ['userdata', 'msgtype', 'msisdn', 'userid'].some((key) =>
+    keys.includes(key)
+  )
+
+  if (contentType.includes('application/json') && hasNaloJsonMarkers) {
+    return 'nalo-json'
+  }
+
+  return 'plain-text'
+}
+
+async function adaptUssdResponse(
+  response: Response,
+  mode: UssdResponseMode,
+  parsedInput: Record<string, unknown>
+) {
+  if (mode === 'plain-text') {
+    return response
+  }
+
+  const raw = await response.text()
+  const isContinue = raw.startsWith('CON ')
+  const message = raw.startsWith('CON ') || raw.startsWith('END ') ? raw.slice(4) : raw
+
+  const payload: Record<string, unknown> = {
+    USERID: readInputString(parsedInput, ['userid', 'user_id', 'clientid', 'client_id']),
+    MSISDN: readInputString(parsedInput, ['msisdn', 'phonenumber', 'phone', 'mobilenumber']),
+    SESSIONID: readInputString(parsedInput, ['sessionid', 'session_id', 'clientsessionid']),
+    NETWORK: readInputString(parsedInput, ['network']),
+    USERDATA: message,
+    MSG: message,
+    MSGTYPE: isContinue,
+  }
+
+  return new Response(JSON.stringify(payload), {
+    status: response.status,
+    headers: {
+      'Content-Type': 'application/json; charset=utf-8',
+      'Cache-Control': 'no-store',
+    },
+  })
+}
+
 function con(message: string) {
   const body = `CON ${message}`
   return new Response(body, {
     status: 200,
     headers: {
-      'Content-Type': 'text/plain',
-      'Content-Length': String(new TextEncoder().encode(body).length),
+      'Content-Type': 'text/plain; charset=utf-8',
+      'Cache-Control': 'no-store',
     },
   })
 }
@@ -66,8 +132,8 @@ function end(message: string) {
   return new Response(body, {
     status: 200,
     headers: {
-      'Content-Type': 'text/plain',
-      'Content-Length': String(new TextEncoder().encode(body).length),
+      'Content-Type': 'text/plain; charset=utf-8',
+      'Cache-Control': 'no-store',
     },
   })
 }
@@ -95,7 +161,7 @@ function normalizeBody(raw: Record<string, unknown>): NormalizedUssdRequest {
 
   const phoneNumber = readString(['phonenumber', 'phone', 'msisdn', 'mobilenumber'])
 
-  const text = readString(['text', 'input', 'msg', 'message', 'ussdstring'])
+  const text = readString(['text', 'input', 'msg', 'message', 'ussdstring', 'userdata'])
 
   return { sessionId, phoneNumber, text }
 }
@@ -676,13 +742,15 @@ async function handleUssdRequest(request: Request) {
       })
     }
 
+    const responseMode = detectUssdResponseMode(contentType, parsedInput)
+
     const signature =
       request.headers.get('x-ussd-signature') ||
       request.headers.get('x-signature') ||
       request.headers.get('x-webhook-signature')
 
     if (!isValidUssdSignature(rawBody, signature)) {
-      return end('Invalid USSD signature')
+      return adaptUssdResponse(end('Invalid USSD signature'), responseMode, parsedInput)
     }
 
     const { sessionId, phoneNumber, text } = normalizeBody(parsedInput)
@@ -698,18 +766,22 @@ async function handleUssdRequest(request: Request) {
     const steps = parseMenu(text)
 
     if (steps.length === 0) {
-      return con('Welcome to BlakVote\n1. Vote\n2. Ticketing')
+      return adaptUssdResponse(con('Welcome to BlakVote\n1. Vote\n2. Ticketing'), responseMode, parsedInput)
     }
 
     if (steps[0] === '1') {
-      return handleVoteFlow({ steps, sessionId, phoneNumber })
+      return adaptUssdResponse(await handleVoteFlow({ steps, sessionId, phoneNumber }), responseMode, parsedInput)
     }
 
     if (steps[0] === '2') {
-      return handleTicketFlow({ steps, sessionId, phoneNumber })
+      return adaptUssdResponse(await handleTicketFlow({ steps, sessionId, phoneNumber }), responseMode, parsedInput)
     }
 
-    return end('Invalid option. Dial again and choose 1 for vote or 2 for ticketing.')
+    return adaptUssdResponse(
+      end('Invalid option. Dial again and choose 1 for vote or 2 for ticketing.'),
+      responseMode,
+      parsedInput
+    )
   } catch (error: any) {
     console.error('[USSD_ROUTE_ERROR]', error?.message || error)
     return end('Service temporarily unavailable. Please try again.')

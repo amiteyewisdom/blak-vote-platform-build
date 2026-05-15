@@ -8,8 +8,8 @@ function ussdMenuResponse() {
   return new Response(body, {
     status: 200,
     headers: {
-      'Content-Type': 'text/plain',
-      'Content-Length': String(new TextEncoder().encode(body).length),
+      'Content-Type': 'text/plain; charset=utf-8',
+      'Cache-Control': 'no-store',
     },
   })
 }

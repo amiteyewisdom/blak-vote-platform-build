@@ -92,6 +92,36 @@ function normalizeIpValue(value: string): string {
   return unwrapped
 }
 
+function extractClientIpCandidates(request: Request): string[] {
+  const forwardedFor = request.headers.get('x-forwarded-for')
+  const realIp = request.headers.get('x-real-ip')
+
+  const candidates: string[] = []
+
+  if (forwardedFor) {
+    for (const item of forwardedFor.split(',')) {
+      const normalized = normalizeIpValue(item)
+      if (normalized) {
+        candidates.push(normalized)
+      }
+    }
+  }
+
+  if (realIp) {
+    const normalized = normalizeIpValue(realIp)
+    if (normalized) {
+      candidates.push(normalized)
+    }
+  }
+
+  const firstIp = normalizeIpValue(extractClientIp(request))
+  if (firstIp) {
+    candidates.push(firstIp)
+  }
+
+  return [...new Set(candidates)]
+}
+
 export function getAllowedIps(envName: string, fallbackIps: string[] = []): string[] {
   const configured = process.env[envName]
 
@@ -110,10 +140,14 @@ export function isRequestFromAllowedIps(request: Request, allowedIps: string[]):
     return true
   }
 
-  const clientIp = normalizeIpValue(extractClientIp(request))
   const normalizedAllowedIps = allowedIps.map(normalizeIpValue).filter(Boolean)
+  const requestIps = extractClientIpCandidates(request)
 
-  return normalizedAllowedIps.includes(clientIp)
+  if (requestIps.length === 0) {
+    return false
+  }
+
+  return requestIps.some(ip => normalizedAllowedIps.includes(ip))
 }
 
 export function isValidPaystackSignature(rawBody: string, signature: string | null): boolean {
