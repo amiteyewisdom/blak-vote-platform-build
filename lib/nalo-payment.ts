@@ -74,6 +74,11 @@ function buildSyntheticTicketBuyerEmail(phoneNumber: string) {
   return `ussd+${phoneIdentifier}@blakvote.local`
 }
 
+function isLegacyBigIntIdError(error: { message?: string } | null | undefined) {
+  const message = String(error?.message || '').toLowerCase()
+  return message.includes('invalid input syntax for type bigint')
+}
+
 function mapExistingTransaction(params: {
   id: string
   phoneNumber: string
@@ -198,11 +203,64 @@ export async function createOrReuseUssdPendingTransaction(
           },
         }
 
-  const { data: createdPayment, error: createPaymentError } = await supabase
+  let { data: createdPayment, error: createPaymentError } = await supabase
     .from('payments')
     .insert(insertPayload)
     .select('reference, status, gateway_status')
     .single()
+
+  if (createPaymentError && isLegacyBigIntIdError(createPaymentError)) {
+    const metadataOnlyPayload = {
+      ...baseInsert,
+      event_id: null,
+      ...(input.type === 'vote'
+        ? {
+            candidate_id: null,
+            voter_email: null,
+            metadata: {
+              paymentFor: 'vote',
+              eventId: input.eventId,
+              organizerId: input.organizerId ?? null,
+              eventCode: input.eventCode,
+              candidateId: input.candidateId,
+              candidateCode: input.candidateCode,
+              quantity: input.quantity,
+              amount: Number(input.amount.toFixed(2)),
+              phone: input.phoneNumber,
+              email: null,
+            },
+          }
+        : {
+            candidate_id: null,
+            voter_email: buildSyntheticTicketBuyerEmail(input.phoneNumber),
+            metadata: {
+              paymentFor: 'ticket',
+              eventId: input.eventId,
+              organizerId: input.organizerId ?? null,
+              eventCode: input.eventCode,
+              ticketId: input.planId,
+              quantity: input.quantity,
+              buyerName: input.buyerName,
+              buyerEmail: buildSyntheticTicketBuyerEmail(input.phoneNumber),
+              buyerPhone: input.phoneNumber,
+              ticketPlan: {
+                id: input.planId,
+                name: input.planName ?? null,
+                optionNumber: input.planOptionNumber,
+              },
+            },
+          }),
+    }
+
+    const retryResult = await supabase
+      .from('payments')
+      .insert(metadataOnlyPayload)
+      .select('reference, status, gateway_status')
+      .single()
+
+    createdPayment = retryResult.data
+    createPaymentError = retryResult.error
+  }
 
   if (createPaymentError || !createdPayment) {
     throw new Error(createPaymentError?.message || 'Unable to create pending USSD transaction')

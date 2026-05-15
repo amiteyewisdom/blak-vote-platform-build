@@ -1121,6 +1121,9 @@ export async function processConfirmedPayment(verification: PaymentVerificationP
   }
 
   const paymentContext = metadata.paymentFor
+  const effectiveEventId = String(payment.event_id || metadata.eventId || '')
+  const effectiveCandidateId = String(payment.candidate_id || metadata.candidateId || '')
+  const effectiveQuantity = Number(payment.quantity || metadata.quantity || 0)
 
   if (paymentContext === 'vote' && (!metadata.candidateId || !metadata.quantity)) {
     console.error('[PAYMENT_VERIFY_FAIL] Missing candidate or quantity:', { reference: verification.reference })
@@ -1175,12 +1178,12 @@ export async function processConfirmedPayment(verification: PaymentVerificationP
 
   if (
     (paymentContext === 'vote' && (
-      payment.event_id !== metadata.eventId ||
-      payment.candidate_id !== metadata.candidateId ||
-      Number(payment.quantity) !== metadata.quantity
+      effectiveEventId !== String(metadata.eventId || '') ||
+      effectiveCandidateId !== String(metadata.candidateId || '') ||
+      effectiveQuantity !== metadata.quantity
     )) ||
     (paymentContext === 'ticket' && (
-      payment.event_id !== metadata.eventId ||
+      effectiveEventId !== String(metadata.eventId || '') ||
       !metadata.ticketId
     ))
   ) {
@@ -1384,7 +1387,7 @@ export async function processConfirmedPayment(verification: PaymentVerificationP
       }
     }
 
-    if (ticket.event_id !== payment.event_id) {
+    if (String(ticket.event_id) !== effectiveEventId) {
       await supabase
         .from('payments')
         .update({
@@ -1511,7 +1514,7 @@ export async function processConfirmedPayment(verification: PaymentVerificationP
         ticketCode: finalIssuedTickets[0].ticket_code,
         ticketCodes: finalIssuedTickets.map((issuedTicket: { ticket_code: string }) => issuedTicket.ticket_code),
         paymentId: payment.id,
-        eventId: payment.event_id,
+        eventId: effectiveEventId,
       },
     }
   }
@@ -1519,7 +1522,7 @@ export async function processConfirmedPayment(verification: PaymentVerificationP
   let eventCheck
 
   try {
-    eventCheck = await verifyEventAndCandidate(payment.event_id, payment.candidate_id, Number(payment.quantity))
+    eventCheck = await verifyEventAndCandidate(effectiveEventId, effectiveCandidateId, effectiveQuantity)
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Payment verification failed'
     console.error('[PAYMENT_VERIFY_FAIL] Event/candidate check failed:', { reference: verification.reference, error: message })
@@ -1530,7 +1533,7 @@ export async function processConfirmedPayment(verification: PaymentVerificationP
         .from('payments')
         .update({ status: 'failed', gateway_status: 'event_ended', verified_at: new Date().toISOString() })
         .eq('reference', verification.reference)
-      await logVoteCreationFailure('Voting has ended', payment.event_id)
+      await logVoteCreationFailure('Voting has ended', effectiveEventId)
     } else {
       await logPaymentVerificationFailure(verification.reference, message)
     }
@@ -1560,11 +1563,17 @@ export async function processConfirmedPayment(verification: PaymentVerificationP
   const resolvedPaymentMethod =
     verification.paymentMethod ?? payment.payment_method ?? (verification.provider === 'nalo' ? 'momo' : 'paystack')
   const resolvedVoteSource = verification.provider === 'nalo' ? 'momo' : 'online'
+  const effectivePayment = {
+    ...payment,
+    event_id: effectiveEventId,
+    candidate_id: effectiveCandidateId,
+    quantity: effectiveQuantity,
+  }
 
   const { error: rpcError } = await supabase.rpc('process_vote', {
-    p_event_id: payment.event_id,
-    p_candidate_id: payment.candidate_id,
-    p_quantity: Number(payment.quantity),
+    p_event_id: effectiveEventId,
+    p_candidate_id: effectiveCandidateId,
+    p_quantity: effectiveQuantity,
     p_voter_id: payment.user_id ?? null,
     p_voter_phone: voterPhoneOrIdentifier,
     p_vote_source: resolvedVoteSource,
@@ -1579,7 +1588,7 @@ export async function processConfirmedPayment(verification: PaymentVerificationP
 
     const fallbackVote = await createVoteFallback({
       supabase,
-      payment,
+      payment: effectivePayment,
       verificationReference: verification.reference,
       voterIdentifier: voterPhoneOrIdentifier,
       amountPaid,
@@ -1588,7 +1597,7 @@ export async function processConfirmedPayment(verification: PaymentVerificationP
     })
 
     if (!fallbackVote.ok) {
-      await logVoteCreationFailure(`RPC error: ${rpcError.message}; fallback error: ${fallbackVote.error}`, payment.event_id)
+      await logVoteCreationFailure(`RPC error: ${rpcError.message}; fallback error: ${fallbackVote.error}`, effectiveEventId)
       await supabase
         .from('payments')
         .update({
