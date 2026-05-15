@@ -212,7 +212,7 @@ export async function createOrReuseUssdPendingTransaction(
   if (createPaymentError && isLegacyBigIntIdError(createPaymentError)) {
     const metadataOnlyPayload = {
       ...baseInsert,
-      event_id: null,
+      event_id: input.eventId,
       ...(input.type === 'vote'
         ? {
             candidate_id: null,
