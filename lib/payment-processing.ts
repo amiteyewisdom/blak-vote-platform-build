@@ -1641,6 +1641,14 @@ export async function processConfirmedPayment(verification: PaymentVerificationP
   }
 
   if (verification.provider === 'nalo') {
+    console.info('[NALO_VOTE_START] Inserting vote via fallback:', {
+      reference: verification.reference,
+      event_id: effectivePayment.event_id,
+      candidate_id: effectivePayment.candidate_id,
+      quantity: effectivePayment.quantity,
+      amount_paid: amountPaid,
+    })
+
     const fallbackVote = await createVoteFallback({
       supabase,
       payment: effectivePayment,
@@ -1672,7 +1680,13 @@ export async function processConfirmedPayment(verification: PaymentVerificationP
       }
     }
 
-    await supabase
+    console.info('[NALO_VOTE_INSERTED] Vote created, linking to payment:', {
+      reference: verification.reference,
+      vote_id: fallbackVote.voteId,
+      candidate_id: effectivePayment.candidate_id,
+    })
+
+    const { error: paymentUpdateError } = await supabase
       .from('payments')
       .update({
         vote_id: fallbackVote.voteId,
@@ -1682,6 +1696,14 @@ export async function processConfirmedPayment(verification: PaymentVerificationP
         processed_at: new Date().toISOString(),
       })
       .eq('reference', verification.reference)
+
+    if (paymentUpdateError) {
+      console.error('[NALO_PAYMENT_UPDATE_FAIL]', paymentUpdateError)
+    } else {
+      const { data: vote } = await supabase.from('votes').select('id, status, amount_paid').eq('id', fallbackVote.voteId).maybeSingle()
+      const { data: nom } = await supabase.from('nominations').select('vote_count').eq('id', effectivePayment.candidate_id).maybeSingle()
+      console.info('[NALO_FINAL_STATE]', { vote, nomination_vote_count: nom?.vote_count })
+    }
 
     return {
       ok: true as const,
