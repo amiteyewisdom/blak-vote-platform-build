@@ -434,7 +434,6 @@ async function createVoteFallback(params: {
     {
       ...basePayload,
       candidate_id: payment.candidate_id,
-      status: amountPaid > 0 ? 'paid' : 'free',
       vote_source: voteSource,
       payment_method: paymentMethod,
       vote_type: amountPaid > 0 ? 'paid' : 'free',
@@ -443,7 +442,6 @@ async function createVoteFallback(params: {
     {
       ...basePayload,
       candidate_id: payment.candidate_id,
-      status: amountPaid > 0 ? 'paid' : 'free',
     },
   ]
 
@@ -473,7 +471,6 @@ async function createVoteFallback(params: {
       {
         ...basePayload,
         nominee_id: payment.candidate_id,
-        status: amountPaid > 0 ? 'paid' : 'free',
         vote_source: voteSource,
         payment_method: paymentMethod,
         vote_type: amountPaid > 0 ? 'paid' : 'free',
@@ -482,7 +479,6 @@ async function createVoteFallback(params: {
       {
         ...basePayload,
         nominee_id: payment.candidate_id,
-        status: amountPaid > 0 ? 'paid' : 'free',
       },
     ]
 
