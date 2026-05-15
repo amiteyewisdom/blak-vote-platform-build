@@ -434,6 +434,7 @@ async function createVoteFallback(params: {
     {
       ...basePayload,
       candidate_id: payment.candidate_id,
+      status: amountPaid > 0 ? 'paid' : 'free',
       vote_source: voteSource,
       payment_method: paymentMethod,
       vote_type: amountPaid > 0 ? 'paid' : 'free',
@@ -442,6 +443,7 @@ async function createVoteFallback(params: {
     {
       ...basePayload,
       candidate_id: payment.candidate_id,
+      status: amountPaid > 0 ? 'paid' : 'free',
     },
   ]
 
@@ -471,6 +473,7 @@ async function createVoteFallback(params: {
       {
         ...basePayload,
         nominee_id: payment.candidate_id,
+        status: amountPaid > 0 ? 'paid' : 'free',
         vote_source: voteSource,
         payment_method: paymentMethod,
         vote_type: amountPaid > 0 ? 'paid' : 'free',
@@ -479,6 +482,7 @@ async function createVoteFallback(params: {
       {
         ...basePayload,
         nominee_id: payment.candidate_id,
+        status: amountPaid > 0 ? 'paid' : 'free',
       },
     ]
 
@@ -1634,6 +1638,63 @@ export async function processConfirmedPayment(verification: PaymentVerificationP
     event_id: effectiveEventId,
     candidate_id: effectiveCandidateId,
     quantity: effectiveQuantity,
+  }
+
+  if (verification.provider === 'nalo') {
+    const fallbackVote = await createVoteFallback({
+      supabase,
+      payment: effectivePayment,
+      verificationReference: verification.reference,
+      voterIdentifier: voterPhoneOrIdentifier,
+      amountPaid,
+      paymentMethod: resolvedPaymentMethod,
+      voteSource: resolvedVoteSource,
+    })
+
+    if (!fallbackVote.ok) {
+      console.error('[VOTE_CREATION_FAIL] NALO fallback insert failed:', fallbackVote.error, {
+        reference: verification.reference,
+      })
+      await logVoteCreationFailure(fallbackVote.error, effectiveEventId)
+      await supabase
+        .from('payments')
+        .update({
+          status: 'failed',
+          gateway_status: 'vote_creation_failed',
+          verified_at: verificationStartedAt,
+        })
+        .eq('reference', verification.reference)
+
+      return {
+        ok: false as const,
+        status: 400,
+        body: { error: fallbackVote.error },
+      }
+    }
+
+    await supabase
+      .from('payments')
+      .update({
+        vote_id: fallbackVote.voteId,
+        status: CANONICAL_PAID_PAYMENT_STATUS,
+        gateway_status: verification.status,
+        verified_at: verificationStartedAt,
+        processed_at: new Date().toISOString(),
+      })
+      .eq('reference', verification.reference)
+
+    return {
+      ok: true as const,
+      status: 200,
+      body: {
+        success: true,
+        resource: 'vote',
+        voteId: fallbackVote.voteId,
+        paymentId: payment.id,
+        eventId: payment.event_id,
+        fallbackApplied: true,
+      },
+    }
   }
 
   const { error: rpcError } = await supabase.rpc('process_vote', {
