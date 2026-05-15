@@ -464,41 +464,6 @@ async function createVoteFallback(params: {
     insertError = insertAttempt.error
   }
 
-  const shouldTryNominee = String(insertError?.message || '').toLowerCase().includes('candidate_id')
-
-  if (!insertedVoteId && shouldTryNominee) {
-    const nomineePayloads = [
-      {
-        ...basePayload,
-        nominee_id: payment.candidate_id,
-        vote_source: voteSource,
-        payment_method: paymentMethod,
-        vote_type: amountPaid > 0 ? 'paid' : 'free',
-        is_manual: false,
-      },
-      {
-        ...basePayload,
-        nominee_id: payment.candidate_id,
-      },
-    ]
-
-    for (const payload of nomineePayloads) {
-      const insertAttempt = await supabase
-        .from('votes')
-        .insert(payload)
-        .select('id')
-        .maybeSingle()
-
-      if (!insertAttempt.error && insertAttempt.data?.id) {
-        insertedVoteId = insertAttempt.data.id
-        insertError = null
-        break
-      }
-
-      insertError = insertAttempt.error
-    }
-  }
-
   if (insertError || !insertedVoteId) {
     return {
       ok: false as const,
@@ -1636,8 +1601,8 @@ export async function processConfirmedPayment(verification: PaymentVerificationP
     quantity: effectiveQuantity,
   }
 
-  if (verification.provider === 'nalo') {
-    console.info('[NALO_VOTE_START] Inserting vote via fallback:', {
+  if (paymentContext === 'vote') {
+    console.info('[VOTE_INSERT_START] Inserting vote via direct path:', {
       reference: verification.reference,
       event_id: effectivePayment.event_id,
       candidate_id: effectivePayment.candidate_id,
@@ -1656,7 +1621,7 @@ export async function processConfirmedPayment(verification: PaymentVerificationP
     })
 
     if (!fallbackVote.ok) {
-      console.error('[VOTE_CREATION_FAIL] NALO fallback insert failed:', fallbackVote.error, {
+      console.error('[VOTE_CREATION_FAIL] Vote insert failed:', fallbackVote.error, {
         reference: verification.reference,
       })
       await logVoteCreationFailure(fallbackVote.error, effectiveEventId)
@@ -1676,7 +1641,7 @@ export async function processConfirmedPayment(verification: PaymentVerificationP
       }
     }
 
-    console.info('[NALO_VOTE_INSERTED] Vote created, linking to payment:', {
+    console.info('[VOTE_INSERTED] Vote created, linking to payment:', {
       reference: verification.reference,
       vote_id: fallbackVote.voteId,
       candidate_id: effectivePayment.candidate_id,
@@ -1694,11 +1659,11 @@ export async function processConfirmedPayment(verification: PaymentVerificationP
       .eq('reference', verification.reference)
 
     if (paymentUpdateError) {
-      console.error('[NALO_PAYMENT_UPDATE_FAIL]', paymentUpdateError)
+      console.error('[VOTE_PAYMENT_UPDATE_FAIL]', paymentUpdateError)
     } else {
-      const { data: vote } = await supabase.from('votes').select('id, status, amount_paid').eq('id', fallbackVote.voteId).maybeSingle()
+      const { data: vote } = await supabase.from('votes').select('id, amount_paid, candidate_id, quantity').eq('id', fallbackVote.voteId).maybeSingle()
       const { data: nom } = await supabase.from('nominations').select('vote_count').eq('id', effectivePayment.candidate_id).maybeSingle()
-      console.info('[NALO_FINAL_STATE]', { vote, nomination_vote_count: nom?.vote_count })
+      console.info('[VOTE_FINAL_STATE]', { vote, nomination_vote_count: nom?.vote_count })
     }
 
     return {
