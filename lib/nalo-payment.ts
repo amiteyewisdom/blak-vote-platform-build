@@ -146,7 +146,6 @@ export async function createOrReuseUssdPendingTransaction(
   const baseInsert = {
     reference: input.id,
     event_id: input.eventId,
-    organizer_id: input.organizerId ?? null,
     quantity: input.quantity,
     voter_phone: input.phoneNumber,
     amount: Number(input.amount.toFixed(2)),
@@ -167,6 +166,7 @@ export async function createOrReuseUssdPendingTransaction(
           metadata: {
             paymentFor: 'vote',
             eventId: input.eventId,
+            organizerId: input.organizerId ?? null,
             eventCode: input.eventCode,
             candidateId: input.candidateId,
             candidateCode: input.candidateCode,
@@ -183,6 +183,7 @@ export async function createOrReuseUssdPendingTransaction(
           metadata: {
             paymentFor: 'ticket',
             eventId: input.eventId,
+            organizerId: input.organizerId ?? null,
             eventCode: input.eventCode,
             ticketId: input.planId,
             quantity: input.quantity,
