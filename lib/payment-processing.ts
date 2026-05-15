@@ -1,4 +1,4 @@
-import crypto from 'crypto'
+﻿import crypto from 'crypto'
 import { z } from 'zod'
 import { resolveEventVotePrice } from '@/lib/event-pricing'
 import { isVotingOpenStatus } from '@/lib/event-status'
@@ -504,6 +504,23 @@ async function createVoteFallback(params: {
       ok: false as const,
       error: insertError?.message || 'Unable to create vote record',
     }
+  }
+
+  // Safety-net: sync nominations.vote_count if DB trigger isn't deployed yet.
+  const candidateIdForCount = payment.candidate_id
+  if (candidateIdForCount) {
+    try {
+      const { data: voteSum } = await supabase
+        .from('votes').select('quantity').eq('candidate_id', candidateIdForCount)
+      const dbTotal = (voteSum ?? []).reduce(
+        (s: number, r: { quantity: number }) => s + Number(r.quantity || 1), 0
+      )
+      const { data: nom } = await supabase
+        .from('nominations').select('id, vote_count').eq('id', candidateIdForCount).maybeSingle()
+      if (nom && dbTotal > Number(nom.vote_count || 0)) {
+        await supabase.from('nominations').update({ vote_count: dbTotal }).eq('id', candidateIdForCount)
+      }
+    } catch { /* best-effort */ }
   }
 
   return {
