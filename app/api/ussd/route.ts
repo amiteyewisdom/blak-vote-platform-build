@@ -240,11 +240,6 @@ function deriveSessionSteps(currentSteps: string[], storedSteps: string[]) {
     return [inputToken]
   }
 
-  const lastToken = cleanStored[cleanStored.length - 1]
-  if (lastToken === inputToken) {
-    return cleanStored
-  }
-
   return [...cleanStored, inputToken]
 }
 
