@@ -512,6 +512,15 @@ export async function initiateMoMoPayment(input: InitiateMoMoPaymentInput) {
   const merchantId =
     process.env.NALO_MERCHANT_ID?.trim() || process.env.NALO_PAYMENT_MERCHANT_ID?.trim()
 
+  console.info('[NALO_ENV_CHECK]', {
+    NALO_MERCHANT_ID_present: Boolean(process.env.NALO_MERCHANT_ID),
+    NALO_MERCHANT_ID_length: process.env.NALO_MERCHANT_ID?.length ?? 0,
+    NALO_BASE_URL_present: Boolean(process.env.NALO_BASE_URL),
+    NALO_BASIC_AUTH_HEADER_present: Boolean(process.env.NALO_BASIC_AUTH_HEADER),
+    NALO_TRANS_HASH_SECRET_present: Boolean(process.env.NALO_TRANS_HASH_SECRET),
+    NODE_ENV: process.env.NODE_ENV,
+  })
+
   if (!merchantId) {
     throw new Error('Missing required environment variable: NALO_MERCHANT_ID')
   }
