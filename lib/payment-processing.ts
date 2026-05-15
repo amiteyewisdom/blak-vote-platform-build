@@ -6,7 +6,7 @@ import { getSupabaseAdminClient } from '@/lib/server-security'
 import { logPaymentVerificationFailure, logVoteCreationFailure } from '@/lib/audit-logging'
 
 const CANONICAL_PAID_PAYMENT_STATUS = 'paid'
-const CONFIRMED_PAYMENT_STATUSES = ['success', 'paid', 'completed', 'processed']
+const CONFIRMED_PAYMENT_STATUSES = ['success', 'successful', 'paid', 'completed', 'processed']
 
 export type PaymentProvider = 'paystack' | 'paypal' | 'nalo'
 export type PaymentMethod = 'paystack' | 'paypal' | 'momo' | 'manual' | 'stripe'
@@ -1070,31 +1070,7 @@ export async function verifyPaystackReference(reference: string) {
 
 export async function processConfirmedPayment(verification: PaymentVerificationPayload) {
   const supabase = getSupabaseAdminClient()
-  const parsedMetadata = normalizedPaystackMetadataSchema.safeParse(verification.metadata ?? {})
-
-  if (!parsedMetadata.success) {
-    console.error('[PAYMENT_VERIFY_FAIL] Invalid metadata schema:', parsedMetadata.error, { reference: verification.reference })
-    await logPaymentVerificationFailure(verification.reference, 'Invalid metadata schema')
-    return {
-      ok: false as const,
-      status: 400,
-      body: { error: 'Invalid payment metadata' },
-    }
-  }
-
-  const metadata = parsedMetadata.data
-
-  const paymentContext = metadata.paymentFor
-
-  if (paymentContext === 'vote' && (!metadata.candidateId || !metadata.quantity)) {
-    console.error('[PAYMENT_VERIFY_FAIL] Missing candidate or quantity:', { reference: verification.reference })
-    await logPaymentVerificationFailure(verification.reference, 'Missing candidate or quantity')
-    return {
-      ok: false as const,
-      status: 400,
-      body: { error: 'Invalid payment metadata' },
-    }
-  }
+  const parsedVerificationMetadata = normalizedPaystackMetadataSchema.safeParse(verification.metadata ?? {})
 
   const { data: payment, error: paymentError } = await supabase
     .from('payments')
@@ -1119,6 +1095,40 @@ export async function processConfirmedPayment(verification: PaymentVerificationP
       ok: false as const,
       status: 404,
       body: { error: 'Payment record not found' },
+    }
+  }
+
+  const parsedStoredPaymentMetadata = normalizedPaystackMetadataSchema.safeParse(payment.metadata ?? {})
+
+  const metadata = parsedVerificationMetadata.success
+    ? parsedVerificationMetadata.data
+    : parsedStoredPaymentMetadata.success
+      ? parsedStoredPaymentMetadata.data
+      : null
+
+  if (!metadata) {
+    console.error('[PAYMENT_VERIFY_FAIL] Invalid metadata schema:', {
+      reference: verification.reference,
+      verificationMetadataValid: parsedVerificationMetadata.success,
+      storedMetadataValid: parsedStoredPaymentMetadata.success,
+    })
+    await logPaymentVerificationFailure(verification.reference, 'Invalid payment metadata')
+    return {
+      ok: false as const,
+      status: 400,
+      body: { error: 'Invalid payment metadata' },
+    }
+  }
+
+  const paymentContext = metadata.paymentFor
+
+  if (paymentContext === 'vote' && (!metadata.candidateId || !metadata.quantity)) {
+    console.error('[PAYMENT_VERIFY_FAIL] Missing candidate or quantity:', { reference: verification.reference })
+    await logPaymentVerificationFailure(verification.reference, 'Missing candidate or quantity')
+    return {
+      ok: false as const,
+      status: 400,
+      body: { error: 'Invalid payment metadata' },
     }
   }
 
