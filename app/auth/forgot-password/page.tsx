@@ -7,6 +7,14 @@ import { AlertCircle, ArrowLeft, Mail, SendHorizonal } from 'lucide-react'
 import BrandLogo from '@/components/BrandLogo'
 import { Button } from '@/components/ui/button'
 
+const RESET_STATE_KEY = 'blakvote_reset_state'
+
+type ResetState = {
+  email: string
+  verified: boolean
+  updatedAt: number
+}
+
 export default function ForgotPasswordPage() {
   const router  = useRouter()
   const [email,   setEmail]   = useState('')
@@ -29,6 +37,14 @@ export default function ForgotPasswordPage() {
       })
       const data: { success?: boolean; error?: string } = await res.json()
       if (!res.ok) throw new Error(data.error ?? 'Failed to send reset code.')
+
+      const state: ResetState = {
+        email: normalizedEmail,
+        verified: false,
+        updatedAt: Date.now(),
+      }
+      sessionStorage.setItem(RESET_STATE_KEY, JSON.stringify(state))
+
       router.push('/auth/verify-reset?email=' + encodeURIComponent(normalizedEmail))
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to send reset code.')

@@ -7,6 +7,37 @@ import { AlertCircle, Loader2, RotateCcw, ShieldCheck } from 'lucide-react'
 import BrandLogo from '@/components/BrandLogo'
 import { Button } from '@/components/ui/button'
 
+const RESET_STATE_KEY = 'blakvote_reset_state'
+
+type ResetState = {
+  email: string
+  verified: boolean
+  updatedAt: number
+}
+
+function readResetState(): ResetState | null {
+  try {
+    const raw = sessionStorage.getItem(RESET_STATE_KEY)
+    if (!raw) return null
+    const parsed: unknown = JSON.parse(raw)
+    if (
+      parsed !== null &&
+      typeof parsed === 'object' &&
+      'email' in parsed &&
+      'verified' in parsed &&
+      'updatedAt' in parsed &&
+      typeof (parsed as { email: unknown }).email === 'string' &&
+      typeof (parsed as { verified: unknown }).verified === 'boolean' &&
+      typeof (parsed as { updatedAt: unknown }).updatedAt === 'number'
+    ) {
+      return parsed as ResetState
+    }
+    return null
+  } catch {
+    return null
+  }
+}
+
 function VerifyResetContent() {
   const searchParams = useSearchParams()
   const router       = useRouter()
@@ -26,6 +57,12 @@ function VerifyResetContent() {
     if (!email) { setError('Missing email. Return to forgot password.'); return }
     if (!/^\d{6}$/.test(token)) { setError('Enter the 6-digit code from your email.'); return }
 
+    const resetState = readResetState()
+    if (!resetState || resetState.email !== email) {
+      setError('Reset session missing or changed. Start again from forgot password.')
+      return
+    }
+
     setLoading(true)
     try {
       const res = await fetch('/api/verify-otp', {
@@ -35,6 +72,14 @@ function VerifyResetContent() {
       })
       const data: { success?: boolean; error?: string } = await res.json()
       if (!res.ok) throw new Error(data.error ?? 'Verification failed.')
+
+      const verifiedState: ResetState = {
+        email,
+        verified: true,
+        updatedAt: Date.now(),
+      }
+      sessionStorage.setItem(RESET_STATE_KEY, JSON.stringify(verifiedState))
+
       router.push('/auth/new-password?email=' + encodeURIComponent(email))
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Verification failed.')
@@ -54,6 +99,12 @@ function VerifyResetContent() {
       })
       const data: { error?: string } = await res.json()
       if (!res.ok) throw new Error(data.error ?? 'Failed to resend.')
+      const pendingState: ResetState = {
+        email,
+        verified: false,
+        updatedAt: Date.now(),
+      }
+      sessionStorage.setItem(RESET_STATE_KEY, JSON.stringify(pendingState))
       setInfo('A fresh reset code has been sent to your inbox.')
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to resend code.')

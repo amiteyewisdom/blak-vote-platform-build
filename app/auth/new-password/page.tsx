@@ -1,11 +1,43 @@
 'use client'
 
-import { FormEvent, Suspense, useMemo, useState } from 'react'
+import { FormEvent, Suspense, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { AlertCircle, CheckCircle2, Eye, EyeOff, KeyRound, Loader2 } from 'lucide-react'
 import BrandLogo from '@/components/BrandLogo'
 import { Button } from '@/components/ui/button'
+
+const RESET_STATE_KEY = 'blakvote_reset_state'
+const RESET_STATE_MAX_AGE_MS = 15 * 60 * 1000
+
+type ResetState = {
+  email: string
+  verified: boolean
+  updatedAt: number
+}
+
+function readResetState(): ResetState | null {
+  try {
+    const raw = sessionStorage.getItem(RESET_STATE_KEY)
+    if (!raw) return null
+    const parsed: unknown = JSON.parse(raw)
+    if (
+      parsed !== null &&
+      typeof parsed === 'object' &&
+      'email' in parsed &&
+      'verified' in parsed &&
+      'updatedAt' in parsed &&
+      typeof (parsed as { email: unknown }).email === 'string' &&
+      typeof (parsed as { verified: unknown }).verified === 'boolean' &&
+      typeof (parsed as { updatedAt: unknown }).updatedAt === 'number'
+    ) {
+      return parsed as ResetState
+    }
+    return null
+  } catch {
+    return null
+  }
+}
 
 function NewPasswordContent() {
   const searchParams = useSearchParams()
@@ -19,12 +51,35 @@ function NewPasswordContent() {
   const [loading,         setLoading]         = useState(false)
   const [error,           setError]           = useState<string | null>(null)
   const [done,            setDone]            = useState(false)
+  const [ready,           setReady]           = useState(false)
+
+  useEffect(() => {
+    const resetState = readResetState()
+    if (!email || !resetState) {
+      setError('Reset session missing. Restart from forgot password.')
+      return
+    }
+
+    if (resetState.email !== email || !resetState.verified) {
+      setError('OTP verification is required before changing password.')
+      return
+    }
+
+    if (Date.now() - resetState.updatedAt > RESET_STATE_MAX_AGE_MS) {
+      sessionStorage.removeItem(RESET_STATE_KEY)
+      setError('Reset session expired. Request a new code.')
+      return
+    }
+
+    setReady(true)
+  }, [email])
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     setError(null)
 
     if (!email) { setError('Missing email. Please restart the reset flow.'); return }
+    if (!ready) { setError('OTP verification is required before changing password.'); return }
     if (password.length < 8) { setError('Password must be at least 8 characters.'); return }
     if (password !== confirmPassword) { setError('Passwords do not match.'); return }
 
@@ -37,6 +92,7 @@ function NewPasswordContent() {
       })
       const data: { success?: boolean; error?: string } = await res.json()
       if (!res.ok) throw new Error(data.error ?? 'Failed to update password.')
+      sessionStorage.removeItem(RESET_STATE_KEY)
       setDone(true)
       setTimeout(() => router.replace('/auth/login'), 2500)
     } catch (e) {
@@ -109,7 +165,7 @@ function NewPasswordContent() {
             </div>
           </div>
 
-          <Button type="submit" disabled={loading} className="h-12 w-full">
+          <Button type="submit" disabled={loading || !ready} className="h-12 w-full">
             {loading
               ? <span className="inline-flex items-center gap-2"><Loader2 size={18} className="animate-spin" />Updating password...</span>
               : <span className="inline-flex items-center gap-2"><KeyRound size={18} />Set new password</span>}
@@ -117,7 +173,7 @@ function NewPasswordContent() {
         </form>
 
         <div className="mt-6 text-center text-sm">
-          <Link href="/auth/login" className="text-muted-foreground transition hover:text-foreground">Back to sign in</Link>
+          <Link href="/auth/forgot-password" className="text-muted-foreground transition hover:text-foreground">Back to forgot password</Link>
         </div>
       </div>
     </div>
