@@ -784,6 +784,10 @@ async function handleUssdRequest(request: Request) {
 
     const steps = parseMenu(text)
 
+    if (ussdDebugEnabled) {
+      console.info('[USSD_DEBUG_PARSED_STEPS]', { text, steps })
+    }
+
     if (steps.length === 0) {
       return adaptUssdResponse(con('Welcome to BlakVote\n1. Vote\n2. Ticketing'), responseMode, parsedInput)
     }
