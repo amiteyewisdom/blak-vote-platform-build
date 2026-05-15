@@ -34,6 +34,12 @@ type TicketPlanRecord = {
   sold_count?: number | string | null
 }
 
+type UssdSessionRecord = {
+  session_id: string
+  phone_number?: string | null
+  steps?: unknown
+}
+
 const MAX_VOTE_QUANTITY = 50
 const MAX_USSD_TICKET_QUANTITY = 3
 const NALO_DEFAULT_USSD_ALLOWED_IPS = ['136.243.56.160']
@@ -124,6 +130,7 @@ function con(message: string) {
     headers: {
       'Content-Type': 'text/plain; charset=utf-8',
       'Cache-Control': 'no-store',
+      'X-USSD-FLOW-STATE': 'CON',
     },
   })
 }
@@ -135,6 +142,7 @@ function end(message: string) {
     headers: {
       'Content-Type': 'text/plain; charset=utf-8',
       'Cache-Control': 'no-store',
+      'X-USSD-FLOW-STATE': 'END',
     },
   })
 }
@@ -194,6 +202,116 @@ function parseMenu(text: string) {
     .filter((part) => part.length > 0)
 
   return menuTokens
+}
+
+function normalizeMenuToken(token: string) {
+  return String(token || '').trim().replace(/^[#*\s]+/g, '').replace(/[#*\s]+$/g, '')
+}
+
+function normalizeStoredSteps(value: unknown) {
+  if (!Array.isArray(value)) {
+    return [] as string[]
+  }
+
+  return value
+    .map((step) => normalizeMenuToken(String(step || '')))
+    .filter((step) => step.length > 0)
+}
+
+function deriveSessionSteps(currentSteps: string[], storedSteps: string[]) {
+  const cleanCurrent = currentSteps.map((step) => normalizeMenuToken(step)).filter((step) => step.length > 0)
+  const cleanStored = storedSteps.map((step) => normalizeMenuToken(step)).filter((step) => step.length > 0)
+
+  if (cleanCurrent.length === 0) {
+    return [] as string[]
+  }
+
+  // Some gateways provide cumulative path, e.g. 1*337*ABC.
+  if (cleanCurrent.length > 1) {
+    return cleanCurrent
+  }
+
+  const inputToken = cleanCurrent[0]
+  if (!inputToken) {
+    return cleanStored
+  }
+
+  // New branch selection should reset prior session history.
+  if (inputToken === '1' || inputToken === '2') {
+    return [inputToken]
+  }
+
+  if (cleanStored.length === 0) {
+    return [inputToken]
+  }
+
+  const lastToken = cleanStored[cleanStored.length - 1]
+  if (lastToken === inputToken) {
+    return cleanStored
+  }
+
+  return [...cleanStored, inputToken]
+}
+
+function readUssdFlowState(response: Response) {
+  return response.headers.get('X-USSD-FLOW-STATE') === 'CON' ? 'CON' : 'END'
+}
+
+function isMissingUssdSessionTableError(error: any) {
+  const message = String(error?.message || '').toLowerCase()
+  return message.includes('relation') && message.includes('ussd_sessions') && message.includes('does not exist')
+}
+
+async function loadUssdSessionRecord(sessionId: string) {
+  const supabase = getSupabaseAdminClient()
+  const { data, error } = await supabase
+    .from('ussd_sessions')
+    .select('session_id, phone_number, steps')
+    .eq('session_id', sessionId)
+    .maybeSingle()
+
+  if (error) {
+    if (!isMissingUssdSessionTableError(error)) {
+      console.error('[USSD_SESSION_LOAD_FAIL]', error.message)
+    }
+
+    return null
+  }
+
+  return (data || null) as UssdSessionRecord | null
+}
+
+async function saveUssdSessionRecord(params: {
+  sessionId: string
+  phoneNumber: string
+  steps: string[]
+}) {
+  const { sessionId, phoneNumber, steps } = params
+  const supabase = getSupabaseAdminClient()
+  const { error } = await supabase.from('ussd_sessions').upsert(
+    {
+      session_id: sessionId,
+      phone_number: phoneNumber || null,
+      steps,
+      updated_at: new Date().toISOString(),
+    },
+    {
+      onConflict: 'session_id',
+    }
+  )
+
+  if (error && !isMissingUssdSessionTableError(error)) {
+    console.error('[USSD_SESSION_SAVE_FAIL]', error.message)
+  }
+}
+
+async function clearUssdSessionRecord(sessionId: string) {
+  const supabase = getSupabaseAdminClient()
+  const { error } = await supabase.from('ussd_sessions').delete().eq('session_id', sessionId)
+
+  if (error && !isMissingUssdSessionTableError(error)) {
+    console.error('[USSD_SESSION_CLEAR_FAIL]', error.message)
+  }
 }
 
 async function getNaloPaymentUtils() {
@@ -782,29 +900,39 @@ async function handleUssdRequest(request: Request) {
       })
     }
 
-    const steps = parseMenu(text)
+    const parsedSteps = parseMenu(text)
+    const storedSession = await loadUssdSessionRecord(sessionId)
+    const storedSteps = normalizeStoredSteps(storedSession?.steps)
+    const steps = deriveSessionSteps(parsedSteps, storedSteps)
 
     if (ussdDebugEnabled) {
-      console.info('[USSD_DEBUG_PARSED_STEPS]', { text, steps })
+      console.info('[USSD_DEBUG_PARSED_STEPS]', {
+        text,
+        parsedSteps,
+        storedSteps,
+        derivedSteps: steps,
+      })
     }
+
+    let flowResponse: Response
 
     if (steps.length === 0) {
-      return adaptUssdResponse(con('Welcome to BlakVote\n1. Vote\n2. Ticketing'), responseMode, parsedInput)
+      flowResponse = con('Welcome to BlakVote\n1. Vote\n2. Ticketing')
+    } else if (steps[0] === '1') {
+      flowResponse = await handleVoteFlow({ steps, sessionId, phoneNumber })
+    } else if (steps[0] === '2') {
+      flowResponse = await handleTicketFlow({ steps, sessionId, phoneNumber })
+    } else {
+      flowResponse = end('Invalid option. Dial again and choose 1 for vote or 2 for ticketing.')
     }
 
-    if (steps[0] === '1') {
-      return adaptUssdResponse(await handleVoteFlow({ steps, sessionId, phoneNumber }), responseMode, parsedInput)
+    if (readUssdFlowState(flowResponse) === 'CON') {
+      await saveUssdSessionRecord({ sessionId, phoneNumber, steps })
+    } else {
+      await clearUssdSessionRecord(sessionId)
     }
 
-    if (steps[0] === '2') {
-      return adaptUssdResponse(await handleTicketFlow({ steps, sessionId, phoneNumber }), responseMode, parsedInput)
-    }
-
-    return adaptUssdResponse(
-      end('Invalid option. Dial again and choose 1 for vote or 2 for ticketing.'),
-      responseMode,
-      parsedInput
-    )
+    return adaptUssdResponse(flowResponse, responseMode, parsedInput)
   } catch (error: any) {
     console.error('[USSD_ROUTE_ERROR]', error?.message || error)
     return end('Service temporarily unavailable. Please try again.')

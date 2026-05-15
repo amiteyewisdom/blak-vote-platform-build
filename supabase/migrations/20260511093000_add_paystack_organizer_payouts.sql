@@ -61,6 +61,8 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP FUNCTION IF EXISTS get_organizer_withdrawal_history(UUID, INTEGER, INTEGER);
+
 CREATE OR REPLACE FUNCTION get_organizer_withdrawal_history(
   p_organizer_id UUID,
   p_limit INTEGER DEFAULT 50,

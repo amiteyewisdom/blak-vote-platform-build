@@ -112,6 +112,8 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP FUNCTION IF EXISTS get_admin_platform_withdrawal_history(INT, INT);
+
 CREATE OR REPLACE FUNCTION get_admin_platform_withdrawal_history(
   p_limit INT DEFAULT 50,
   p_offset INT DEFAULT 0
