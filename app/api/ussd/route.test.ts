@@ -6,6 +6,10 @@ const mockGetAllowedIps = vi.fn<(envName: string, fallbackIps?: string[]) => str
   (_envName, fallbackIps) => fallbackIps ?? ['136.243.56.160']
 )
 const mockIsRequestFromAllowedIps = vi.fn<(request: Request, allowedIps: string[]) => boolean>(() => true)
+const mockBuildUssdTransactionId = vi.fn(() => 'USSD-test-ref')
+const mockCreateOrReuseUssdPendingTransaction = vi.fn()
+const mockInitiateMoMoPayment = vi.fn()
+const mockUpdateUssdPendingTransaction = vi.fn()
 
 vi.mock('@/lib/event-pricing', () => ({
   resolveEventVotePrice: vi.fn(() => 0),
@@ -16,10 +20,10 @@ vi.mock('@/lib/event-status', () => ({
 }))
 
 vi.mock('@/lib/nalo-payment', () => ({
-  buildUssdTransactionId: vi.fn(() => 'USSD-test-ref'),
-  createOrReuseUssdPendingTransaction: vi.fn(),
-  initiateMoMoPayment: vi.fn(),
-  updateUssdPendingTransaction: vi.fn(),
+  buildUssdTransactionId: mockBuildUssdTransactionId,
+  createOrReuseUssdPendingTransaction: mockCreateOrReuseUssdPendingTransaction,
+  initiateMoMoPayment: mockInitiateMoMoPayment,
+  updateUssdPendingTransaction: mockUpdateUssdPendingTransaction,
 }))
 
 vi.mock('@/lib/server-security', () => ({
@@ -43,6 +47,14 @@ class QueryBuilder {
   }
 
   select() {
+    return this
+  }
+
+  or() {
+    return this
+  }
+
+  order() {
     return this
   }
 
@@ -89,6 +101,28 @@ class QueryBuilder {
       return Promise.resolve({ data: null, error: null })
     }
 
+    if (this.table === 'tickets') {
+      if (this.filters.event_id === 'event-1') {
+        return Promise.resolve({
+          data: [
+            {
+              id: 'ticket-plan-1',
+              event_id: 'event-1',
+              name: 'Regular',
+              price: 15,
+              quantity: 100,
+              sold_count: 10,
+              admin_fee: null,
+              created_at: '2026-05-15T00:00:00.000Z',
+            },
+          ],
+          error: null,
+        })
+      }
+
+      return Promise.resolve({ data: [], error: null })
+    }
+
     return Promise.resolve({ data: null, error: null })
   }
 }
@@ -115,7 +149,12 @@ describe('USSD route', () => {
       return Array.isArray(fallbackIps) ? fallbackIps : ['136.243.56.160']
     })
     mockIsRequestFromAllowedIps.mockReturnValue(true)
+    mockBuildUssdTransactionId.mockClear()
+    mockCreateOrReuseUssdPendingTransaction.mockReset()
+    mockInitiateMoMoPayment.mockReset()
+    mockUpdateUssdPendingTransaction.mockReset()
     delete process.env.USSD_WEBHOOK_SECRET
+    delete process.env.NALO_USSD_SHORTCODE
   })
 
   afterEach(() => {
@@ -140,6 +179,150 @@ describe('USSD route', () => {
 
     expect(response.status).toBe(200)
     expect(body).toBe('CON Welcome to BlakVote\n1. Vote\n2. Ticketing')
+  })
+
+  it('returns a Nalo JSON welcome response for initial shortcode dial', async () => {
+    process.env.NALO_USSD_SHORTCODE = '*920*377#'
+    const { POST } = await import('@/app/api/ussd/route')
+
+    const response = await POST(
+      new Request('http://localhost:3000/api/ussd', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-forwarded-for': '136.243.56.160',
+        },
+        body: JSON.stringify({
+          USERID: 'BLAKVOTE',
+          MSISDN: '233501234567',
+          SESSIONID: 'session-1',
+          NETWORK: 'MTN',
+          USERDATA: '*920*377#',
+          MSGTYPE: 'Initial',
+        }),
+      })
+    )
+
+    const body = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(body.USERDATA).toBe('Welcome to BlakVote\n1. Vote\n2. Ticketing')
+    expect(body.MSGTYPE).toBe(true)
+  })
+
+  it('initiates MoMo for vote confirmation using organizer-set price and nominee', async () => {
+    const eventPricing = await import('@/lib/event-pricing')
+    vi.mocked(eventPricing.resolveEventVotePrice).mockReturnValue(12.5)
+    mockCreateOrReuseUssdPendingTransaction.mockResolvedValue({
+      id: 'USSD-test-ref',
+      phoneNumber: '233501234567',
+      eventCode: '337',
+      candidateCode: 'ABC',
+      ticketPlan: null,
+      quantity: 2,
+      type: 'vote',
+      amount: 25,
+      status: 'pending',
+      gatewayStatus: 'initialized',
+    })
+    mockInitiateMoMoPayment.mockResolvedValue({ success: true })
+
+    const { POST } = await import('@/app/api/ussd/route')
+
+    const response = await POST(
+      new Request('http://localhost:3000/api/ussd', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-forwarded-for': '136.243.56.160',
+        },
+        body: JSON.stringify({
+          USERID: 'BLAKVOTE',
+          MSISDN: '233501234567',
+          SESSIONID: 'session-vote-1',
+          NETWORK: 'MTN',
+          USERDATA: '1*337*ABC*2*1',
+          MSGTYPE: 'Continue',
+        }),
+      })
+    )
+
+    const body = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(body.USERDATA).toBe('Payment request sent. Please confirm on your phone.')
+    expect(mockCreateOrReuseUssdPendingTransaction).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'vote',
+        eventCode: '337',
+        candidateCode: 'ABC',
+        quantity: 2,
+        amount: 25,
+      })
+    )
+    expect(mockInitiateMoMoPayment).toHaveBeenCalledWith(
+      expect.objectContaining({
+        amount: 25,
+        reference: 'USSD-test-ref',
+      })
+    )
+  })
+
+  it('initiates MoMo for ticket confirmation using ticket plan price', async () => {
+    mockCreateOrReuseUssdPendingTransaction.mockResolvedValue({
+      id: 'USSD-ticket-ref',
+      phoneNumber: '233501234567',
+      eventCode: '337',
+      candidateCode: null,
+      ticketPlan: { id: 'ticket-plan-1', name: 'Regular', optionNumber: 1 },
+      quantity: 2,
+      type: 'ticket',
+      amount: 30,
+      status: 'pending',
+      gatewayStatus: 'initialized',
+    })
+    mockInitiateMoMoPayment.mockResolvedValue({ success: true })
+
+    const { POST } = await import('@/app/api/ussd/route')
+
+    const response = await POST(
+      new Request('http://localhost:3000/api/ussd', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-forwarded-for': '136.243.56.160',
+        },
+        body: JSON.stringify({
+          USERID: 'BLAKVOTE',
+          MSISDN: '233501234567',
+          SESSIONID: 'session-ticket-1',
+          NETWORK: 'MTN',
+          USERDATA: '2*337*1*2*Kwame Mensah*1',
+          MSGTYPE: 'Continue',
+        }),
+      })
+    )
+
+    const body = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(body.USERDATA).toBe('Payment request sent. Please confirm on your phone.')
+    expect(mockCreateOrReuseUssdPendingTransaction).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'ticket',
+        eventCode: '337',
+        planId: 'ticket-plan-1',
+        quantity: 2,
+        amount: 30,
+        buyerName: 'Kwame Mensah',
+      })
+    )
+    expect(mockInitiateMoMoPayment).toHaveBeenCalledWith(
+      expect.objectContaining({
+        amount: 30,
+        reference: 'USSD-ticket-ref',
+      })
+    )
   })
 
   it('accepts sha256-prefixed USSD signatures', async () => {
