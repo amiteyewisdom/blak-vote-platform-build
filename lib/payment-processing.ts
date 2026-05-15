@@ -1576,7 +1576,7 @@ export async function processConfirmedPayment(verification: PaymentVerificationP
     }
   }
 
-  console.log('[PAYMENT_VERIFY_SUCCESS] Creating vote via RPC:', { reference: verification.reference, payment_id: payment.id })
+  console.log('[PAYMENT_VERIFY_SUCCESS] Preparing vote creation:', { reference: verification.reference, payment_id: payment.id })
 
   const voterPhoneOrIdentifier = getGuestVoterIdentifier(
     payment.voter_phone,

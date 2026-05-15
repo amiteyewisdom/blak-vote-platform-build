@@ -64,10 +64,9 @@ CREATE OR REPLACE FUNCTION trg_increment_nomination_vote_count()
   LANGUAGE plpgsql
 AS $$
 BEGIN
-  -- Prefer candidate_id; fall back to nominee_id for schema variants.
   UPDATE nominations
   SET vote_count = COALESCE(vote_count, 0) + COALESCE(NEW.quantity, 1)
-  WHERE id::TEXT = COALESCE(NEW.candidate_id, NEW.nominee_id)::TEXT;
+  WHERE id::TEXT = NEW.candidate_id::TEXT;
 
   RETURN NEW;
 END;
@@ -108,7 +107,6 @@ BEGIN
     payment_method,
     amount_paid,
     transaction_id,
-    status,
     voter_phone,
     vote_source
   ) VALUES (
@@ -119,7 +117,6 @@ BEGIN
     p_payment_method,
     COALESCE(p_amount_paid, 0),
     p_transaction_id,
-    'paid',
     p_voter_phone,
     p_vote_source
   );

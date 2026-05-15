@@ -1,36 +1,27 @@
 -- =============================================================================
--- Migration: Remove ambiguous process_vote overloads
+-- Migration: Fix votes trigger + process_vote for deployed databases
 --
--- Supabase/PostgREST cannot resolve RPC calls when multiple process_vote()
--- signatures exist with overlapping named parameters. Keep a single canonical
--- signature and drop the legacy overloads that were causing PGRST203.
+-- Problems observed in production:
+--   1. trg_increment_nomination_vote_count referenced NEW.nominee_id, but the
+--      votes table does not have that column. Any INSERT into votes aborted.
+--   2. process_vote inserted into votes.status, but votes has no status column.
+--
+-- This migration repairs both functions in-place for databases that already ran
+-- the earlier broken migrations.
 -- =============================================================================
 
-DROP FUNCTION IF EXISTS public.process_vote(
-  uuid,
-  uuid,
-  integer,
-  uuid,
-  text,
-  text,
-  text,
-  text,
-  text,
-  numeric
-);
+CREATE OR REPLACE FUNCTION trg_increment_nomination_vote_count()
+  RETURNS TRIGGER
+  LANGUAGE plpgsql
+AS $$
+BEGIN
+  UPDATE nominations
+  SET vote_count = COALESCE(vote_count, 0) + COALESCE(NEW.quantity, 1)
+  WHERE id::TEXT = NEW.candidate_id::TEXT;
 
-DROP FUNCTION IF EXISTS public.process_vote(
-  uuid,
-  uuid,
-  integer,
-  uuid,
-  character varying,
-  character varying,
-  character varying,
-  character varying,
-  inet,
-  numeric
-);
+  RETURN NEW;
+END;
+$$;
 
 CREATE OR REPLACE FUNCTION public.process_vote(
   p_event_id        uuid,
