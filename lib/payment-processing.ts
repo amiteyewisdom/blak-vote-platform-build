@@ -6,7 +6,7 @@ import { getSupabaseAdminClient } from '@/lib/server-security'
 import { logPaymentVerificationFailure, logVoteCreationFailure } from '@/lib/audit-logging'
 
 const CANONICAL_PAID_PAYMENT_STATUS = 'paid'
-const CONFIRMED_PAYMENT_STATUSES = ['success', 'successful', 'paid', 'completed', 'processed']
+const CONFIRMED_PAYMENT_STATUSES = ['success', 'successful', 'succeeded', 'paid', 'completed', 'processed']
 
 export type PaymentProvider = 'paystack' | 'paypal' | 'nalo'
 export type PaymentMethod = 'paystack' | 'paypal' | 'momo' | 'manual' | 'stripe'

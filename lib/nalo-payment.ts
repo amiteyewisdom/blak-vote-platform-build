@@ -1,7 +1,7 @@
 import crypto from 'crypto'
 import { NextResponse } from 'next/server'
 import { paymentService } from '@/lib/payment-service'
-import { getAllowedIps, isRequestFromAllowedIps } from '@/lib/server-security'
+import { extractClientIp, getAllowedIps, isRequestFromAllowedIps } from '@/lib/server-security'
 import { getSupabaseAdminClient } from '@/lib/server-security'
 
 type UssdTransactionStatus = 'pending' | 'paid' | 'failed'
@@ -316,7 +316,7 @@ type InitiateMoMoPaymentInput = {
   description?: string | null
 }
 
-const NALO_CONFIRMED_STATUSES = ['success', 'successful', 'paid', 'completed', 'processed']
+const NALO_CONFIRMED_STATUSES = ['success', 'successful', 'succeeded', 'paid', 'completed', 'processed']
 const NALO_PENDING_STATUSES = ['pending', 'processing', 'queued', 'initiated', 'in_progress']
 const NALO_FAILED_STATUSES = ['failed', 'cancelled', 'canceled', 'abandoned', 'expired', 'rejected']
 
@@ -748,8 +748,10 @@ function parseNaloWebhookPayload(rawBody: string, contentType: string) {
 export async function handleNaloWebhookRequest(request: Request) {
   try {
     const allowedIps = getAllowedNaloWebhookIps()
+    const clientIp = extractClientIp(request)
 
     if (!isRequestFromAllowedIps(request, allowedIps)) {
+      console.warn('[NALO_WEBHOOK_BLOCKED_IP]', { clientIp, allowedIps })
       return NextResponse.json({ error: 'Unauthorized source IP' }, { status: 403 })
     }
 
@@ -761,6 +763,10 @@ export async function handleNaloWebhookRequest(request: Request) {
       request.headers.get('x-webhook-signature')
 
     if (!isValidNaloWebhookSignature(rawBody, signature)) {
+      console.warn('[NALO_WEBHOOK_INVALID_SIGNATURE]', {
+        clientIp,
+        hasSignature: Boolean(signature),
+      })
       return NextResponse.json({ error: 'Invalid webhook signature' }, { status: 401 })
     }
 
@@ -771,9 +777,20 @@ export async function handleNaloWebhookRequest(request: Request) {
     })
 
     const normalizedStatus = normalizeWebhookStatus(verification.status)
+    console.info('[NALO_WEBHOOK_VERIFICATION]', {
+      clientIp,
+      status: normalizedStatus,
+      reference: verification.reference,
+      amount: verification.amount,
+    })
 
     if (NALO_CONFIRMED_STATUSES.includes(normalizedStatus)) {
       const result = await paymentService.handleSuccess(verification)
+      console.info('[NALO_WEBHOOK_CONFIRMED_RESULT]', {
+        reference: verification.reference,
+        status: normalizedStatus,
+        responseStatus: result.status,
+      })
       return NextResponse.json(result.body, { status: result.status })
     }
 
@@ -781,6 +798,11 @@ export async function handleNaloWebhookRequest(request: Request) {
       await updateUssdPendingTransaction(verification.reference, {
         status: 'pending',
         gatewayStatus: normalizedStatus,
+      })
+
+      console.info('[NALO_WEBHOOK_PENDING]', {
+        reference: verification.reference,
+        status: normalizedStatus,
       })
 
       return NextResponse.json(
@@ -795,11 +817,21 @@ export async function handleNaloWebhookRequest(request: Request) {
         gatewayStatus: normalizedStatus,
       })
 
+      console.info('[NALO_WEBHOOK_FAILED]', {
+        reference: verification.reference,
+        status: normalizedStatus,
+      })
+
       return NextResponse.json(
         { received: true, status: normalizedStatus, action: 'payment_failed' },
         { status: 200 }
       )
     }
+
+    console.warn('[NALO_WEBHOOK_IGNORED_STATUS]', {
+      reference: verification.reference,
+      status: normalizedStatus || 'unknown',
+    })
 
     return NextResponse.json(
       { received: true, status: normalizedStatus || 'unknown', action: 'ignored' },
