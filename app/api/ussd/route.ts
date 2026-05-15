@@ -236,11 +236,6 @@ function deriveSessionSteps(currentSteps: string[], storedSteps: string[]) {
     return cleanStored
   }
 
-  // New branch selection should reset prior session history.
-  if (inputToken === '1' || inputToken === '2') {
-    return [inputToken]
-  }
-
   if (cleanStored.length === 0) {
     return [inputToken]
   }
