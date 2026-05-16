@@ -9,6 +9,24 @@ import { supabase } from '@/lib/supabaseClient'
 import { getAuthenticatedUserRole, getRedirectPathForRole } from '@/lib/auth/role-routing'
 import { SUPPORT_EMAIL_HREF } from '@/lib/support-contact'
 
+function getLoginErrorMessage(error: unknown) {
+  const message = error instanceof Error ? error.message : 'Failed to sign in.'
+  const normalizedMessage = message.toLowerCase()
+
+  if (
+    normalizedMessage.includes('invalid login credentials') ||
+    normalizedMessage.includes('invalid credentials')
+  ) {
+    return 'Email or password is incorrect. If you recently changed your password, try again or reset it.'
+  }
+
+  if (normalizedMessage.includes('email not confirmed')) {
+    return 'Your account is not ready for password sign-in yet. Reset your password or contact support for help.'
+  }
+
+  return message
+}
+
 export default function LoginPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -29,26 +47,22 @@ export default function LoginPage() {
     setLoading(true)
 
     try {
-      const { error: authError } = await supabase.auth.signInWithPassword({
+      const {
+        data: { user },
+        error: authError,
+      } = await supabase.auth.signInWithPassword({
         email: normalizedEmail,
         password,
       })
 
       if (authError) throw authError
-
-      const {
-        data: { user },
-        error: userError,
-      } = await supabase.auth.getUser()
-
-      if (userError || !user) throw new Error('Session not established.')
+      if (!user) throw new Error('Sign-in succeeded but no user account was returned.')
 
       const role = await getAuthenticatedUserRole(supabase, user)
       const nextPath = getRedirectPathForRole(role)
       window.location.replace(nextPath)
     } catch (loginError) {
-      const message = loginError instanceof Error ? loginError.message : 'Failed to sign in.'
-      setError(message)
+      setError(getLoginErrorMessage(loginError))
     } finally {
       setLoading(false)
     }
