@@ -482,7 +482,7 @@ async function createVoteFallback(params: {
       )
       const { data: nom } = await supabase
         .from('nominations').select('id, vote_count').eq('id', candidateIdForCount).maybeSingle()
-      if (nom && dbTotal > Number(nom.vote_count || 0)) {
+      if (nom && dbTotal !== Number(nom.vote_count || 0)) {
         await supabase.from('nominations').update({ vote_count: dbTotal }).eq('id', candidateIdForCount)
       }
     } catch { /* best-effort */ }
