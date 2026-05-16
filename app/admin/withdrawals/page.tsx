@@ -1,7 +1,6 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { supabase } from "@/lib/supabaseClient"
 import { useToast } from "@/hooks/use-toast"
 
 interface Withdrawal {
@@ -20,12 +19,6 @@ interface Withdrawal {
   payout_provider?: string | null
   payout_reference?: string | null
   payout_failure_reason?: string | null
-}
-
-interface AdminEarning {
-  id: string
-  platform_fee_amount: number
-  created_at: string
 }
 
 interface PlatformWithdrawal {
@@ -50,7 +43,6 @@ interface PlatformWithdrawalSummary {
 export default function AdminWithdrawalsPage() {
   const { toast } = useToast()
   const [withdrawals, setWithdrawals] = useState<Withdrawal[]>([])
-  const [earnings, setEarnings] = useState<AdminEarning[]>([])
   const [platformWithdrawals, setPlatformWithdrawals] = useState<PlatformWithdrawal[]>([])
   const [platformSummary, setPlatformSummary] = useState<PlatformWithdrawalSummary>({
     totalPlatformRevenue: 0,
@@ -76,43 +68,44 @@ export default function AdminWithdrawalsPage() {
     try {
       setLoading(true)
 
-      const [organizerWithdrawalsResponse, { data: earningData }, platformResponse] = await Promise.all([
+      const [organizerWithdrawalsResponse, platformResponse] = await Promise.all([
         fetch("/api/admin/withdrawals?limit=200", { cache: "no-store" }),
-        supabase
-          .from("admin_revenue_transactions")
-          .select("id, platform_fee_amount, created_at")
-          .order("created_at", { ascending: false }),
         fetch("/api/admin/platform-withdrawals?limit=50", { cache: "no-store" }),
       ])
 
+      let nextError: string | null = null
+
       if (!organizerWithdrawalsResponse.ok) {
         const payload = await organizerWithdrawalsResponse.json().catch(() => ({}))
-        throw new Error(payload?.error || "Failed to load organizer withdrawals")
+        nextError = payload?.error || "Failed to load organizer withdrawals"
+      } else {
+        const organizerWithdrawalsPayload = await organizerWithdrawalsResponse.json().catch(() => ({}))
+        setWithdrawals(
+          Array.isArray(organizerWithdrawalsPayload?.withdrawals)
+            ? organizerWithdrawalsPayload.withdrawals as Withdrawal[]
+            : []
+        )
       }
 
       if (!platformResponse.ok) {
         const payload = await platformResponse.json().catch(() => ({}))
-        throw new Error(payload?.error || "Failed to load platform withdrawals")
+        nextError = nextError || payload?.error || "Failed to load platform withdrawals"
+      } else {
+        const platformPayload = await platformResponse.json().catch(() => ({}))
+        setPlatformWithdrawals(
+          Array.isArray(platformPayload?.withdrawals) ? platformPayload.withdrawals as PlatformWithdrawal[] : []
+        )
+        setPlatformSummary({
+          totalPlatformRevenue: Number(platformPayload?.summary?.total_platform_revenue || 0),
+          availableBalance: Number(platformPayload?.availableBalance || 0),
+          pendingAmount: Number(platformPayload?.pendingAmount || 0),
+          processedAmount: Number(platformPayload?.processedAmount || 0),
+        })
       }
 
-      const organizerWithdrawalsPayload = await organizerWithdrawalsResponse.json().catch(() => ({}))
-      const platformPayload = await platformResponse.json().catch(() => ({}))
-
-      setWithdrawals(
-        Array.isArray(organizerWithdrawalsPayload?.withdrawals)
-          ? organizerWithdrawalsPayload.withdrawals as Withdrawal[]
-          : []
-      )
-      if (earningData) setEarnings(earningData as AdminEarning[])
-      setPlatformWithdrawals(
-        Array.isArray(platformPayload?.withdrawals) ? platformPayload.withdrawals as PlatformWithdrawal[] : []
-      )
-      setPlatformSummary({
-        totalPlatformRevenue: Number(platformPayload?.summary?.total_platform_revenue || 0),
-        availableBalance: Number(platformPayload?.availableBalance || 0),
-        pendingAmount: Number(platformPayload?.pendingAmount || 0),
-        processedAmount: Number(platformPayload?.processedAmount || 0),
-      })
+      if (nextError) {
+        throw new Error(nextError)
+      }
     } catch (error: any) {
       toast({
         title: "Failed to load withdrawals",
@@ -371,7 +364,7 @@ export default function AdminWithdrawalsPage() {
   const approvedCount = withdrawals.filter((w) => w.status === "approved" && !w.processed_at).length
   const pendingFundsCount = withdrawals.filter((w) => w.status === 'pending_funds' && !w.processed_at).length
   const processedCount = withdrawals.filter((w) => Boolean(w.processed_at)).length
-  const totalPlatformIncome = earnings.reduce((sum, earning) => sum + Number(earning.platform_fee_amount || 0), 0)
+  const totalPlatformIncome = Number(platformSummary.totalPlatformRevenue || 0)
 
   return (
     <div className="p-4 md:p-8 text-foreground space-y-8">
