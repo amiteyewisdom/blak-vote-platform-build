@@ -25,6 +25,7 @@ interface WalletSummary {
 
 interface EventEarning {
   event_id: string
+  event_title?: string
   total_votes: number
   paid_votes: number
   free_votes: number
@@ -413,7 +414,7 @@ export default function OrganizerWalletPage() {
         </div>
       )}
 
-      {wallet && wallet.available_balance > 0 && (
+      {wallet && (
         <div className="space-y-4 rounded-xl border border-border bg-card p-5 sm:p-6">
           <div className="space-y-2">
             <h2 className="text-2xl font-bold">Withdraw Funds</h2>
@@ -422,6 +423,11 @@ export default function OrganizerWalletPage() {
             <p className="text-xs text-muted-foreground">
               Requests stay pending until admin validates them. After approval the system attempts a Paystack payout immediately, and low-balance cases wait in pending funds until they can be retried.
             </p>
+            {wallet.available_balance <= 0 ? (
+              <div className="rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-sm text-amber-200">
+                You do not have withdrawable funds yet. Revenue will appear here once paid votes or ticket sales are posted to your organizer wallet.
+              </div>
+            ) : null}
           </div>
 
           <div className="grid md:grid-cols-3 gap-3">
@@ -445,7 +451,7 @@ export default function OrganizerWalletPage() {
             <Button
               onClick={handleWithdraw}
               className="w-full"
-              disabled={submittingWithdraw || loadingOptions}
+              disabled={submittingWithdraw || loadingOptions || wallet.available_balance <= 0}
             >
               {submittingWithdraw ? 'Submitting...' : 'Request Withdrawal'}
             </Button>
@@ -591,7 +597,7 @@ export default function OrganizerWalletPage() {
             <table className="w-full text-sm">
               <thead className="border-b border-border">
                 <tr className="text-left text-muted-foreground">
-                  <th className="pb-3 font-semibold">Event ID</th>
+                  <th className="pb-3 font-semibold">Event</th>
                   <th className="pb-3 font-semibold">Total Votes</th>
                   <th className="pb-3 font-semibold">Paid Votes</th>
                   <th className="pb-3 font-semibold">Revenue</th>
@@ -602,8 +608,13 @@ export default function OrganizerWalletPage() {
               <tbody className="divide-y divide-border/60">
                 {earnings.map((earning) => (
                   <tr key={earning.event_id} className="transition hover:bg-muted/30">
-                    <td className="py-4 font-mono text-xs text-gold">
-                      {earning.event_id.slice(0, 8)}...
+                    <td className="py-4">
+                      <div className="font-medium text-foreground">
+                        {earning.event_title || `Event ${earning.event_id.slice(0, 8)}`}
+                      </div>
+                      <div className="font-mono text-xs text-gold">
+                        {earning.event_id.slice(0, 8)}...
+                      </div>
                     </td>
                     <td className="py-4">{earning.total_votes.toLocaleString()}</td>
                     <td className="py-4 font-semibold text-green-400">

@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { requireRole } from '@/lib/api-auth'
+import { getOrganizerEventEarningsData } from '@/lib/organizer-wallet'
+import { getSupabaseAdminClient } from '@/lib/server-security'
 import { z } from 'zod'
 
 const eventEarningsQuerySchema = z.object({
@@ -28,6 +30,7 @@ const eventEarningsQuerySchema = z.object({
 export async function GET(request: NextRequest) {
   try {
     const supabase = await createClient()
+    const adminSupabase = getSupabaseAdminClient()
 
     const auth = await requireRole(supabase, ['organizer'])
     if (!auth.ok) {
@@ -50,28 +53,7 @@ export async function GET(request: NextRequest) {
 
     const queryParams = parsedQuery.data
 
-    // Get event earnings
-    const { data: earnings, error: earningsError } = await supabase
-      .rpc('get_organizer_event_earnings', {
-        p_organizer_id: auth.userId,
-      })
-
-    let results = earnings || []
-
-    if (earningsError) {
-      // Fallback for environments where the RPC is missing or not yet migrated.
-      const { data: fallbackRows, error: fallbackError } = await supabase
-        .from('organizer_event_earnings')
-        .select('event_id,total_votes,paid_votes,free_votes,manual_votes,paid_ticket_count,vote_revenue,ticket_revenue,total_revenue,platform_fee_percent,vote_platform_fee_deducted,ticket_platform_fee_deducted,platform_fee_deducted,net_earnings,updated_at')
-        .eq('organizer_id', auth.userId)
-        .order('updated_at', { ascending: false })
-
-      if (fallbackError) {
-        return NextResponse.json({ error: earningsError.message }, { status: 500 })
-      }
-
-      results = fallbackRows || []
-    }
+    const results = await getOrganizerEventEarningsData(adminSupabase, auth.userId)
 
     // Apply pagination
     const paginated = results.slice(queryParams.offset, queryParams.offset + queryParams.limit)

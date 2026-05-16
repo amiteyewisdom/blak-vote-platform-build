@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { requireRole } from '@/lib/api-auth'
 import { getSupabaseAdminClient } from '@/lib/server-security'
+import {
+  createOrganizerWithdrawalRequest,
+  getOrganizerWithdrawalHistoryData,
+} from '@/lib/organizer-wallet'
 
 function readTrimmedString(record: Record<string, unknown>, key: string) {
   const value = record[key]
@@ -23,15 +27,7 @@ export async function GET(request: NextRequest) {
 
     const adminSupabase = getSupabaseAdminClient()
 
-    const { data, error } = await adminSupabase.rpc('get_organizer_withdrawal_history', {
-      p_organizer_id: auth.userId,
-      p_limit: limit,
-      p_offset: offset,
-    })
-
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 })
-    }
+    const data = await getOrganizerWithdrawalHistoryData(adminSupabase, auth.userId, limit, offset)
 
     return NextResponse.json(
       {
@@ -98,21 +94,46 @@ export async function POST(request: NextRequest) {
 
     const adminSupabase = getSupabaseAdminClient()
 
-    const { data, error } = await adminSupabase.rpc('request_organizer_withdrawal', {
-      p_organizer_id: auth.userId,
-      p_amount: amount,
-      p_method: method,
-      p_account_details: normalizedAccountDetails,
-    })
+    const [{ data: feeOverride }, { data: globalSettings }, { data: feeResult }] = await Promise.all([
+      adminSupabase
+        .from('organizer_fee_overrides')
+        .select('platform_fee_percent')
+        .eq('organizer_user_id', auth.userId)
+        .maybeSingle(),
+      adminSupabase
+        .from('platform_settings')
+        .select('platform_fee_percent')
+        .limit(1)
+        .maybeSingle(),
+      adminSupabase.rpc('get_effective_platform_fee_percent', {
+        p_organizer_ref: auth.userId,
+      }),
+    ])
 
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 400 })
+    const effectivePlatformFeePercent = Number(
+      feeResult ?? feeOverride?.platform_fee_percent ?? globalSettings?.platform_fee_percent ?? 10
+    )
+
+    let withdrawal = null
+
+    try {
+      withdrawal = await createOrganizerWithdrawalRequest(adminSupabase, auth.userId, {
+        amount,
+        method,
+        accountDetails: normalizedAccountDetails,
+        platformFeePercent: effectivePlatformFeePercent,
+      })
+    } catch (error) {
+      return NextResponse.json(
+        { error: error instanceof Error ? error.message : 'Failed to create withdrawal request' },
+        { status: 400 }
+      )
     }
 
     return NextResponse.json(
       {
         success: true,
-        withdrawal: Array.isArray(data) && data.length > 0 ? data[0] : null,
+        withdrawal,
       },
       { status: 200 }
     )

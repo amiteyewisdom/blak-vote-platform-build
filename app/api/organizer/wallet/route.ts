@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { requireRole } from '@/lib/api-auth'
 import { getSupabaseAdminClient } from '@/lib/server-security'
+import { getOrganizerWalletSummaryData } from '@/lib/organizer-wallet'
 
 /**
  * GET /api/organizer/wallet
@@ -47,37 +48,11 @@ export async function GET(request: NextRequest) {
     )
     const feeSource = feeOverride?.platform_fee_percent != null ? 'custom' : 'default'
 
-    // Get wallet summary
-    const { data: wallet, error: walletError } = await supabase
-      .rpc('get_organizer_wallet_summary', {
-        p_organizer_id: auth.userId,
-      })
-
-    if (walletError) {
-      return NextResponse.json({ error: walletError.message }, { status: 500 })
-    }
-
-    if (!wallet || wallet.length === 0) {
-      // Return default if wallet doesn't exist
-      return NextResponse.json(
-        {
-          total_revenue: 0,
-          total_paid_votes: 0,
-          platform_fees_deducted: 0,
-          net_balance: 0,
-          available_balance: 0,
-          pending_withdrawals: 0,
-          last_updated: new Date().toISOString(),
-          effective_platform_fee_percent: effectivePlatformFeePercent,
-          fee_source: feeSource,
-        },
-        { status: 200 }
-      )
-    }
+    const wallet = await getOrganizerWalletSummaryData(adminSupabase, auth.userId)
 
     return NextResponse.json(
       {
-        ...wallet[0],
+        ...wallet,
         effective_platform_fee_percent: effectivePlatformFeePercent,
         fee_source: feeSource,
       },
