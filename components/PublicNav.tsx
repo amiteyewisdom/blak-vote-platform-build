@@ -10,6 +10,7 @@ const NAV_ITEMS = [
   { label: 'Home', href: '/events' },
   { label: 'Ticketing', href: '/events' },
   { label: 'Contact', href: '/contact' },
+  { label: 'Open App', href: 'https://app.blakvote.com', external: true },
   { label: 'Terms & Conditions', href: '/terms' },
   { label: 'Privacy Policy', href: '/privacy' },
 ]
@@ -99,12 +100,14 @@ export default function PublicNav({ actions }: PublicNavProps) {
 
         <ul className="flex-1 space-y-1 px-2 py-4">
           {NAV_ITEMS.map((item) => {
-            const active = pathname === item.href
+            const active = !item.external && pathname === item.href
             return (
               <li key={`${item.label}-${item.href}`}>
                 <Link
                   href={item.href}
                   onClick={handleNavClick}
+                  target={item.external ? '_blank' : undefined}
+                  rel={item.external ? 'noreferrer' : undefined}
                   className={`block rounded-md px-4 py-3 text-[15px] transition-colors ${
                     active
                       ? 'border-r-2 border-gold bg-gold/10 text-gold font-semibold'

@@ -1,14 +1,19 @@
-import type { Metadata, Viewport } from "next"
+import type { Viewport } from "next"
+import { headers } from "next/headers"
 import { ToastProvider, ToastViewport } from "@/components/ui/toast"
 import { ThemeProvider } from "@/components/theme-provider"
 import { ThemeToggle } from "@/components/theme-toggle"
 import AuthSessionListener from "@/components/AuthSessionListener"
+import { buildMetadata, buildStructuredData, normalizeHost } from "@/lib/site-metadata"
 import "./globals.css"
 
-export const metadata: Metadata = {
-  title: "BlakVote — Premium Digital Voting Platform",
-  description:
-    "Secure, elegant and enterprise-grade digital voting platform built for modern organizations.",
+export async function generateMetadata() {
+  const requestHeaders = await headers()
+  const hostname = normalizeHost(
+    requestHeaders.get("x-forwarded-host") ?? requestHeaders.get("host")
+  )
+
+  return buildMetadata(hostname)
 }
 
 export const viewport: Viewport = {
@@ -19,16 +24,26 @@ export const viewport: Viewport = {
   viewportFit: "cover",
 }
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
+  const requestHeaders = await headers()
+  const hostname = normalizeHost(
+    requestHeaders.get("x-forwarded-host") ?? requestHeaders.get("host")
+  )
+  const structuredData = buildStructuredData(hostname)
+
   return (
     <html lang="en" suppressHydrationWarning>
       <body
         className="font-sans antialiased bg-background text-foreground"
       >
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }}
+        />
         <ThemeProvider
           attribute="class"
           defaultTheme="system"
