@@ -53,6 +53,7 @@ class Builder {
   private nullFilters: string[] = []
   private ltFilters: Record<string, string> = {}
   private updatePayload: Record<string, unknown> | null = null
+  private insertPayload: Record<string, unknown> | null = null
 
   constructor(table: string) {
     this.table = table
@@ -91,6 +92,11 @@ class Builder {
 
   update(payload: Record<string, unknown>) {
     this.updatePayload = payload
+    return this
+  }
+
+  insert(payload: Record<string, unknown>) {
+    this.insertPayload = payload
     return this
   }
 
@@ -156,6 +162,20 @@ class Builder {
     }
 
     if (this.table === 'votes') {
+      if (this.insertPayload) {
+        const transactionId = String(this.insertPayload.transaction_id || '')
+        const candidateId = String(this.insertPayload.candidate_id || '')
+
+        if (!state.votes.find((vote) => vote.transaction_id === transactionId)) {
+          const voteId = `vote-${state.votes.length + 1}`
+          state.votes.push({ id: voteId, transaction_id: transactionId })
+          return { data: { id: voteId, candidate_id: candidateId }, error: null }
+        }
+
+        const existingVote = state.votes.find((vote) => vote.transaction_id === transactionId)
+        return { data: existingVote ? { id: existingVote.id, candidate_id: candidateId } : null, error: null }
+      }
+
       const tx = this.filters.transaction_id
       const match = state.votes.find((v) => v.transaction_id === tx)
       return { data: match ? { id: match.id } : null, error: null }
@@ -211,15 +231,7 @@ const mockSupabase = {
   from(table: string) {
     return new Builder(table)
   },
-  async rpc(name: string, args?: Record<string, unknown>) {
-    if (name === 'process_vote') {
-      const existing = state.votes.find((v) => v.transaction_id === args?.p_transaction_id)
-      if (!existing && typeof args?.p_transaction_id === 'string') {
-        state.votes.push({ id: 'vote-1', transaction_id: args.p_transaction_id })
-      }
-      return { error: null }
-    }
-
+  async rpc() {
     return { data: null, error: null }
   },
 }

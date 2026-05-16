@@ -1117,19 +1117,6 @@ export async function processConfirmedPayment(verification: PaymentVerificationP
     0
   )
 
-  console.info('[PAYMENT_VERIFY_DEBUG]', {
-    reference: verification.reference,
-    provider: verification.provider,
-    paymentContext,
-    candidate_id_col: payment.candidate_id,
-    quantity_col: payment.quantity,
-    metadata_candidateId: rawStoredMeta.candidateId,
-    metadata_quantity: rawStoredMeta.quantity,
-    parsedStoredSuccess: parsedStoredPaymentMetadata.success,
-    effectiveCandidateId,
-    effectiveQuantity,
-  })
-
   if (!metadata && !rawStoredMeta.candidateId && !payment.candidate_id) {
     console.error('[PAYMENT_VERIFY_FAIL] Invalid metadata schema:', {
       reference: verification.reference,
@@ -1550,10 +1537,8 @@ export async function processConfirmedPayment(verification: PaymentVerificationP
     }
   }
 
-  let eventCheck
-
   try {
-    eventCheck = await verifyEventAndCandidate(effectiveEventId, effectiveCandidateId, effectiveQuantity)
+    await verifyEventAndCandidate(effectiveEventId, effectiveCandidateId, effectiveQuantity)
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Payment verification failed'
     console.error('[PAYMENT_VERIFY_FAIL] Event/candidate check failed:', { reference: verification.reference, error: message })
@@ -1575,8 +1560,6 @@ export async function processConfirmedPayment(verification: PaymentVerificationP
       body: { error: message },
     }
   }
-
-  console.log('[PAYMENT_VERIFY_SUCCESS] Preparing vote creation:', { reference: verification.reference, payment_id: payment.id })
 
   const voterPhoneOrIdentifier = getGuestVoterIdentifier(
     payment.voter_phone,
@@ -1602,14 +1585,6 @@ export async function processConfirmedPayment(verification: PaymentVerificationP
   }
 
   if (paymentContext === 'vote') {
-    console.info('[VOTE_INSERT_START] Inserting vote via direct path:', {
-      reference: verification.reference,
-      event_id: effectivePayment.event_id,
-      candidate_id: effectivePayment.candidate_id,
-      quantity: effectivePayment.quantity,
-      amount_paid: amountPaid,
-    })
-
     const fallbackVote = await createVoteFallback({
       supabase,
       payment: effectivePayment,
@@ -1641,12 +1616,6 @@ export async function processConfirmedPayment(verification: PaymentVerificationP
       }
     }
 
-    console.info('[VOTE_INSERTED] Vote created, linking to payment:', {
-      reference: verification.reference,
-      vote_id: fallbackVote.voteId,
-      candidate_id: effectivePayment.candidate_id,
-    })
-
     const { error: paymentUpdateError } = await supabase
       .from('payments')
       .update({
@@ -1660,10 +1629,6 @@ export async function processConfirmedPayment(verification: PaymentVerificationP
 
     if (paymentUpdateError) {
       console.error('[VOTE_PAYMENT_UPDATE_FAIL]', paymentUpdateError)
-    } else {
-      const { data: vote } = await supabase.from('votes').select('id, amount_paid, candidate_id, quantity').eq('id', fallbackVote.voteId).maybeSingle()
-      const { data: nom } = await supabase.from('nominations').select('vote_count').eq('id', effectivePayment.candidate_id).maybeSingle()
-      console.info('[VOTE_FINAL_STATE]', { vote, nomination_vote_count: nom?.vote_count })
     }
 
     return {
@@ -1679,127 +1644,101 @@ export async function processConfirmedPayment(verification: PaymentVerificationP
       },
     }
   }
+}
 
-  const { error: rpcError } = await supabase.rpc('process_vote', {
-    p_event_id: effectiveEventId,
-    p_candidate_id: effectiveCandidateId,
-    p_quantity: effectiveQuantity,
-    p_voter_id: payment.user_id ?? null,
-    p_voter_phone: voterPhoneOrIdentifier,
-    p_vote_source: resolvedVoteSource,
-    p_payment_method: resolvedPaymentMethod,
-    p_transaction_id: verification.reference,
-    p_ip_address: null,
-    p_amount_paid: amountPaid,
-  })
+function normalizeStoredPaymentProvider(reference: string, provider: unknown): PaymentProvider {
+  const normalizedProvider = String(provider || '').trim().toLowerCase()
 
-  if (rpcError) {
-    console.error('[VOTE_CREATION_FAIL] RPC error:', rpcError, { reference: verification.reference })
+  if (normalizedProvider === 'nalo' || reference.toUpperCase().startsWith('USSD-')) {
+    return 'nalo'
+  }
 
-    const fallbackVote = await createVoteFallback({
-      supabase,
-      payment: effectivePayment,
-      verificationReference: verification.reference,
-      voterIdentifier: voterPhoneOrIdentifier,
-      amountPaid,
-      paymentMethod: resolvedPaymentMethod,
-      voteSource: resolvedVoteSource,
-    })
+  if (normalizedProvider === 'paypal') {
+    return 'paypal'
+  }
 
-    if (!fallbackVote.ok) {
-      await logVoteCreationFailure(`RPC error: ${rpcError.message}; fallback error: ${fallbackVote.error}`, effectiveEventId)
-      await supabase
-        .from('payments')
-        .update({
-          status: 'failed',
-          gateway_status: 'vote_creation_failed',
-          verified_at: verificationStartedAt,
-        })
-        .eq('reference', verification.reference)
+  return 'paystack'
+}
 
-      return {
-        ok: false as const,
-        status: 400,
-        body: { error: fallbackVote.error },
-      }
-    }
+export async function reprocessConfirmedPaymentReference(input: {
+  reference: string
+  provider?: PaymentProvider
+  status?: string
+  amount?: number
+}) {
+  const reference = String(input.reference || '').trim()
 
-    await supabase
-      .from('payments')
-      .update({
-        vote_id: fallbackVote.voteId,
-        status: CANONICAL_PAID_PAYMENT_STATUS,
-        gateway_status: verification.status,
-        verified_at: verificationStartedAt,
-        processed_at: new Date().toISOString(),
-      })
-      .eq('reference', verification.reference)
-
+  if (!reference) {
     return {
-      ok: true as const,
-      status: 200,
-      body: {
-        success: true,
-        resource: 'vote',
-        voteId: fallbackVote.voteId,
-        paymentId: payment.id,
-        eventId: payment.event_id,
-        fallbackApplied: true,
-      },
+      ok: false as const,
+      status: 400,
+      body: { error: 'Reference required' },
     }
   }
 
-  const { data: createdVote, error: createdVoteError } = await supabase
-    .from('votes')
-    .select('id')
-    .eq('transaction_id', verification.reference)
+  const supabase = getSupabaseAdminClient()
+  const { data: payment, error: paymentError } = await supabase
+    .from('payments')
+    .select('reference, amount, metadata, provider, payment_method, currency, status, gateway_status')
+    .eq('reference', reference)
     .maybeSingle()
 
-  if (createdVoteError || !createdVote) {
-    console.error('[VOTE_CREATION_FAIL] Vote not found after RPC:', createdVoteError, { reference: verification.reference })
-    await logVoteCreationFailure(
-      createdVoteError?.message || 'Vote not found after RPC',
-      payment.event_id
-    )
-    await supabase
-      .from('payments')
-      .update({
-        status: 'failed',
-        gateway_status: 'vote_lookup_failed',
-        verified_at: verificationStartedAt,
-      })
-      .eq('reference', verification.reference)
+  if (paymentError) {
     return {
       ok: false as const,
       status: 500,
-      body: { error: createdVoteError?.message || 'Vote was created but could not be linked to payment' },
+      body: { error: paymentError.message },
     }
   }
 
-  await supabase
-    .from('payments')
-    .update({
-      vote_id: createdVote.id,
-      status: CANONICAL_PAID_PAYMENT_STATUS,
-      gateway_status: verification.status,
-      verified_at: verificationStartedAt,
-      processed_at: new Date().toISOString(),
-    })
-    .eq('reference', verification.reference)
-
-  console.log('[VOTE_CREATION_SUCCESS] Payment and vote linked:', { reference: verification.reference, vote_id: createdVote.id, payment_id: payment.id })
-
-  return {
-    ok: true as const,
-    status: 200,
-    body: {
-      success: true,
-      resource: 'vote',
-      voteId: createdVote.id,
-      paymentId: payment.id,
-      eventId: eventCheck.event.id,
-    },
+  if (!payment) {
+    return {
+      ok: false as const,
+      status: 404,
+      body: { error: 'Payment record not found' },
+    }
   }
+
+  const provider = input.provider ?? normalizeStoredPaymentProvider(reference, payment.provider)
+  let verification: PaymentVerificationPayload
+
+  if (provider === 'paystack') {
+    const verified = await verifyPaystackReference(reference)
+    verification = {
+      ...verified,
+      provider: 'paystack',
+      paymentMethod: 'paystack',
+      currency: typeof payment.currency === 'string' ? payment.currency : undefined,
+    }
+  } else {
+    const fallbackStatus =
+      typeof input.status === 'string' && input.status.trim()
+        ? input.status.trim()
+        : isConfirmedPaymentStatus(payment.gateway_status)
+          ? String(payment.gateway_status)
+          : isConfirmedPaymentStatus(payment.status)
+            ? String(payment.status)
+            : provider === 'nalo'
+              ? 'completed'
+              : 'paid'
+
+    verification = {
+      reference,
+      amount: Number.isFinite(Number(input.amount)) ? Number(input.amount) : Number(payment.amount || 0),
+      status: fallbackStatus,
+      metadata: payment.metadata ?? {},
+      provider,
+      paymentMethod:
+        provider === 'nalo'
+          ? 'momo'
+          : provider === 'paypal'
+            ? 'paypal'
+            : 'paystack',
+      currency: typeof payment.currency === 'string' ? payment.currency : undefined,
+    }
+  }
+
+  return processConfirmedPayment(verification)
 }
 
 // =============================================================================
