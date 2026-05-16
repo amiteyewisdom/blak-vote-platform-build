@@ -19,6 +19,7 @@ export async function verifySecuritySetup(): Promise<SecurityCheckResult[]> {
     'NEXT_PUBLIC_SUPABASE_URL',
     'SUPABASE_SERVICE_ROLE_KEY',
     'PAYSTACK_SECRET_KEY',
+    'RESEND_API_KEY',
   ]
 
   const missingEnv = envChecks.filter((name) => !hasEnv(name))
@@ -173,9 +174,17 @@ export async function verifySecuritySetup(): Promise<SecurityCheckResult[]> {
   results.push({
     name: 'Application-Level Safeguards',
     status: 'warning',
-    message: 'Client redirect validation, verification idempotency, and duplicate detection require code review in addition to runtime checks',
+    message: 'Header policy, public auth abuse controls, payment redirect validation, and duplicate detection require code review in addition to runtime checks',
     details: {
       reviewAreas: [
+        'proxy.ts',
+        'app/api/send-otp/route.ts',
+        'app/api/verify-otp/route.ts',
+        'app/api/update-password/route.ts',
+        'lib/payment-route-security.ts',
+        'app/api/payments/initialize/route.ts',
+        'app/api/payments/verify/route.ts',
+        'app/api/payments/webhook/route.ts',
         'payment-processing.ts',
         'payment/success/page.tsx',
         'events/[eventId]/page.tsx',

@@ -2,23 +2,13 @@
 
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabaseClient'
-import {
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-} from 'recharts'
-import { TrendingUp, Users, Vote, AlertTriangle, DollarSign } from 'lucide-react'
+import { TrendingUp, Users, Vote, DollarSign } from 'lucide-react'
 import { DSCard } from '@/components/ui/design-system'
 
 interface DashboardStats {
   totalUsers: number
   totalEvents: number
   totalVotes: number
-  suspiciousActivities: number
   totalPlatformRevenue: number
   totalGrossRevenue: number
   totalRevenueTransactions: number
@@ -29,11 +19,6 @@ interface DashboardStats {
     total_gross_revenue: number
     total_transactions: number
     last_transaction_at: string | null
-  }>
-  dailyStats: Array<{
-    date: string
-    votes: number
-    users: number
   }>
 }
 
@@ -67,9 +52,8 @@ export default function AnalyticsPage() {
       const totalEvents = eventsResult.count || 0
       const totalVotes = votesResult.count || 0
 
-      const suspiciousActivities = 0
-
       const revenueRes = await fetch('/api/admin/revenue')
+
       if (!revenueRes.ok) {
         throw new Error('Failed to fetch revenue analytics')
       }
@@ -80,27 +64,14 @@ export default function AnalyticsPage() {
         ? revenueData.perEventRevenue
         : []
 
-      const dailyStats = Array.from({ length: 7 }, (_, i) => ({
-        date: new Date(
-          Date.now() - (6 - i) * 86400000
-        ).toLocaleDateString('en-US', {
-          month: 'short',
-          day: 'numeric',
-        }),
-        votes: Math.floor(Math.random() * 120) + 30,
-        users: Math.floor(Math.random() * 40) + 10,
-      }))
-
       setStats({
         totalUsers,
         totalEvents,
         totalVotes,
-        suspiciousActivities,
         totalPlatformRevenue: Number(revenueSummary.total_platform_revenue || 0),
         totalGrossRevenue: Number(revenueSummary.total_gross_revenue || 0),
         totalRevenueTransactions: Number(revenueSummary.total_transactions || 0),
         perEventRevenue,
-        dailyStats,
       })
     } catch (err) {
       console.error(err)
@@ -137,7 +108,7 @@ export default function AnalyticsPage() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 sm:gap-6">
+      <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
 
         {/* Users */}
         <DSCard className="p-6">
@@ -169,17 +140,6 @@ export default function AnalyticsPage() {
           </div>
           <div className="text-3xl font-bold">
             {stats.totalVotes}
-          </div>
-        </DSCard>
-
-        {/* Suspicious */}
-        <DSCard className="p-6 border border-red-500/30">
-          <div className="mb-3 flex items-center justify-between text-sm text-muted-foreground">
-            <span>Suspicious Activity</span>
-            <AlertTriangle className="w-4 h-4 text-red-400" />
-          </div>
-          <div className="text-3xl font-bold text-red-400">
-            {stats.suspiciousActivities}
           </div>
         </DSCard>
 
@@ -239,43 +199,6 @@ export default function AnalyticsPage() {
             </table>
           </div>
         )}
-      </DSCard>
-
-      {/* Chart */}
-      <DSCard className="p-6">
-        <h2 className="text-lg font-semibold mb-6">
-          Daily Activity Overview
-        </h2>
-
-        <ResponsiveContainer width="100%" height={300}>
-          <LineChart data={stats.dailyStats}>
-            <CartesianGrid stroke="hsl(var(--border) / 0.8)" />
-            <XAxis dataKey="date" stroke="hsl(var(--muted-foreground))" />
-            <YAxis stroke="hsl(var(--muted-foreground))" />
-            <Tooltip
-              contentStyle={{
-                backgroundColor: 'hsl(var(--card))',
-                border: '1px solid hsl(var(--border))',
-                borderRadius: '12px',
-                color: 'hsl(var(--foreground))',
-              }}
-            />
-            <Line
-              type="monotone"
-              dataKey="votes"
-              stroke="hsl(var(--gold))"
-              strokeWidth={3}
-              dot={false}
-            />
-            <Line
-              type="monotone"
-              dataKey="users"
-              stroke="hsl(221 83% 53%)"
-              strokeWidth={2}
-              dot={false}
-            />
-          </LineChart>
-        </ResponsiveContainer>
       </DSCard>
 
     </div>

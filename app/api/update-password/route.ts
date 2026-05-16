@@ -1,5 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { logAudit, logRateLimitViolation } from '@/lib/audit-logging'
+import {
+  applyNoStoreHeaders,
+  checkRateLimit,
+  extractClientIp,
+  getPasswordPolicyError,
+  getRetryAfterSeconds,
+  hasTrustedOrigin,
+} from '@/lib/server-security'
 
 interface UpdatePasswordBody {
   email: string
@@ -8,6 +17,14 @@ interface UpdatePasswordBody {
 
 interface UserIdRow {
   id: string
+}
+
+const UPDATE_PASSWORD_WINDOW_MS = 15 * 60 * 1000
+const MAX_UPDATE_PASSWORD_PER_IP_WINDOW = 10
+const MAX_UPDATE_PASSWORD_PER_EMAIL_WINDOW = 5
+
+function jsonNoStore(body: Record<string, unknown>, init?: ResponseInit) {
+  return applyNoStoreHeaders(NextResponse.json(body, init))
 }
 
 function getAdminClient() {
@@ -19,17 +36,78 @@ function getAdminClient() {
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
   try {
+    if (!hasTrustedOrigin(req)) {
+      await logAudit({
+        action: 'PASSWORD_RESET_FAILED',
+        severity: 'warning',
+        ip_address: extractClientIp(req),
+        details: { reason: 'Cross-site request blocked.' },
+      })
+
+      return jsonNoStore({ error: 'Cross-site request blocked.' }, { status: 403 })
+    }
+
     const body: UpdatePasswordBody = await req.json()
     const { email, newPassword } = body
+    const clientIp = extractClientIp(req)
 
     if (!email || typeof email !== 'string') {
-      return NextResponse.json({ error: 'A valid email address is required.' }, { status: 400 })
-    }
-    if (!newPassword || newPassword.length < 8) {
-      return NextResponse.json({ error: 'Password must be at least 8 characters.' }, { status: 400 })
+      await logAudit({
+        action: 'PASSWORD_RESET_FAILED',
+        severity: 'warning',
+        ip_address: clientIp,
+        details: { reason: 'Missing email address.' },
+      })
+
+      return jsonNoStore({ error: 'A valid email address is required.' }, { status: 400 })
     }
 
     const normalizedEmail = email.trim().toLowerCase()
+    const ipRateLimit = checkRateLimit(`update-password:ip:${clientIp}`, MAX_UPDATE_PASSWORD_PER_IP_WINDOW, UPDATE_PASSWORD_WINDOW_MS)
+    const emailRateLimit = checkRateLimit(`update-password:email:${normalizedEmail}`, MAX_UPDATE_PASSWORD_PER_EMAIL_WINDOW, UPDATE_PASSWORD_WINDOW_MS)
+
+    if (!ipRateLimit.allowed || !emailRateLimit.allowed) {
+      const retryAfterMs = Math.max(ipRateLimit.retryAfterMs, emailRateLimit.retryAfterMs)
+      await logRateLimitViolation('app/api/update-password', clientIp, MAX_UPDATE_PASSWORD_PER_IP_WINDOW)
+      await logAudit({
+        action: 'PASSWORD_RESET_FAILED',
+        severity: 'warning',
+        ip_address: clientIp,
+        details: { reason: 'Rate limit exceeded.', email: normalizedEmail },
+      })
+
+      return jsonNoStore(
+        { error: 'Too many password reset attempts. Please try again later.' },
+        {
+          status: 429,
+          headers: { 'Retry-After': getRetryAfterSeconds(retryAfterMs) },
+        }
+      )
+    }
+
+    if (!newPassword || typeof newPassword !== 'string') {
+      await logAudit({
+        action: 'PASSWORD_RESET_FAILED',
+        severity: 'warning',
+        ip_address: clientIp,
+        details: { reason: 'Missing new password.', email: normalizedEmail },
+      })
+
+      return jsonNoStore({ error: 'A new password is required.' }, { status: 400 })
+    }
+
+    const passwordPolicyError = getPasswordPolicyError(newPassword)
+    if (passwordPolicyError) {
+      await logAudit({
+        action: 'PASSWORD_RESET_FAILED',
+        severity: 'warning',
+        ip_address: clientIp,
+        details: { reason: passwordPolicyError, email: normalizedEmail },
+      })
+
+      return jsonNoStore({ error: passwordPolicyError }, { status: 400 })
+    }
+
     const admin = getAdminClient()
     const now   = new Date().toISOString()
 
@@ -48,7 +126,14 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     if (otpError) throw new Error(otpError.message)
 
     if (!otpRecord) {
-      return NextResponse.json(
+      await logAudit({
+        action: 'PASSWORD_RESET_FAILED',
+        severity: 'warning',
+        ip_address: clientIp,
+        details: { reason: 'Password reset session expired.', email: normalizedEmail },
+      })
+
+      return jsonNoStore(
         { error: 'Password reset session expired. Please request a new code.' },
         { status: 400 }
       )
@@ -63,7 +148,14 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
     if (userError) throw new Error(userError.message)
     if (!userData) {
-      return NextResponse.json({ error: 'No account found with this email.' }, { status: 404 })
+      await logAudit({
+        action: 'PASSWORD_RESET_FAILED',
+        severity: 'warning',
+        ip_address: clientIp,
+        details: { reason: 'No account found.', email: normalizedEmail },
+      })
+
+      return jsonNoStore({ error: 'No account found with this email.' }, { status: 404 })
     }
 
     const { error: updateError } = await admin.auth.admin.updateUserById(userData.id, {
@@ -74,10 +166,16 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     // Clean up all reset OTPs for this email
     await admin.from('email_otps').delete().eq('email', normalizedEmail).eq('type', 'reset')
 
-    return NextResponse.json({ success: true })
+    return jsonNoStore({ success: true })
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Failed to update password.'
     console.error('[update-password]', message)
-    return NextResponse.json({ error: message }, { status: 500 })
+    await logAudit({
+      action: 'PASSWORD_RESET_FAILED',
+      severity: 'warning',
+      ip_address: extractClientIp(req),
+      details: { reason: message },
+    })
+    return jsonNoStore({ error: message }, { status: 500 })
   }
 }

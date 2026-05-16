@@ -2,6 +2,13 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { randomInt } from 'crypto'
 import { SUPPORT_EMAIL, SUPPORT_WHATSAPP_LABEL } from '@/lib/support-contact'
+import {
+  applyNoStoreHeaders,
+  checkRateLimit,
+  extractClientIp,
+  getRetryAfterSeconds,
+  hasTrustedOrigin,
+} from '@/lib/server-security'
 
 type OtpType = 'signup' | 'reset'
 
@@ -13,6 +20,11 @@ interface SendOtpBody {
 
 const OTP_EXPIRY_MINUTES = 10
 const MAX_OTP_PER_WINDOW = 3
+const MAX_RESET_OTP_PER_IP_WINDOW = 8
+
+function jsonNoStore(body: Record<string, unknown>, init?: ResponseInit) {
+  return applyNoStoreHeaders(NextResponse.json(body, init))
+}
 
 function getAdminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -78,18 +90,22 @@ async function sendViaResend(
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
   try {
+    if (!hasTrustedOrigin(req)) {
+      return jsonNoStore({ error: 'Cross-site request blocked.' }, { status: 403 })
+    }
+
     const body: SendOtpBody = await req.json()
     const { email, type, fullName } = body
 
     if (!email || typeof email !== 'string') {
-      return NextResponse.json({ error: 'A valid email address is required.' }, { status: 400 })
+      return jsonNoStore({ error: 'A valid email address is required.' }, { status: 400 })
     }
     if (type !== 'signup' && type !== 'reset') {
-      return NextResponse.json({ error: 'Invalid OTP type.' }, { status: 400 })
+      return jsonNoStore({ error: 'Invalid OTP type.' }, { status: 400 })
     }
 
     if (type === 'signup') {
-      return NextResponse.json(
+      return jsonNoStore(
         {
           error: `Self-service account creation is disabled. Contact ${SUPPORT_EMAIL} or ${SUPPORT_WHATSAPP_LABEL} for account setup.`,
         },
@@ -98,6 +114,19 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     }
 
     const normalizedEmail = email.trim().toLowerCase()
+    const clientIp = extractClientIp(req)
+    const ipRateLimit = checkRateLimit(`send-otp:${type}:ip:${clientIp}`, MAX_RESET_OTP_PER_IP_WINDOW, OTP_EXPIRY_MINUTES * 60 * 1000)
+
+    if (!ipRateLimit.allowed) {
+      return jsonNoStore(
+        { error: 'Too many requests from this network. Please try again later.' },
+        {
+          status: 429,
+          headers: { 'Retry-After': getRetryAfterSeconds(ipRateLimit.retryAfterMs) },
+        }
+      )
+    }
+
     const admin = getAdminClient()
     const windowStart = new Date(Date.now() - OTP_EXPIRY_MINUTES * 60 * 1000).toISOString()
 
@@ -111,7 +140,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     if (countError) throw new Error(countError.message)
 
     if ((count ?? 0) >= MAX_OTP_PER_WINDOW) {
-      return NextResponse.json(
+      return jsonNoStore(
         { error: 'Too many codes requested. Please wait a few minutes and try again.' },
         { status: 429 }
       )
@@ -140,10 +169,10 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
     await sendViaResend(normalizedEmail, otp, type, fullName)
 
-    return NextResponse.json({ success: true })
+    return jsonNoStore({ success: true })
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Failed to send verification code.'
     console.error('[send-otp]', message)
-    return NextResponse.json({ error: message }, { status: 500 })
+    return jsonNoStore({ error: message }, { status: 500 })
   }
 }

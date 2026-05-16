@@ -2,11 +2,12 @@ import { createServerClient } from "@supabase/ssr";
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse, type NextRequest } from "next/server";
 import { getSupabaseBrowserConfig } from "./lib/supabase/client-config";
+import { applySecurityHeaders } from "./lib/server-security";
 
 function toLoginRedirect(req: NextRequest) {
   const loginUrl = new URL("/auth/login", req.url);
   loginUrl.searchParams.set("redirectTo", req.nextUrl.pathname);
-  return NextResponse.redirect(loginUrl);
+  return applySecurityHeaders(NextResponse.redirect(loginUrl));
 }
 
 export async function proxy(req: NextRequest) {
@@ -21,7 +22,7 @@ export async function proxy(req: NextRequest) {
       return toLoginRedirect(req);
     }
 
-    return NextResponse.next();
+    return applySecurityHeaders(NextResponse.next());
   }
 
   const { url: supabaseUrl, publishableKey: supabaseKey } = config;
@@ -88,15 +89,15 @@ export async function proxy(req: NextRequest) {
   }
 
   if (maintenanceMode && role !== "admin" && !isMaintenancePage) {
-    return NextResponse.redirect(new URL("/maintenance", req.url));
+    return applySecurityHeaders(NextResponse.redirect(new URL("/maintenance", req.url)));
   }
 
   if (!maintenanceMode && isMaintenancePage) {
-    return NextResponse.redirect(new URL("/", req.url));
+    return applySecurityHeaders(NextResponse.redirect(new URL("/", req.url)));
   }
 
   if (!isProtectedRoute) {
-    return res;
+    return applySecurityHeaders(res);
   }
 
   if (userError || !user) {
@@ -108,14 +109,14 @@ export async function proxy(req: NextRequest) {
   }
 
   if (pathname.startsWith("/admin") && role !== "admin") {
-    return NextResponse.redirect(new URL("/", req.url));
+    return applySecurityHeaders(NextResponse.redirect(new URL("/", req.url)));
   }
 
   if (pathname.startsWith("/organizer") && role !== "organizer") {
-    return NextResponse.redirect(new URL("/", req.url));
+    return applySecurityHeaders(NextResponse.redirect(new URL("/", req.url)));
   }
 
-  return res;
+  return applySecurityHeaders(res);
 }
 
 export const config = {

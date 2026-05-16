@@ -1,16 +1,6 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { paymentService } from '@/lib/payment-service'
+import { NextRequest } from 'next/server'
+import { handlePaymentInitializeRequest } from '@/lib/payment-route-security'
 
 export async function POST(request: NextRequest) {
-  try {
-    const body = await request.json()
-    const result = await paymentService.initiatePayment(body)
-    return NextResponse.json(result.body, { status: result.status })
-  } catch (error: any) {
-    console.error('Payment init alias error:', error?.message || error)
-    return NextResponse.json(
-      { error: error?.message || 'Payment initialization failed' },
-      { status: 500 }
-    )
-  }
+  return handlePaymentInitializeRequest(request, 'app/api/payment-init')
 }

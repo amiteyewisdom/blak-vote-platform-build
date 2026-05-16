@@ -1,6 +1,13 @@
 import crypto from 'crypto'
 import { createClient } from '@supabase/supabase-js'
 
+const BASE_CONTENT_SECURITY_POLICY = [
+  "base-uri 'self'",
+  "form-action 'self'",
+  "frame-ancestors 'none'",
+  "object-src 'none'",
+].join('; ')
+
 // ---------------------------------------------------------------------------
 // Sliding-window in-process rate limiter.
 // NOTE: State is per-instance. For multi-instance deployments replace with a
@@ -9,6 +16,9 @@ import { createClient } from '@supabase/supabase-js'
 interface RateLimitBucket {
   timestamps: number[]
 }
+
+const PASSWORD_MIN_LENGTH = 10
+const PASSWORD_MAX_LENGTH = 128
 
 const rateLimitStore = new Map<string, RateLimitBucket>()
 
@@ -175,4 +185,81 @@ export function isValidPaystackSignature(rawBody: string, signature: string | nu
   }
 
   return crypto.timingSafeEqual(expectedBuffer, receivedBuffer)
+}
+
+export function hasTrustedOrigin(request: Request): boolean {
+  const requestOrigin = new URL(request.url).origin
+  const originHeader = request.headers.get('origin')
+  const refererHeader = request.headers.get('referer')
+
+  if (originHeader) {
+    try {
+      return new URL(originHeader).origin === requestOrigin
+    } catch {
+      return false
+    }
+  }
+
+  if (refererHeader) {
+    try {
+      return new URL(refererHeader).origin === requestOrigin
+    } catch {
+      return false
+    }
+  }
+
+  return true
+}
+
+export function applyNoStoreHeaders<T extends Response>(response: T): T {
+  response.headers.set('Cache-Control', 'no-store, max-age=0')
+  response.headers.set('Expires', '0')
+  response.headers.set('Pragma', 'no-cache')
+  return response
+}
+
+export function getRetryAfterSeconds(retryAfterMs: number): string {
+  return String(Math.max(1, Math.ceil(retryAfterMs / 1000)))
+}
+
+export function getPasswordPolicyError(password: string): string | null {
+  if (password.length < PASSWORD_MIN_LENGTH) {
+    return `Password must be at least ${PASSWORD_MIN_LENGTH} characters.`
+  }
+
+  if (password.length > PASSWORD_MAX_LENGTH) {
+    return `Password must be at most ${PASSWORD_MAX_LENGTH} characters.`
+  }
+
+  if (!/[a-z]/.test(password)) {
+    return 'Password must include at least one lowercase letter.'
+  }
+
+  if (!/[A-Z]/.test(password)) {
+    return 'Password must include at least one uppercase letter.'
+  }
+
+  if (!/\d/.test(password)) {
+    return 'Password must include at least one number.'
+  }
+
+  return null
+}
+
+export function applySecurityHeaders<T extends Response>(response: T): T {
+  response.headers.set('Content-Security-Policy', BASE_CONTENT_SECURITY_POLICY)
+  response.headers.set('Cross-Origin-Opener-Policy', 'same-origin')
+  response.headers.set('Cross-Origin-Resource-Policy', 'same-site')
+  response.headers.set('Origin-Agent-Cluster', '?1')
+  response.headers.set('Permissions-Policy', 'camera=(), geolocation=(), microphone=()')
+  response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin')
+  response.headers.set('X-Content-Type-Options', 'nosniff')
+  response.headers.set('X-DNS-Prefetch-Control', 'off')
+  response.headers.set('X-Frame-Options', 'DENY')
+
+  if (process.env.NODE_ENV === 'production') {
+    response.headers.set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload')
+  }
+
+  return response
 }
