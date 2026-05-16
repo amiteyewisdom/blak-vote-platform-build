@@ -76,11 +76,8 @@ export default function AdminWithdrawalsPage() {
     try {
       setLoading(true)
 
-      const [{ data: withdrawalsData }, { data: earningData }, platformResponse] = await Promise.all([
-        supabase
-          .from("organizer_withdrawals")
-          .select("*")
-          .order("created_at", { ascending: false }),
+      const [organizerWithdrawalsResponse, { data: earningData }, platformResponse] = await Promise.all([
+        fetch("/api/admin/withdrawals?limit=200", { cache: "no-store" }),
         supabase
           .from("admin_revenue_transactions")
           .select("id, platform_fee_amount, created_at")
@@ -88,14 +85,24 @@ export default function AdminWithdrawalsPage() {
         fetch("/api/admin/platform-withdrawals?limit=50", { cache: "no-store" }),
       ])
 
+      if (!organizerWithdrawalsResponse.ok) {
+        const payload = await organizerWithdrawalsResponse.json().catch(() => ({}))
+        throw new Error(payload?.error || "Failed to load organizer withdrawals")
+      }
+
       if (!platformResponse.ok) {
         const payload = await platformResponse.json().catch(() => ({}))
         throw new Error(payload?.error || "Failed to load platform withdrawals")
       }
 
+      const organizerWithdrawalsPayload = await organizerWithdrawalsResponse.json().catch(() => ({}))
       const platformPayload = await platformResponse.json().catch(() => ({}))
 
-      if (withdrawalsData) setWithdrawals(withdrawalsData as Withdrawal[])
+      setWithdrawals(
+        Array.isArray(organizerWithdrawalsPayload?.withdrawals)
+          ? organizerWithdrawalsPayload.withdrawals as Withdrawal[]
+          : []
+      )
       if (earningData) setEarnings(earningData as AdminEarning[])
       setPlatformWithdrawals(
         Array.isArray(platformPayload?.withdrawals) ? platformPayload.withdrawals as PlatformWithdrawal[] : []
