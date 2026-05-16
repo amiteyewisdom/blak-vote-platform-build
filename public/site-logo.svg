@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+  <title>BlakVote logo</title>
+  <desc>Black circular BlakVote mark with gold shapes forming the brand symbol.</desc>
+  <rect width="512" height="512" rx="112" fill="#ffffff" />
+  <circle cx="256" cy="256" r="210" fill="#000000" />
+  <path d="M228 132h94c33.137 0 60 26.863 60 60s-26.863 60-60 60h-94z" fill="#f6e08e" />
+  <circle cx="171" cy="314" r="44" fill="#f6e08e" />
+  <path d="M219 258h80c42.526 0 77 34.474 77 77v1H219z" fill="#cc8208" />
+</svg>

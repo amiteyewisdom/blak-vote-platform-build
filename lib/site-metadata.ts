@@ -100,6 +100,7 @@ export function getSiteConfig(hostname: string | null | undefined): SiteConfig {
 export function buildMetadata(hostname: string | null | undefined): Metadata {
   const site = getSiteConfig(hostname)
   const imageUrl = `${site.origin}/logo.jpeg`
+  const faviconUrl = `${site.origin}/favicon.svg`
 
   return {
     metadataBase: new URL(site.origin),
@@ -123,10 +124,11 @@ export function buildMetadata(hostname: string | null | undefined): Metadata {
     manifest: "/manifest.webmanifest",
     icons: {
       icon: [
+        { url: "/favicon.svg", sizes: "any", type: "image/svg+xml" },
         { url: "/icon", sizes: "512x512", type: "image/png" },
         { url: "/logo.jpeg", type: "image/jpeg" },
       ],
-      shortcut: ["/icon"],
+      shortcut: [faviconUrl],
       apple: [{ url: "/apple-icon", sizes: "180x180", type: "image/png" }],
     },
     openGraph: {
@@ -177,7 +179,12 @@ export function buildStructuredData(hostname: string | null | undefined) {
         "@id": `${MAIN_SITE_ORIGIN}/#organization`,
         name: "BlakVote",
         url: MAIN_SITE_ORIGIN,
-        logo: `${MAIN_SITE_ORIGIN}/logo.jpeg`,
+        logo: {
+          "@type": "ImageObject",
+          url: `${MAIN_SITE_ORIGIN}/site-logo.svg`,
+          width: 512,
+          height: 512,
+        },
       },
       {
         "@type": "WebSite",
