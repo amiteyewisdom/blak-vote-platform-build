@@ -277,11 +277,22 @@ async function buildOrganizerEventMetrics(adminSupabase: SupabaseLike, userId: s
     metric.platform_fee_deducted = metric.vote_platform_fee_deducted + metric.ticket_platform_fee_deducted
 
     if (metric.total_revenue > 0 && metric.platform_fee_deducted === 0) {
-      metric.platform_fee_deducted = Number(
-        ((metric.total_revenue * metric.platform_fee_percent) / 100).toFixed(2)
-      )
-      metric.vote_platform_fee_deducted = metric.platform_fee_deducted
-      metric.ticket_platform_fee_deducted = 0
+      metric.platform_fee_deducted = Number(((metric.total_revenue * metric.platform_fee_percent) / 100).toFixed(2))
+
+      if (metric.vote_revenue > 0 && metric.ticket_revenue > 0) {
+        metric.vote_platform_fee_deducted = Number(
+          ((metric.platform_fee_deducted * metric.vote_revenue) / metric.total_revenue).toFixed(2)
+        )
+        metric.ticket_platform_fee_deducted = Number(
+          (metric.platform_fee_deducted - metric.vote_platform_fee_deducted).toFixed(2)
+        )
+      } else if (metric.vote_revenue > 0) {
+        metric.vote_platform_fee_deducted = metric.platform_fee_deducted
+        metric.ticket_platform_fee_deducted = 0
+      } else {
+        metric.vote_platform_fee_deducted = 0
+        metric.ticket_platform_fee_deducted = metric.platform_fee_deducted
+      }
     }
 
     metric.net_earnings = Number((metric.total_revenue - metric.platform_fee_deducted).toFixed(2))
