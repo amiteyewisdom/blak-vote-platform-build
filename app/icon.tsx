@@ -24,6 +24,7 @@ export default function Icon() {
           style={{
             background: "#000000",
             borderRadius: 9999,
+            display: "flex",
             height: 420,
             overflow: "hidden",
             position: "relative",

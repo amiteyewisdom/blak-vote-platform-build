@@ -24,6 +24,7 @@ export default function AppleIcon() {
           style={{
             background: "#000000",
             borderRadius: 9999,
+            display: "flex",
             height: 148,
             overflow: "hidden",
             position: "relative",
