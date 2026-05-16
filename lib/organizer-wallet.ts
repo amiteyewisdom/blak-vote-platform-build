@@ -323,15 +323,15 @@ export async function getOrganizerWalletSummaryData(adminSupabase: SupabaseLike,
       accumulator.total_revenue += toNumber(row.total_revenue)
       accumulator.vote_revenue += toNumber(row.vote_revenue)
       accumulator.ticket_revenue += toNumber(row.ticket_revenue)
-      accumulator.total_paid_votes += toNumber(row.total_paid_votes)
+      accumulator.total_paid_votes += toNumber(row.paid_votes)
       accumulator.manual_votes += toNumber(row.manual_votes)
       accumulator.paid_ticket_count += toNumber(row.paid_ticket_count)
-      accumulator.platform_fees_deducted += toNumber(row.platform_fees_deducted)
-      accumulator.vote_platform_fees_deducted += toNumber(row.vote_platform_fees_deducted)
-      accumulator.ticket_platform_fees_deducted += toNumber(row.ticket_platform_fees_deducted)
-      accumulator.net_balance += toNumber(row.net_balance)
+      accumulator.platform_fees_deducted += toNumber(row.platform_fee_deducted)
+      accumulator.vote_platform_fees_deducted += toNumber(row.vote_platform_fee_deducted)
+      accumulator.ticket_platform_fees_deducted += toNumber(row.ticket_platform_fee_deducted)
+      accumulator.net_balance += toNumber(row.net_earnings)
 
-      const updatedAt = typeof row.last_updated === 'string' ? row.last_updated : ''
+      const updatedAt = typeof row.updated_at === 'string' ? row.updated_at : ''
       if (updatedAt && updatedAt > accumulator.last_updated) {
         accumulator.last_updated = updatedAt
       }
