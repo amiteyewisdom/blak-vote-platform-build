@@ -3,8 +3,17 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabaseClient'
 import { LIVE_EVENT_STATUSES } from '@/lib/event-status'
+import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Users, BarChart3, Zap } from 'lucide-react'
+import { Input } from '@/components/ui/input'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import { BarChart3, Loader2, RotateCcw, Users, Zap } from 'lucide-react'
 
 interface DashboardStats {
   totalUsers: number
@@ -13,9 +22,18 @@ interface DashboardStats {
   activeEvents: number
 }
 
+type PaymentProviderOption = 'auto' | 'paystack' | 'nalo' | 'paypal'
+
 export default function AdminDashboard() {
   const [stats, setStats] = useState<DashboardStats | null>(null)
   const [loading, setLoading] = useState(true)
+  const [reprocessReference, setReprocessReference] = useState('')
+  const [reprocessProvider, setReprocessProvider] = useState<PaymentProviderOption>('auto')
+  const [reprocessLoading, setReprocessLoading] = useState(false)
+  const [reprocessResult, setReprocessResult] = useState<{
+    ok: boolean
+    message: string
+  } | null>(null)
 
   useEffect(() => {
     const fetchStats = async () => {
@@ -124,6 +142,111 @@ export default function AdminDashboard() {
           <StatusRow label="Database" status="Operational" />
           <StatusRow label="Authentication" status="Operational" />
           <StatusRow label="Payments" status="Operational" />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Payment Recovery</CardTitle>
+          <CardDescription>
+            Reprocess an already-paid reference that failed after provider confirmation.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_220px_auto] md:items-end">
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-foreground">Reference</label>
+              <Input
+                value={reprocessReference}
+                onChange={(event) => setReprocessReference(event.target.value)}
+                placeholder="PAY-... or USSD-..."
+                autoCapitalize="off"
+                autoCorrect="off"
+                spellCheck={false}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-foreground">Provider</label>
+              <Select
+                value={reprocessProvider}
+                onValueChange={(value) => setReprocessProvider(value as PaymentProviderOption)}
+              >
+                <SelectTrigger className="h-11 rounded-xl bg-card">
+                  <SelectValue placeholder="Auto detect" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="auto">Auto detect</SelectItem>
+                  <SelectItem value="paystack">Paystack</SelectItem>
+                  <SelectItem value="nalo">NALO / USSD</SelectItem>
+                  <SelectItem value="paypal">PayPal</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <Button
+              type="button"
+              className="h-11"
+              disabled={reprocessLoading || !reprocessReference.trim()}
+              onClick={async () => {
+                const reference = reprocessReference.trim()
+                if (!reference) {
+                  return
+                }
+
+                setReprocessLoading(true)
+                setReprocessResult(null)
+
+                try {
+                  const response = await fetch('/api/admin/payments/reprocess', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      reference,
+                      ...(reprocessProvider === 'auto' ? {} : { provider: reprocessProvider }),
+                    }),
+                  })
+
+                  const payload = await response.json().catch(() => ({}))
+                  const successMessage =
+                    payload?.resource === 'vote'
+                      ? `Vote reprocessed successfully for ${reference}.`
+                      : payload?.resource === 'ticket'
+                        ? `Ticket payment reprocessed successfully for ${reference}.`
+                        : `Payment reprocessed successfully for ${reference}.`
+
+                  setReprocessResult({
+                    ok: response.ok,
+                    message: response.ok ? successMessage : String(payload?.error || 'Reprocess failed'),
+                  })
+                } catch (error) {
+                  setReprocessResult({
+                    ok: false,
+                    message: error instanceof Error ? error.message : 'Reprocess failed',
+                  })
+                } finally {
+                  setReprocessLoading(false)
+                }
+              }}
+            >
+              {reprocessLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw className="h-4 w-4" />}
+              Reprocess
+            </Button>
+          </div>
+
+          <p className="text-sm text-muted-foreground">
+            Use this only for references that were already charged or confirmed by the provider.
+          </p>
+
+          {reprocessResult && (
+            <div
+              className={reprocessResult.ok
+                ? 'rounded-xl border border-success/30 bg-success/10 px-4 py-3 text-sm text-success'
+                : 'rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive'}
+            >
+              {reprocessResult.message}
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>
