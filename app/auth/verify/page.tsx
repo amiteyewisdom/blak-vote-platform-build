@@ -13,7 +13,7 @@ function LegacyVerifyRedirect() {
     const intent = searchParams.get('intent')
 
     if (email && intent === 'signup') {
-      router.replace('/auth/verify-email?email=' + encodeURIComponent(email))
+      router.replace('/auth/signup')
       return
     }
 

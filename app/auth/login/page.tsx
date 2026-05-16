@@ -7,6 +7,7 @@ import BrandLogo from '@/components/BrandLogo'
 import { Button } from '@/components/ui/button'
 import { supabase } from '@/lib/supabaseClient'
 import { getAuthenticatedUserRole, getRedirectPathForRole } from '@/lib/auth/role-routing'
+import { SUPPORT_EMAIL_HREF } from '@/lib/support-contact'
 
 export default function LoginPage() {
   const [email, setEmail] = useState('')
@@ -131,10 +132,10 @@ export default function LoginPage() {
         </form>
 
         <div className="mt-8 text-center text-sm text-muted-foreground">
-          Don&apos;t have an account?{' '}
-          <Link href="/auth/signup" className="font-medium text-gold transition hover:opacity-80">
-            Create account
-          </Link>
+          Need an account?{' '}
+          <a href={SUPPORT_EMAIL_HREF} className="font-medium text-gold transition hover:opacity-80">
+            Contact us for setup
+          </a>
         </div>
       </div>
     </div>

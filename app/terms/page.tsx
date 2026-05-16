@@ -1,6 +1,7 @@
 'use client'
 
 import PublicNav from '@/components/PublicNav'
+import { SUPPORT_EMAIL, SUPPORT_WHATSAPP_HREF } from '@/lib/support-contact'
 
 const sections = [
   {
@@ -13,7 +14,7 @@ const sections = [
   },
   {
     title: '3. Account Responsibilities',
-    body: 'Users are responsible for safeguarding credentials and for activities performed through their accounts.',
+    body: 'Accounts are provisioned by BlakVote. You are responsible for safeguarding credentials and for activities performed through your assigned account.',
   },
   {
     title: '4. Payments and Refunds',
@@ -29,7 +30,7 @@ const sections = [
   },
   {
     title: '7. Contact',
-    body: 'Questions regarding these terms can be sent to blakvotebusiness@gmail.com or via WhatsApp at https://wa.me/+233531652382.',
+    body: `Questions regarding these terms, including account creation requests, can be sent to ${SUPPORT_EMAIL} or via WhatsApp at ${SUPPORT_WHATSAPP_HREF}.`,
   },
 ]
 

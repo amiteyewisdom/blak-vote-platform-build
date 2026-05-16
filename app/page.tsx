@@ -64,10 +64,10 @@ export default async function HomePage() {
     }
   }
 
-  const primaryCtaHref = isAppHost ? '/auth/sign-up' : '/sign-up'
-  const primaryCtaLabel = isAppHost ? 'Sign Up' : 'Get Started'
-  const secondaryCtaHref = isAppHost ? '/auth/sign-up' : '/sign-up'
-  const secondaryCtaLabel = isAppHost ? 'Create Your Account' : 'Create Your Account'
+  const primaryCtaHref = isAppHost ? '/contact' : '/contact'
+  const primaryCtaLabel = 'Contact Us'
+  const secondaryCtaHref = isAppHost ? '/contact' : '/contact'
+  const secondaryCtaLabel = 'Request Account Access'
 
   return (
     <div className="flex min-h-screen flex-col bg-background text-foreground">

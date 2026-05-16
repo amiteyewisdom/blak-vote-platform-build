@@ -1,24 +1,30 @@
 'use client'
 
 import PublicNav from '@/components/PublicNav'
+import {
+  SUPPORT_EMAIL,
+  SUPPORT_EMAIL_HREF,
+  SUPPORT_WHATSAPP_HREF,
+  SUPPORT_WHATSAPP_LABEL,
+} from '@/lib/support-contact'
 
 const contactOptions = [
   {
     title: 'General Support',
-    label: 'blakvotebusiness@gmail.com',
-    href: 'mailto:blakvotebusiness@gmail.com',
+    label: SUPPORT_EMAIL,
+    href: SUPPORT_EMAIL_HREF,
     description: 'Questions about voting, events, and account access.',
   },
   {
     title: 'WhatsApp Support',
-    label: 'WhatsApp: +233 53 165 2382',
-    href: 'https://wa.me/+233531652382',
+    label: SUPPORT_WHATSAPP_LABEL,
+    href: SUPPORT_WHATSAPP_HREF,
     description: 'Fast assistance for event setup, voting access, and organizer questions.',
   },
   {
     title: 'Security & Compliance',
-    label: 'blakvotebusiness@gmail.com',
-    href: 'mailto:blakvotebusiness@gmail.com',
+    label: SUPPORT_EMAIL,
+    href: SUPPORT_EMAIL_HREF,
     description: 'Responsible disclosure, privacy requests, and compliance communication.',
   },
 ]
@@ -33,7 +39,7 @@ export default function ContactPage() {
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gold">Contact</p>
           <h1 className="mt-3 text-3xl font-bold tracking-tight sm:text-4xl">We are here to help</h1>
           <p className="mt-3 max-w-3xl text-sm leading-relaxed text-muted-foreground sm:text-base">
-            Reach Blak Vote Business for support, event operations, or security-related requests. We typically respond within one business day.
+            Reach Blak Vote Business for support, event operations, security-related requests, or manual account creation. New voter, organizer, and admin accounts are provisioned by our team. We typically respond within one business day.
           </p>
         </section>
 

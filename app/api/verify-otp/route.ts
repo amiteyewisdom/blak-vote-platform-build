@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { SUPPORT_EMAIL, SUPPORT_WHATSAPP_LABEL } from '@/lib/support-contact'
 
 type OtpType = 'signup' | 'reset'
 
@@ -32,6 +33,15 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     }
     if (type !== 'signup' && type !== 'reset') {
       return NextResponse.json({ error: 'Invalid OTP type.' }, { status: 400 })
+    }
+
+    if (type === 'signup') {
+      return NextResponse.json(
+        {
+          error: `Self-service account creation is disabled. Contact ${SUPPORT_EMAIL} or ${SUPPORT_WHATSAPP_LABEL} for account setup.`,
+        },
+        { status: 403 }
+      )
     }
 
     const normalizedEmail = email.trim().toLowerCase()

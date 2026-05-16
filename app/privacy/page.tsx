@@ -1,11 +1,12 @@
 'use client'
 
 import PublicNav from '@/components/PublicNav'
+import { SUPPORT_EMAIL, SUPPORT_WHATSAPP_HREF } from '@/lib/support-contact'
 
 const sections = [
   {
     title: 'Information We Collect',
-    body: 'We collect account details, voting activity metadata, payment references, and support communications needed to operate the platform.',
+    body: 'We collect account details supplied during manual account provisioning, voting activity metadata, payment references, and support communications needed to operate the platform.',
   },
   {
     title: 'How We Use Information',
@@ -29,7 +30,7 @@ const sections = [
   },
   {
     title: 'Contact',
-    body: 'For privacy requests, email blakvotebusiness@gmail.com or contact us via WhatsApp at https://wa.me/+233531652382.',
+    body: `For privacy requests or account access questions, email ${SUPPORT_EMAIL} or contact us via WhatsApp at ${SUPPORT_WHATSAPP_HREF}.`,
   },
 ]
 
