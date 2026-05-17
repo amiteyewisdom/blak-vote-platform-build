@@ -9,7 +9,7 @@ import { supabase } from '@/lib/supabaseClient'
 import { getAuthenticatedUserRole, getRedirectPathForRole } from '@/lib/auth/role-routing'
 import { SUPPORT_EMAIL_HREF } from '@/lib/support-contact'
 
-function getLoginErrorMessage(error: unknown) {
+async function getLoginErrorMessage(email: string, error: unknown) {
   const message = error instanceof Error ? error.message : 'Failed to sign in.'
   const normalizedMessage = message.toLowerCase()
 
@@ -17,6 +17,21 @@ function getLoginErrorMessage(error: unknown) {
     normalizedMessage.includes('invalid login credentials') ||
     normalizedMessage.includes('invalid credentials')
   ) {
+    try {
+      const res = await fetch('/api/auth/login-diagnostics', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      })
+
+      const data: { message?: string } = await res.json()
+      if (typeof data.message === 'string' && data.message.trim()) {
+        return data.message
+      }
+    } catch {
+      // Fall through to the generic credential error if diagnostics are unavailable.
+    }
+
     return 'Email or password is incorrect. If you recently changed your password, try again or reset it.'
   }
 
@@ -62,7 +77,7 @@ export default function LoginPage() {
       const nextPath = getRedirectPathForRole(role)
       window.location.replace(nextPath)
     } catch (loginError) {
-      setError(getLoginErrorMessage(loginError))
+      setError(await getLoginErrorMessage(normalizedEmail, loginError))
     } finally {
       setLoading(false)
     }
