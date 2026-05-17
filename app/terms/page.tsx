@@ -39,19 +39,19 @@ export default function TermsPage() {
     <div className="min-h-screen bg-background text-foreground">
       <PublicNav />
 
-      <main className="mx-auto max-w-4xl px-4 py-12 sm:px-6 sm:py-16">
-        <header className="rounded-2xl border border-border bg-card p-6 sm:p-8">
+      <main className="mx-auto max-w-4xl px-4 py-10 sm:px-6 sm:py-16">
+        <header className="rounded-2xl border border-border bg-card p-5 sm:p-8">
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gold">Legal</p>
-          <h1 className="mt-3 text-3xl font-bold tracking-tight sm:text-4xl">Terms and Conditions</h1>
+          <h1 className="mt-3 text-2xl font-bold tracking-tight sm:text-4xl">Terms and Conditions</h1>
           <p className="mt-3 text-sm leading-relaxed text-muted-foreground sm:text-base">
             Effective date: April 12, 2026. Please review these terms before using Black Events and BlakVote services in Accra, Ghana.
           </p>
         </header>
 
-        <section className="mt-8 space-y-4">
+        <section className="mt-6 space-y-3 sm:mt-8 sm:space-y-4">
           {sections.map((section) => (
-            <article key={section.title} className="rounded-xl border border-border bg-card p-5 sm:p-6">
-              <h2 className="text-lg font-semibold text-card-foreground">{section.title}</h2>
+            <article key={section.title} className="rounded-xl border border-border bg-card p-4 sm:p-6">
+              <h2 className="text-base font-semibold text-card-foreground sm:text-lg">{section.title}</h2>
               <p className="mt-2 text-sm leading-relaxed text-muted-foreground sm:text-base">{section.body}</p>
             </article>
           ))}

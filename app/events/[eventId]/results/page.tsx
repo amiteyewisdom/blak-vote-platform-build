@@ -100,7 +100,7 @@ export default function PublicResultsPage() {
       <PublicNav />
 
       <section
-        className="relative min-h-[44vh] overflow-hidden"
+        className="relative min-h-[34vh] overflow-hidden sm:min-h-[44vh]"
         style={{
           backgroundImage: heroImage
             ? `linear-gradient(rgba(17,24,39,0.56), rgba(17,24,39,0.56)), url(${heroImage})`
@@ -109,8 +109,8 @@ export default function PublicResultsPage() {
           backgroundPosition: "center",
         }}
       >
-        <div className="relative mx-auto flex min-h-[44vh] max-w-4xl flex-col items-center justify-end px-5 pb-12 pt-10 text-center text-white">
-          <div className="h-20 w-20 overflow-hidden rounded-full border-[3px] border-white/90 bg-black/35 shadow-[0_10px_28px_rgba(0,0,0,0.35)] sm:h-24 sm:w-24">
+        <div className="relative mx-auto flex min-h-[34vh] max-w-4xl flex-col items-center justify-end px-4 pb-8 pt-8 text-center text-white sm:min-h-[44vh] sm:px-5 sm:pb-12 sm:pt-10">
+          <div className="h-16 w-16 overflow-hidden rounded-full border-[3px] border-white/90 bg-black/35 shadow-[0_10px_28px_rgba(0,0,0,0.35)] sm:h-24 sm:w-24">
             {badgeImage ? (
               <img src={badgeImage} alt="Event logo" className="h-full w-full object-cover" />
             ) : (
@@ -118,35 +118,35 @@ export default function PublicResultsPage() {
             )}
           </div>
 
-          <h1 className="mt-6 text-5xl font-bold tracking-[-0.02em] sm:text-6xl">{event.title}</h1>
-          <p className="mt-2 text-2xl font-medium text-white/92 sm:text-3xl">{subtitle}</p>
+          <h1 className="mt-4 text-3xl font-bold tracking-[-0.02em] sm:mt-6 sm:text-6xl">{event.title}</h1>
+          <p className="mt-2 text-base font-medium text-white/92 sm:text-3xl">{subtitle}</p>
         </div>
       </section>
 
-      <section className="mx-auto max-w-4xl px-5 py-12 sm:px-8 sm:py-14">
-        <h2 className="text-center text-[2rem] font-semibold tracking-[-0.015em] text-foreground sm:text-[2.2rem]">
+      <section className="mx-auto max-w-4xl px-4 py-8 sm:px-8 sm:py-14">
+        <h2 className="text-center text-2xl font-semibold tracking-[-0.015em] text-foreground sm:text-[2.2rem]">
           Voting Results
         </h2>
 
         {groupedResults.every((group) => group.candidates.length === 0) ? (
-          <div className="mt-8 rounded-xl border border-border bg-card px-6 py-10 text-center text-muted-foreground">
+          <div className="mt-6 rounded-xl border border-border bg-card px-5 py-8 text-center text-sm text-muted-foreground sm:mt-8 sm:px-6 sm:py-10">
             No results yet.
           </div>
         ) : (
-          <div className="mt-8 space-y-5">
+          <div className="mt-6 space-y-4 sm:mt-8 sm:space-y-5">
             {groupedResults.map((group) => (
               <section key={group.id} className="overflow-hidden rounded-xl border border-border bg-card">
-                <div className="border-b border-border px-5 py-3 sm:px-6">
+                <div className="border-b border-border px-4 py-3 sm:px-6">
                   <h3 className="text-base font-semibold text-card-foreground sm:text-lg">{group.name}</h3>
                 </div>
 
                 {group.candidates.length === 0 ? (
-                  <p className="px-5 py-6 text-sm text-muted-foreground sm:px-6">No candidates in this category.</p>
+                  <p className="px-4 py-5 text-sm text-muted-foreground sm:px-6 sm:py-6">No candidates in this category.</p>
                 ) : (
                   <ul className="divide-y divide-border">
                     {group.candidates.map((candidate, index) => (
-                      <li key={candidate.id} className="flex items-center gap-4 px-5 py-5 sm:px-6">
-                        <div className="h-14 w-14 flex-shrink-0 overflow-hidden rounded-full border border-border bg-muted/40">
+                      <li key={candidate.id} className="flex items-center gap-3 px-4 py-4 sm:gap-4 sm:px-6 sm:py-5">
+                        <div className="h-11 w-11 flex-shrink-0 overflow-hidden rounded-full border border-border bg-muted/40 sm:h-14 sm:w-14">
                           {candidate.photoUrl ? (
                             <img src={candidate.photoUrl} alt={candidate.name} className="h-full w-full object-cover" />
                           ) : (
@@ -155,12 +155,12 @@ export default function PublicResultsPage() {
                         </div>
 
                         <div className="min-w-0 flex-1">
-                          <p className="text-[1.02rem] font-medium uppercase tracking-[0.01em] leading-tight text-foreground sm:text-[1.1rem]">
+                          <p className="text-[0.96rem] font-medium uppercase tracking-[0.01em] leading-tight text-foreground sm:text-[1.1rem]">
                             {index + 1}. {candidate.name}
                           </p>
                         </div>
 
-                        <p className="text-2xl font-bold tabular-nums text-foreground sm:text-[1.75rem]">
+                        <p className="text-xl font-bold tabular-nums text-foreground sm:text-[1.75rem]">
                           {candidate.totalVotes.toLocaleString()}
                         </p>
                       </li>

@@ -70,6 +70,19 @@ class QueryBuilder {
 
   maybeSingle(): Promise<QueryResult> {
     if (this.table === 'events') {
+      if (this.filters.id === 'event-1') {
+        return Promise.resolve({
+          data: {
+            id: 'event-1',
+            title: 'Launch Event',
+            status: 'active',
+            short_code: '337',
+            event_code: '337',
+          },
+          error: null,
+        })
+      }
+
       const code = this.ilikeFilters.event_code ?? this.ilikeFilters.short_code
       if (code === '337') {
         return Promise.resolve({
@@ -77,6 +90,8 @@ class QueryBuilder {
             id: 'event-1',
             title: 'Launch Event',
             status: 'active',
+            short_code: '337',
+            event_code: '337',
           },
           error: null,
         })
@@ -87,11 +102,12 @@ class QueryBuilder {
 
     if (this.table === 'nominations') {
       const code = this.ilikeFilters.voting_code ?? this.ilikeFilters.short_code
-      if (this.filters.event_id === 'event-1' && code === 'ABC') {
+      if ((!this.filters.event_id || this.filters.event_id === 'event-1') && code === 'ABC') {
         return Promise.resolve({
           data: {
             id: 'candidate-1',
             nominee_name: 'Candidate A',
+            event_id: 'event-1',
             status: 'approved',
           },
           error: null,
@@ -241,7 +257,7 @@ describe('USSD route', () => {
           MSISDN: '233501234567',
           SESSIONID: 'session-vote-1',
           NETWORK: 'MTN',
-          USERDATA: '1*337*ABC*2*1',
+          USERDATA: '1*ABC*2*1',
           MSGTYPE: 'Continue',
         }),
       })
@@ -332,7 +348,7 @@ describe('USSD route', () => {
     const rawBody = new URLSearchParams({
       sessionId: 'session-2',
       phoneNumber: '233501234567',
-      text: '1*337',
+      text: '1*ABC',
     }).toString()
 
     const crypto = await import('crypto')
@@ -352,7 +368,7 @@ describe('USSD route', () => {
     const body = await response.text()
 
     expect(response.status).toBe(200)
-    expect(body).toContain('CON Event: Launch Event')
+    expect(body).toContain('CON Candidate: Candidate A')
   })
 
   it('rejects invalid signatures when a USSD secret is configured', async () => {

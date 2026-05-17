@@ -88,28 +88,28 @@ export default function OrganizerDashboard() {
   )
 
   return (
-    <div className="flex-1 p-4 md:p-8 lg:p-12 space-y-10 md:space-y-14 bg-background min-h-screen">
+    <div className="min-h-screen flex-1 space-y-6 bg-background p-3 sm:p-4 md:space-y-10 md:p-8 lg:p-10">
       {/* Header */}
-      <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6 md:gap-8 pb-8 border-b border-border/60">
+      <div className="flex flex-col items-start justify-between gap-4 border-b border-border/60 pb-6 md:flex-row md:items-center md:gap-8 md:pb-8">
         <div className="flex-1">
-          <h1 className="text-3xl md:text-4xl font-bold text-foreground mb-2 leading-tight">
+          <h1 className="mb-2 text-2xl font-bold leading-tight text-foreground sm:text-3xl md:text-4xl">
             Organizer Dashboard
           </h1>
-          <p className="text-foreground/50 text-sm md:text-base">
+          <p className="text-sm text-foreground/50 md:text-base">
             Manage your events, track revenue, and view live voting statistics
           </p>
         </div>
 
         <button
           onClick={() => router.push('/organizer/create-event')}
-          className="w-full md:w-auto px-6 py-3 rounded-xl font-semibold bg-gradient-to-br from-gold to-gold-deep text-gold-foreground hover:brightness-110 active:scale-[0.97] transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-black shadow-lg hover:shadow-[hsl(var(--gold))]/30 whitespace-nowrap"
+          className="w-full whitespace-nowrap rounded-xl bg-gradient-to-br from-gold to-gold-deep px-5 py-3 font-semibold text-gold-foreground shadow-lg transition-all duration-200 hover:brightness-110 hover:shadow-[hsl(var(--gold))]/30 active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-black md:w-auto md:px-6"
         >
           + Create Event
         </button>
       </div>
 
       {/* Metrics */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 md:gap-6">
         <MetricCard title="Total Revenue" value={`GHS ${totalRevenue.toFixed(2)}`} />
         <MetricCard title="Total Events" value={events.length.toString()} />
         <MetricCard
@@ -120,13 +120,13 @@ export default function OrganizerDashboard() {
 
       {/* Empty State */}
       {events.length === 0 && (
-        <div className="rounded-2xl border-2 border-dashed border-border bg-white/2 p-12 md:p-16 text-center">
+        <div className="rounded-2xl border-2 border-dashed border-border bg-white/2 p-8 text-center sm:p-12 md:p-16">
           <div className="inline-block mb-6">
             <div className="w-16 h-16 rounded-full bg-[hsl(var(--gold))]/15 flex items-center justify-center">
               <span className="text-3xl">📋</span>
             </div>
           </div>
-          <h3 className="text-2xl font-bold text-foreground mb-3">No Events Yet</h3>
+          <h3 className="mb-3 text-xl font-bold text-foreground sm:text-2xl">No Events Yet</h3>
           <p className="text-foreground/60 mb-8 max-w-md mx-auto leading-relaxed">
             Create your first voting event to start collecting votes, tracking revenue, and engaging your audience.
           </p>
@@ -142,12 +142,12 @@ export default function OrganizerDashboard() {
       {/* Event Cards Grid */}
       {events.length > 0 && (
         <div>
-          <h2 className="text-lg font-bold text-foreground mb-6 flex items-center gap-2">
+          <h2 className="mb-4 flex items-center gap-2 text-lg font-bold text-foreground sm:mb-6">
             <span>Your Events</span>
             <span className="text-sm font-semibold text-foreground/50 bg-white/5 px-3 py-1 rounded-full">{events.length}</span>
           </h2>
 
-          <div className="grid sm:grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 md:gap-8">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 md:gap-6 xl:grid-cols-3">
           {events.map((event, idx) => (
           <div
             key={event.id}
@@ -155,7 +155,7 @@ export default function OrganizerDashboard() {
             style={{ animationDelay: `${idx * 50}ms` }}
           >
             {event.image_url && (
-              <div className="relative h-60 w-full overflow-hidden">
+              <div className="relative h-44 w-full overflow-hidden sm:h-52 md:h-60">
                 <img
                   src={event.image_url}
                   alt={event.title || 'Event image'}
@@ -165,8 +165,8 @@ export default function OrganizerDashboard() {
               </div>
             )}
 
-<div className="p-5 md:p-6 space-y-5 md:space-y-6">
-              <div className="flex items-start justify-between gap-4">
+<div className="space-y-4 p-4 md:space-y-6 md:p-6">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
                 <div className="min-w-0 flex-1">
                   <h3 className="text-lg font-bold text-foreground truncate">
                     {event.title}
@@ -181,11 +181,11 @@ export default function OrganizerDashboard() {
                 </div>
               </div>
 
-              <div className="bg-white/5 rounded-lg p-4 border border-white/8">
+              <div className="rounded-lg border border-white/8 bg-white/5 p-3 sm:p-4">
                 <div className="text-foreground/50 text-xs font-semibold uppercase tracking-wider mb-2">
                   Total Revenue
                 </div>
-                <div className="text-3xl font-bold text-gold mb-3">
+                <div className="mb-3 text-2xl font-bold text-gold sm:text-3xl">
                   GHS {Number(event.total_revenue || 0).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
                 </div>
                 <div className="flex items-center gap-1 text-foreground/40 text-xs">
@@ -198,7 +198,7 @@ export default function OrganizerDashboard() {
               </div>
 
               {/* Action Buttons */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-2 border-t border-border/60">
+              <div className="grid grid-cols-1 gap-2 pt-2 border-t border-border/60 sm:grid-cols-3 sm:gap-2.5">
                 <button
                   onClick={() => router.push(`/organizer/events/${event.id}`)}
                   className="min-h-11 flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-white/5 border border-border text-foreground hover:border-gold/40 transition-all"
@@ -236,9 +236,9 @@ export default function OrganizerDashboard() {
 
 function MetricCard({ title, value }: { title: string; value: string }) {
   return (
-    <div className="rounded-2xl bg-surface-elevated border border-white/[0.07] p-6 shadow-[0_2px_12px_hsl(var(--foreground)/0.35)] flex flex-col gap-3">
+    <div className="flex flex-col gap-3 rounded-2xl border border-white/[0.07] bg-surface-elevated p-5 shadow-[0_2px_12px_hsl(var(--foreground)/0.35)] sm:p-6">
       <p className="text-xs uppercase tracking-widest font-medium text-foreground/40">{title}</p>
-      <div className="text-3xl font-bold text-foreground leading-none">{value}</div>
+      <div className="text-2xl font-bold leading-none text-foreground sm:text-3xl">{value}</div>
     </div>
   )
 }

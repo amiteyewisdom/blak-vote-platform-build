@@ -29,7 +29,7 @@ export default function VoterLayout({ children }: { children: React.ReactNode })
   return (
     <div className="min-h-screen bg-background text-foreground">
       <Header user={user} homeHref="/voter" settingsHref="/voter" settingsLabel="Dashboard" />
-      <main>{children}</main>
+      <main className="overflow-x-hidden">{children}</main>
     </div>
   )
 }

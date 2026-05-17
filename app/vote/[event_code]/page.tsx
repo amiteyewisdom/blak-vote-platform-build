@@ -203,7 +203,7 @@ export default function PublicVotePage() {
     <div className='min-h-screen ui-page-fade' style={{ backgroundColor: UI.bg, color: UI.textPrimary }}>
       <PublicNav />
       <section
-        className='mx-4 mt-4 rounded-2xl bg-cover bg-center bg-no-repeat px-4 py-12 sm:mx-8 sm:px-8 sm:py-16'
+        className='mx-3 mt-3 rounded-xl bg-cover bg-center bg-no-repeat px-4 py-10 sm:mx-8 sm:mt-4 sm:rounded-2xl sm:px-8 sm:py-16'
         style={{
           backgroundImage: heroImage
             ? `linear-gradient(rgba(0,0,0,0.6), rgba(0,0,0,0.6)), url(${heroImage})`
@@ -212,29 +212,29 @@ export default function PublicVotePage() {
         }}
       >
         <div className='mx-auto max-w-5xl text-center ui-hero-enter'>
-          <p className='text-xs font-semibold uppercase tracking-[0.18em] sm:text-sm' style={{ color: UI.textSecondary }}>
+          <p className='text-[11px] font-semibold uppercase tracking-[0.18em] sm:text-sm' style={{ color: UI.textSecondary }}>
             Public Voting
           </p>
-          <h1 className='mt-4 text-3xl font-extrabold tracking-[0.02em] sm:text-4xl md:text-5xl'>
+          <h1 className='mt-3 text-2xl font-extrabold tracking-[0.02em] sm:mt-4 sm:text-4xl md:text-5xl'>
             {event.title}
           </h1>
-          <p className='mx-auto mt-4 max-w-3xl text-sm leading-relaxed sm:text-base' style={{ color: UI.textSecondary }}>
+          <p className='mx-auto mt-3 max-w-3xl text-sm leading-relaxed sm:mt-4 sm:text-base' style={{ color: UI.textSecondary }}>
             {event.description}
           </p>
-          <div className='mt-8'>
-            <button type='button' className='ui-pill-btn'>
+          <div className='mt-6 sm:mt-8'>
+            <button type='button' className='ui-pill-btn w-full sm:w-auto'>
               Start Voting
             </button>
           </div>
         </div>
       </section>
 
-      <main className='mx-auto max-w-6xl px-4 py-8 sm:px-6 sm:py-10'>
-        <div className='mb-8 rounded-2xl border p-4 sm:p-6' style={{ backgroundColor: UI.surface, borderColor: 'rgba(255,255,255,0.08)' }}>
+      <main className='mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-10'>
+        <div className='mb-6 rounded-2xl border p-4 sm:mb-8 sm:p-6' style={{ backgroundColor: UI.surface, borderColor: 'rgba(255,255,255,0.08)' }}>
           <div className='grid gap-4 md:grid-cols-3 md:items-end'>
             <div>
               <p className='text-xs font-semibold uppercase tracking-[0.16em]' style={{ color: UI.textSecondary }}>Price per vote</p>
-              <p className='mt-2 text-2xl font-bold'>GHS {votePrice.toFixed(2)}</p>
+              <p className='mt-2 text-xl font-bold sm:text-2xl'>GHS {votePrice.toFixed(2)}</p>
             </div>
             <div className='md:col-span-2'>
               <label className='text-xs font-semibold uppercase tracking-[0.16em]' style={{ color: UI.textSecondary }}>
@@ -245,7 +245,7 @@ export default function PublicVotePage() {
                 value={receiptEmail}
                 onChange={(event) => setReceiptEmail(event.target.value)}
                 placeholder='you@example.com'
-                className='mt-2 h-12 rounded-xl border px-4'
+                className='mt-2 h-11 rounded-xl border px-4 sm:h-12'
                 style={{ borderColor: 'rgba(255,255,255,0.12)', backgroundColor: 'rgba(255,255,255,0.02)', color: UI.textPrimary }}
               />
             </div>
@@ -270,17 +270,17 @@ export default function PublicVotePage() {
                 }}
               >
                 <div className='flex flex-col gap-4 lg:gap-6'>
-                  <div className='flex items-center justify-between gap-4'>
+                  <div className='flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4'>
                     <div className='flex min-w-0 items-center gap-3'>
                       {candidate.photo_url ? (
                         <img
                           src={candidate.photo_url}
                           alt={candidate.name}
-                          className='h-12 w-12 rounded-lg object-cover'
+                          className='h-10 w-10 rounded-lg object-cover sm:h-12 sm:w-12'
                         />
                       ) : (
                         <div
-                          className='flex h-12 w-12 items-center justify-center rounded-lg text-sm font-bold'
+                          className='flex h-10 w-10 items-center justify-center rounded-lg text-xs font-bold sm:h-12 sm:w-12 sm:text-sm'
                           style={{ backgroundColor: 'rgba(225,29,72,0.18)', color: UI.textPrimary }}
                         >
                           {candidate.name.slice(0, 2).toUpperCase()}
@@ -288,7 +288,7 @@ export default function PublicVotePage() {
                       )}
 
                       <div className='min-w-0'>
-                        <h2 className='truncate text-lg font-bold leading-tight sm:text-xl'>{candidate.name}</h2>
+                        <h2 className='truncate text-base font-bold leading-tight sm:text-xl'>{candidate.name}</h2>
                         <p className='mt-1 text-sm' style={{ color: UI.textSecondary }}>
                           Code: {candidate.voting_code}
                         </p>
@@ -303,7 +303,7 @@ export default function PublicVotePage() {
                           bulkPackageId: null,
                         })
                       }
-                      className='ui-pill-btn h-auto w-auto px-5 py-3'
+                      className='ui-pill-btn h-auto w-full px-5 py-3 sm:w-auto'
                       disabled={submittingCandidateId === candidate.id}
                     >
                       {submittingCandidateId === candidate.id ? 'Redirecting...' : 'Vote'}
@@ -314,7 +314,7 @@ export default function PublicVotePage() {
                     {candidate.bio || 'No biography provided for this candidate.'}
                   </p>
 
-                  <div className='grid gap-4 sm:grid-cols-2'>
+                  <div className='grid gap-3 sm:grid-cols-2 sm:gap-4'>
                     <div>
                       <label className='text-xs font-semibold uppercase tracking-[0.16em]' style={{ color: UI.textSecondary }}>
                         Single vote purchase
@@ -338,7 +338,7 @@ export default function PublicVotePage() {
                             [candidate.id]: '',
                           })
                         }}
-                        className='mt-2 h-12 rounded-xl border px-4'
+                        className='mt-2 h-11 rounded-xl border px-4 sm:h-12'
                         style={{ borderColor: 'rgba(255,255,255,0.12)', backgroundColor: 'rgba(255,255,255,0.02)', color: UI.textPrimary }}
                       />
                     </div>
@@ -359,17 +359,17 @@ export default function PublicVotePage() {
                             [candidate.id]: Number.isFinite(nextAmount) ? nextAmount : 0,
                           })
                         }}
-                        className='mt-2 h-12 rounded-xl border px-4'
+                        className='mt-2 h-11 rounded-xl border px-4 sm:h-12'
                         style={{ borderColor: 'rgba(255,255,255,0.12)', backgroundColor: 'rgba(255,255,255,0.02)', color: UI.textPrimary }}
                       />
                     </div>
                   </div>
 
-                  <div className='rounded-xl border p-4 text-sm' style={{ borderColor: 'rgba(255,255,255,0.08)', backgroundColor: 'rgba(255,255,255,0.02)' }}>
+                  <div className='rounded-xl border p-3 text-sm sm:p-4' style={{ borderColor: 'rgba(255,255,255,0.08)', backgroundColor: 'rgba(255,255,255,0.02)' }}>
                     <p>You are purchasing {votes} votes for GHS {total.toFixed(2)}</p>
                     <p className='mt-1' style={{ color: UI.textSecondary }}>Effective price per vote: GHS {unitPrice.toFixed(4)}</p>
                     {savings > 0 ? <p className='mt-1' style={{ color: '#34D399' }}>You saved GHS {savings.toFixed(2)}</p> : null}
-                    <div className='mt-3 flex items-center justify-between text-sm'>
+                    <div className='mt-3 flex items-center justify-between gap-3 text-sm'>
                       <span style={{ color: UI.textSecondary }}>Total payable</span>
                       <span className='font-semibold'>GHS {total.toFixed(2)}</span>
                     </div>
@@ -389,7 +389,7 @@ export default function PublicVotePage() {
                             <button
                               key={pkg.id}
                               type='button'
-                              className='rounded-xl border px-4 py-3 text-left transition'
+                              className='rounded-xl border px-3 py-3 text-left transition sm:px-4'
                               style={{
                                 borderColor: 'rgba(255,255,255,0.08)',
                                 backgroundColor: 'rgba(255,255,255,0.02)',
@@ -403,7 +403,7 @@ export default function PublicVotePage() {
                               }
                               disabled={submittingCandidateId === candidate.id}
                             >
-                              <div className='flex items-center justify-between gap-3'>
+                              <div className='flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3'>
                                 <div>
                                   <p className='text-sm font-semibold' style={{ color: UI.textPrimary }}>
                                     {packageVotes} votes for GHS {packagePrice.toFixed(2)}
@@ -454,7 +454,7 @@ export default function PublicVotePage() {
           background: ${UI.primary};
           color: ${UI.textPrimary};
           border-radius: 9999px;
-          padding: 12px 20px;
+          padding: 11px 18px;
           font-weight: 600;
           transition: background-color 200ms ease, transform 200ms ease;
         }

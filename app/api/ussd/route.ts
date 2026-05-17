@@ -40,6 +40,15 @@ type UssdSessionRecord = {
   steps?: unknown
 }
 
+type CandidateRecord = {
+  id: string
+  nominee_name?: string | null
+  event_id: string
+  voting_code?: string | null
+  short_code?: string | null
+  status?: string | null
+}
+
 const MAX_VOTE_QUANTITY = 50
 const MAX_USSD_TICKET_QUANTITY = 3
 const NALO_DEFAULT_USSD_ALLOWED_IPS = ['136.243.56.160']
@@ -351,7 +360,19 @@ async function getEventByCode(code: string): Promise<EventRecord | null> {
   return (byEventCode.data || byShortCode.data || null) as EventRecord | null
 }
 
-async function getCandidateByCode(eventId: string, code: string) {
+async function getEventById(id: string): Promise<EventRecord | null> {
+  const supabase = getSupabaseAdminClient()
+  const { data } = await supabase.from('events').select('*').eq('id', id).maybeSingle()
+  return (data || null) as EventRecord | null
+}
+
+function isMultipleRowsError(error: any) {
+  const message = String(error?.message || '').toLowerCase()
+  const code = String(error?.code || '').toLowerCase()
+  return code === 'pgrst116' || message.includes('multiple') || message.includes('more than 1 row')
+}
+
+async function findCandidateByCode(code: string): Promise<{ candidate: CandidateRecord | null; ambiguous: boolean }> {
   const supabase = getSupabaseAdminClient()
   const normalizedCode = toUpperCode(code)
 
@@ -359,27 +380,23 @@ async function getCandidateByCode(eventId: string, code: string) {
     supabase
       .from('nominations')
       .select('id, nominee_name, event_id, voting_code, short_code, status')
-      .eq('event_id', eventId)
       .ilike('voting_code', normalizedCode)
       .maybeSingle(),
     supabase
       .from('nominations')
       .select('id, nominee_name, event_id, voting_code, short_code, status')
-      .eq('event_id', eventId)
       .ilike('short_code', normalizedCode)
       .maybeSingle(),
   ])
 
-  const candidate = byVotingCode.data || byShortCode.data
-  if (!candidate) {
-    return null
+  if (isMultipleRowsError(byVotingCode.error) || isMultipleRowsError(byShortCode.error)) {
+    return { candidate: null, ambiguous: true }
   }
 
-  if (!['approved', 'candidate'].includes(String(candidate.status || '').toLowerCase())) {
-    return null
+  return {
+    candidate: (byVotingCode.data || byShortCode.data || null) as CandidateRecord | null,
+    ambiguous: false,
   }
-
-  return candidate
 }
 
 async function getTicketPlansForEvent(eventId: string) {
@@ -456,14 +473,31 @@ async function handleVoteFlow(params: {
   const { steps, sessionId, phoneNumber } = params
 
   if (steps.length === 1) {
-    return con('Enter event code (e.g. 337)')
+    return con('Enter nominee code')
   }
 
-  const eventCode = toUpperCode(steps[1])
-  const event = await getEventByCode(eventCode)
+  const candidateCode = toUpperCode(steps[1])
+  const candidateMatch = await findCandidateByCode(candidateCode)
+
+  if (candidateMatch.ambiguous) {
+    return end('This nominee code matches multiple events. Use a unique nominee code and try again.')
+  }
+
+  const candidate = candidateMatch.candidate
+
+  if (!candidate) {
+    return end('Candidate not found. Check nominee code and try again.')
+  }
+
+  if (!['approved', 'candidate'].includes(String(candidate.status || '').toLowerCase())) {
+    return end('Candidate is not available for voting.')
+  }
+
+  const event = await getEventById(candidate.event_id)
+  const eventCode = toUpperCode(String(event?.short_code || event?.event_code || event?.id || ''))
 
   if (!event) {
-    return end('Event not found. Check code and try again.')
+    return end('Event not found for this nominee code.')
   }
 
   if (!isVotingOpenStatus(event.status)) {
@@ -471,21 +505,14 @@ async function handleVoteFlow(params: {
   }
 
   if (steps.length === 2) {
-    return con(`Event: ${event.title || eventCode}\nEnter candidate code`)
+    return con(
+      `Candidate: ${candidate.nominee_name || candidateCode}\n` +
+        `Event: ${event.title || eventCode}\n` +
+        'Enter quantity (1-50)'
+    )
   }
 
-  const candidateCode = toUpperCode(steps[2])
-  const candidate = await getCandidateByCode(event.id, candidateCode)
-
-  if (!candidate) {
-    return end('Candidate not found for this event.')
-  }
-
-  if (steps.length === 3) {
-    return con('Enter quantity (1-50)')
-  }
-
-  const quantity = Number(steps[3])
+  const quantity = Number(steps[2])
   if (!Number.isInteger(quantity) || quantity < 1 || quantity > MAX_VOTE_QUANTITY) {
     return end('Invalid quantity. Use a number between 1 and 50.')
   }
@@ -493,7 +520,7 @@ async function handleVoteFlow(params: {
   const votePrice = resolveEventVotePrice(event)
   const totalAmount = Number((votePrice * quantity).toFixed(2))
 
-  if (steps.length === 4) {
+  if (steps.length === 3) {
     return con(
       `Vote ${quantity} for ${candidate.nominee_name || 'candidate'}\n` +
         `Event: ${event.title || eventCode}\n` +
@@ -502,11 +529,11 @@ async function handleVoteFlow(params: {
     )
   }
 
-  if (steps[4] === '2') {
+  if (steps[3] === '2') {
     return end('Vote cancelled.')
   }
 
-  if (steps[4] !== '1') {
+  if (steps[3] !== '1') {
     return end('Invalid confirmation option.')
   }
 

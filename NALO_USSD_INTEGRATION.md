@@ -51,19 +51,17 @@ The top-level menu is:
 ### Voting Flow
 
 1. Choose `1`
-2. Enter event code
-3. Enter candidate code
-4. Enter quantity
-5. Confirm or cancel
+2. Enter nominee (candidate) code
+3. Enter quantity
+4. Confirm or cancel
 
 Input sequence example (what the backend parses):
 
-- 1*337*ABC*5*1
+- 1*ABC*5*1
 
 Meaning:
 
 - 1 = Vote
-- 337 = event code
 - ABC = candidate code
 - 5 = quantity
 - 1 = confirm
@@ -159,7 +157,7 @@ Example body values:
 
 - sessionId: test-session-001
 - phoneNumber: 233501234567
-- text: 1*337*ABC*1*1
+- text: 1*ABC*1*1
 
 Expected vote result:
 
@@ -180,7 +178,7 @@ After confirming the MoMo prompt on your phone for a paid flow, expect the Nalo 
 ## 8) Notes
 
 - Voting only works when event status is active.
-- Candidate code must belong to the selected event.
+- Candidate code must resolve to a single active event.
 - Ticketing works from the same USSD endpoint.
 - The user selects a ticket plan by menu number, not by ticket UUID.
 - Free voting can complete on USSD only when the vote price resolves to 0.

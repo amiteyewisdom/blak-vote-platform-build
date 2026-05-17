@@ -84,22 +84,22 @@ export default function EventsPage() {
   return (
     <div className="relative min-h-screen overflow-hidden bg-[hsl(var(--legacy-bg-base))] text-foreground">
       <div className="pointer-events-none absolute inset-0">
-        <div className="absolute -top-20 left-1/2 h-[26rem] w-[26rem] -translate-x-1/2 rounded-full bg-[radial-gradient(circle,hsl(var(--gold)/0.2),transparent_65%)] blur-3xl" />
-        <div className="absolute top-40 -left-24 h-72 w-72 rounded-full bg-[radial-gradient(circle,rgba(56,189,248,0.16),transparent_68%)] blur-3xl" />
-        <div className="absolute bottom-8 -right-20 h-80 w-80 rounded-full bg-[radial-gradient(circle,rgba(34,197,94,0.14),transparent_68%)] blur-3xl" />
+        <div className="absolute -top-16 left-1/2 h-[20rem] w-[20rem] -translate-x-1/2 rounded-full bg-[radial-gradient(circle,hsl(var(--gold)/0.2),transparent_65%)] blur-3xl sm:-top-20 sm:h-[26rem] sm:w-[26rem]" />
+        <div className="absolute top-32 -left-28 h-52 w-52 rounded-full bg-[radial-gradient(circle,rgba(56,189,248,0.16),transparent_68%)] blur-3xl sm:top-40 sm:h-72 sm:w-72" />
+        <div className="absolute bottom-8 -right-20 h-60 w-60 rounded-full bg-[radial-gradient(circle,rgba(34,197,94,0.14),transparent_68%)] blur-3xl sm:h-80 sm:w-80" />
       </div>
 
       <PublicNav />
-      <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-14 sm:py-20">
-        <div className="max-w-3xl rounded-2xl border border-border bg-card/90 px-5 py-6 shadow-[0_12px_28px_hsl(var(--foreground)/0.12)] backdrop-blur-sm dark:border-white/10 dark:bg-[linear-gradient(180deg,rgba(17,24,39,0.75),rgba(15,23,42,0.45))] dark:shadow-[0_20px_50px_rgba(2,6,23,0.35)] sm:px-7 sm:py-7">
+      <div className="relative z-10 mx-auto max-w-7xl px-4 py-10 sm:px-6 sm:py-20 lg:px-8">
+        <div className="max-w-3xl rounded-2xl border border-border bg-card/90 px-4 py-5 shadow-[0_12px_28px_hsl(var(--foreground)/0.12)] backdrop-blur-sm dark:border-white/10 dark:bg-[linear-gradient(180deg,rgba(17,24,39,0.75),rgba(15,23,42,0.45))] dark:shadow-[0_20px_50px_rgba(2,6,23,0.35)] sm:px-7 sm:py-7">
           <p className="text-[11px] uppercase tracking-[0.2em] text-gold/85">Discover</p>
-          <h1 className="mt-2 text-3xl sm:text-4xl font-semibold tracking-[-0.02em] text-foreground dark:bg-gradient-to-r dark:from-white dark:via-slate-100 dark:to-gold dark:bg-clip-text dark:text-transparent">Public Events</h1>
-          <p className="mt-3 text-sm sm:text-base text-foreground/60 leading-relaxed">
+          <h1 className="mt-2 text-2xl font-semibold tracking-[-0.02em] text-foreground dark:bg-gradient-to-r dark:from-white dark:via-slate-100 dark:to-gold dark:bg-clip-text dark:text-transparent sm:text-4xl">Public Events</h1>
+          <p className="mt-3 text-sm leading-relaxed text-foreground/60 sm:text-base">
             Browse live and upcoming voting events.
           </p>
         </div>
 
-        <div className="mt-8 max-w-xl rounded-xl border border-border bg-card/80 px-4 py-3 backdrop-blur-sm dark:border-white/10 dark:bg-slate-900/45">
+        <div className="mt-6 max-w-xl rounded-xl border border-border bg-card/80 px-4 py-3 backdrop-blur-sm sm:mt-8 dark:border-white/10 dark:bg-slate-900/45">
           <input
             type="text"
             placeholder="Search events"
@@ -109,7 +109,7 @@ export default function EventsPage() {
           />
         </div>
 
-        <div className="mt-5 grid w-fit grid-cols-2 gap-2 sm:gap-3">
+        <div className="mt-4 grid max-w-xs grid-cols-2 gap-2 sm:mt-5 sm:w-fit sm:max-w-none sm:gap-3">
           <div className="rounded-lg border border-emerald-500/35 bg-emerald-500/10 px-3 py-2">
             <p className="text-[10px] uppercase tracking-[0.12em] text-emerald-700 dark:text-emerald-200/90">Live</p>
             <p className="mt-1 text-base font-semibold text-emerald-800 dark:text-emerald-100">{summary.live}</p>
@@ -120,7 +120,7 @@ export default function EventsPage() {
           </div>
         </div>
 
-        <div className="mt-10">
+        <div className="mt-8 sm:mt-10">
         {filteredEvents.length === 0 ? (
           <div className="py-16 text-center">
             <h3 className="text-xl sm:text-2xl font-semibold">No events found</h3>
@@ -128,7 +128,7 @@ export default function EventsPage() {
           </div>
         ) : (
           <>
-            <div className="flex items-baseline justify-between pb-3.5 border-b border-gold/20">
+            <div className="flex flex-col gap-2 border-b border-gold/20 pb-3.5 sm:flex-row sm:items-baseline sm:justify-between">
               <h2 className="text-[15px] sm:text-base font-semibold tracking-[0.01em]">All Events</h2>
               <p className="inline-flex items-center rounded-full border border-sky-400/30 bg-sky-400/10 px-2.5 py-1 text-xs sm:text-sm text-sky-700 dark:text-sky-200">{filteredEvents.length} total</p>
             </div>
@@ -157,7 +157,7 @@ export default function EventsPage() {
                     className="no-transition group flex flex-col overflow-hidden rounded-2xl border border-border bg-card/90 shadow-[0_4px_18px_hsl(var(--foreground)/0.08)] transition-shadow hover:shadow-[0_8px_28px_hsl(var(--foreground)/0.16)] dark:border-white/10 dark:bg-slate-950/60"
                   >
                     {/* Cover image */}
-                    <div className="relative h-40 w-full shrink-0 overflow-hidden bg-gradient-to-br from-gold/20 via-slate-800/40 to-slate-900/60">
+                    <div className="relative h-36 w-full shrink-0 overflow-hidden bg-gradient-to-br from-gold/20 via-slate-800/40 to-slate-900/60 sm:h-40">
                       {coverImage ? (
                         <img
                           src={coverImage}

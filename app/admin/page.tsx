@@ -99,27 +99,27 @@ export default function AdminDashboard() {
   ]
 
   return (
-    <div className="flex-1 space-y-8 p-4 md:p-8 text-foreground">
+    <div className="flex-1 space-y-6 p-3 text-foreground sm:p-4 md:space-y-8 md:p-8">
       <div className="space-y-2">
-        <h1 className="text-2xl md:text-3xl font-bold">Admin Dashboard</h1>
-        <p className="text-muted-foreground">
+        <h1 className="text-xl font-bold sm:text-2xl md:text-3xl">Admin Dashboard</h1>
+        <p className="text-sm text-muted-foreground sm:text-base">
           Platform performance overview and system metrics.
         </p>
       </div>
 
-      <div className="grid gap-6 md:grid-cols-3">
+      <div className="grid gap-4 sm:gap-6 md:grid-cols-3">
         {statCards.map((stat, index) => {
           const Icon = stat.icon
           return (
             <Card key={index}>
-              <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">
+              <CardHeader className="flex flex-row items-center justify-between pb-1 sm:pb-2">
+                <CardTitle className="text-xs font-medium text-muted-foreground sm:text-sm">
                   {stat.title}
                 </CardTitle>
                 <Icon className="h-4 w-4 text-gold" />
               </CardHeader>
               <CardContent>
-                <div className="text-3xl font-bold text-foreground">
+                <div className="text-2xl font-bold text-foreground sm:text-3xl">
                   {stat.value}
                 </div>
                 <p className="text-xs text-muted-foreground">
@@ -153,7 +153,7 @@ export default function AdminDashboard() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_220px_auto] md:items-end">
+          <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_220px_auto] md:items-end md:gap-4">
             <div className="space-y-2">
               <label className="text-sm font-medium text-foreground">Reference</label>
               <Input
@@ -186,7 +186,7 @@ export default function AdminDashboard() {
 
             <Button
               type="button"
-              className="h-11"
+              className="h-11 w-full md:w-auto"
               disabled={reprocessLoading || !reprocessReference.trim()}
               onClick={async () => {
                 const reference = reprocessReference.trim()
@@ -255,7 +255,7 @@ export default function AdminDashboard() {
 
 function StatusRow({ label, status }: { label: string; status: string }) {
   return (
-    <div className="flex items-center justify-between border-b border-border/60 pb-4">
+    <div className="flex flex-col gap-3 border-b border-border/60 pb-4 sm:flex-row sm:items-center sm:justify-between">
       <div>
         <p className="font-medium text-foreground">{label}</p>
         <p className="text-sm text-muted-foreground">All systems functional</p>
