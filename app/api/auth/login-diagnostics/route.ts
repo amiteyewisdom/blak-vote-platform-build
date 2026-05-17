@@ -145,7 +145,8 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
     if (profile && !authUser) {
       return jsonNoStore({
-        message: `Your account setup is incomplete for password sign-in. ${getSupportMessage()}`,
+        message:
+          'Your account setup is incomplete for password sign-in. Use Forgot Password to activate your password login, or contact support if that fails.',
       })
     }
 

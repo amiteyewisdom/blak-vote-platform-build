@@ -19,9 +19,16 @@ interface UserIdRow {
   id: string
 }
 
+type AuthUserLike = {
+  id?: string
+  email?: string | null
+}
+
 const UPDATE_PASSWORD_WINDOW_MS = 15 * 60 * 1000
 const MAX_UPDATE_PASSWORD_PER_IP_WINDOW = 10
 const MAX_UPDATE_PASSWORD_PER_EMAIL_WINDOW = 5
+const AUTH_LIST_PAGE_SIZE = 100
+const AUTH_LIST_MAX_PAGES = 10
 
 function jsonNoStore(body: Record<string, unknown>, init?: ResponseInit) {
   return applyNoStoreHeaders(NextResponse.json(body, init))
@@ -32,6 +39,59 @@ function getAdminClient() {
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY
   if (!url || !key) throw new Error('Supabase environment variables are not configured.')
   return createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } })
+}
+
+async function findAuthUserByEmail(
+  admin: ReturnType<typeof getAdminClient>,
+  email: string,
+  preferredId?: string
+): Promise<AuthUserLike | null> {
+  if (preferredId) {
+    const authById = await admin.auth.admin.getUserById(preferredId)
+    const matchedUser = authById.data.user
+
+    if (
+      matchedUser &&
+      typeof matchedUser.email === 'string' &&
+      matchedUser.email.trim().toLowerCase() === email
+    ) {
+      return matchedUser
+    }
+
+    if (authById.error && !authById.error.message.toLowerCase().includes('not found')) {
+      throw new Error(authById.error.message)
+    }
+  }
+
+  for (let page = 1; page <= AUTH_LIST_MAX_PAGES; page += 1) {
+    const { data, error } = await admin.auth.admin.listUsers({
+      page,
+      perPage: AUTH_LIST_PAGE_SIZE,
+    })
+
+    if (error) {
+      throw new Error(error.message)
+    }
+
+    const users = Array.isArray(data?.users) ? data.users : []
+    const matchedUser = users.find((user) => {
+      if (typeof user.email !== 'string') {
+        return false
+      }
+
+      return user.email.trim().toLowerCase() === email
+    })
+
+    if (matchedUser) {
+      return matchedUser
+    }
+
+    if (users.length < AUTH_LIST_PAGE_SIZE) {
+      break
+    }
+  }
+
+  return null
 }
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
@@ -158,10 +218,30 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       return jsonNoStore({ error: 'No account found with this email.' }, { status: 404 })
     }
 
-    const { error: updateError } = await admin.auth.admin.updateUserById(userData.id, {
-      password: newPassword,
-    })
-    if (updateError) throw new Error(updateError.message)
+    const authUser = await findAuthUserByEmail(admin, normalizedEmail, userData.id)
+
+    if (authUser && authUser.id && authUser.id !== userData.id) {
+      throw new Error('Account setup mismatch detected. Please contact support.')
+    }
+
+    if (!authUser) {
+      const { error: createError } = await admin.auth.admin.createUser({
+        id: userData.id,
+        email: normalizedEmail,
+        password: newPassword,
+        email_confirm: true,
+      })
+
+      if (createError) {
+        throw new Error(createError.message)
+      }
+    } else {
+      const { error: updateError } = await admin.auth.admin.updateUserById(userData.id, {
+        password: newPassword,
+        email_confirm: true,
+      })
+      if (updateError) throw new Error(updateError.message)
+    }
 
     // Clean up all reset OTPs for this email
     await admin.from('email_otps').delete().eq('email', normalizedEmail).eq('type', 'reset')
