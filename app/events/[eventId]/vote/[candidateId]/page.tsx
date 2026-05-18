@@ -137,7 +137,32 @@ export default function CandidateVotePage() {
         return
       }
 
-      window.location.href = payload.authorization_url
+      const fallbackAccessCode = typeof payload?.access_code === 'string' ? payload.access_code.trim() : ''
+      const authorizationUrl =
+        typeof payload?.authorization_url === 'string' && payload.authorization_url.trim().length > 0
+          ? payload.authorization_url.trim()
+          : fallbackAccessCode
+            ? `https://checkout.paystack.com/${fallbackAccessCode}`
+            : null
+
+      if (!authorizationUrl) {
+        toast({ title: 'Payment Error', description: 'Unable to start Paystack checkout. Please try again.', variant: 'destructive' })
+        setVoting(false)
+        return
+      }
+
+      const redirectUrl = new URL(authorizationUrl)
+      const isTrustedPaystackHost =
+        redirectUrl.hostname === 'paystack.com' ||
+        redirectUrl.hostname.endsWith('.paystack.com')
+
+      if (!isTrustedPaystackHost || !redirectUrl.protocol.startsWith('https')) {
+        toast({ title: 'Security Error', description: 'Received invalid payment URL from server', variant: 'destructive' })
+        setVoting(false)
+        return
+      }
+
+      window.location.href = authorizationUrl
     } catch {
       toast({ title: 'Error', description: 'Something went wrong. Please try again.', variant: 'destructive' })
       setVoting(false)

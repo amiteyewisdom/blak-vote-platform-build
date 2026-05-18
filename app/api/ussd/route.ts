@@ -49,7 +49,7 @@ type CandidateRecord = {
   status?: string | null
 }
 
-const MAX_VOTE_QUANTITY = 50
+const MAX_VOTE_QUANTITY = 1000
 const MAX_USSD_TICKET_QUANTITY = 3
 const NALO_DEFAULT_USSD_ALLOWED_IPS = ['136.243.56.160']
 const DEFAULT_USSD_SHORTCODE = '*920*377#'
@@ -508,13 +508,13 @@ async function handleVoteFlow(params: {
     return con(
       `Candidate: ${candidate.nominee_name || candidateCode}\n` +
         `Event: ${event.title || eventCode}\n` +
-        'Enter quantity (1-50)'
+        `Enter quantity (1-${MAX_VOTE_QUANTITY})`
     )
   }
 
   const quantity = Number(steps[2])
   if (!Number.isInteger(quantity) || quantity < 1 || quantity > MAX_VOTE_QUANTITY) {
-    return end('Invalid quantity. Use a number between 1 and 50.')
+    return end(`Invalid quantity. Use a number between 1 and ${MAX_VOTE_QUANTITY}.`)
   }
 
   const votePrice = resolveEventVotePrice(event)

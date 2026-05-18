@@ -975,7 +975,7 @@ export async function initializeVotePayment(input: PaymentInitInput | unknown) {
     },
     body: JSON.stringify({
       email: getPaystackEmail(email ?? undefined, phone ?? undefined),
-      amount: totalAmount * 100,
+      amount: Math.round(totalAmount * 100),
       reference,
       callback_url: callbackUrl,
       metadata: {

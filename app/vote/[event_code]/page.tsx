@@ -164,12 +164,31 @@ export default function PublicVotePage() {
         return
       }
 
-      const PAYSTACK_CHECKOUT_DOMAIN = 'checkout.paystack.com'
+      const fallbackAccessCode = typeof data?.access_code === 'string' ? data.access_code.trim() : ''
+      const authorizationUrl =
+        typeof data?.authorization_url === 'string' && data.authorization_url.trim().length > 0
+          ? data.authorization_url.trim()
+          : fallbackAccessCode
+            ? `https://checkout.paystack.com/${fallbackAccessCode}`
+            : null
+
+      if (!authorizationUrl) {
+        toast({
+          title: 'Payment Error',
+          description: 'Unable to start Paystack checkout. Please try again.',
+          variant: 'destructive',
+        })
+        return
+      }
 
       try {
-        const url = new URL(data.authorization_url)
+        const url = new URL(authorizationUrl)
 
-        if (url.hostname !== PAYSTACK_CHECKOUT_DOMAIN) {
+        const isTrustedPaystackHost =
+          url.hostname === 'paystack.com' ||
+          url.hostname.endsWith('.paystack.com')
+
+        if (!isTrustedPaystackHost) {
           throw new Error('Invalid payment redirect domain')
         }
 
@@ -177,9 +196,9 @@ export default function PublicVotePage() {
           throw new Error('Payment URL must use HTTPS')
         }
 
-        window.location.href = data.authorization_url
+        window.location.href = authorizationUrl
       } catch (urlError) {
-        console.error('Invalid payment URL:', data.authorization_url, urlError)
+        console.error('Invalid payment URL:', authorizationUrl, urlError)
         toast({
           title: 'Security Error',
           description: 'Received invalid payment URL from server',
