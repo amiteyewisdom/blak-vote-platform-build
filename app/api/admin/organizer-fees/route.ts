@@ -22,7 +22,21 @@ export async function GET() {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 
-  return NextResponse.json({ overrides: data || [] })
+  // Always return the default (10%) for organizers not in the overrides list
+  // If you want to fetch for a specific organizer, pass ?organizerUserId=...
+  // Otherwise, return all overrides and note the default
+  const searchParams = new URLSearchParams(globalThis.location?.search || '')
+  const organizerUserId = searchParams.get('organizerUserId')
+  if (organizerUserId) {
+    const found = (data || []).find((row) => row.organizer_user_id === organizerUserId)
+    return NextResponse.json({
+      organizerUserId,
+      platformFeePercent: found ? found.platform_fee_percent : 10,
+      override: found || null,
+      default: !found
+    })
+  }
+  return NextResponse.json({ overrides: data || [], defaultPlatformFeePercent: 10 })
 }
 
 export async function POST(req: Request) {
@@ -42,28 +56,50 @@ export async function POST(req: Request) {
   }
 
   const adminSupabase = getSupabaseAdminClient()
-  let resolvedOrganizerUserId = organizerUserId
+  let resolvedOrganizerUserId = null
+  let userRow = null
+  let organizerRow = null
 
-  const { data: userRow } = await adminSupabase
+  // Try direct user ID
+  const { data: user } = await adminSupabase
     .from('users')
     .select('id')
     .eq('id', organizerUserId)
     .maybeSingle()
-
-  if (!userRow?.id) {
-    const { data: organizerRow } = await adminSupabase
+  if (user?.id) {
+    resolvedOrganizerUserId = user.id
+    userRow = user
+  } else {
+    // Try organizer ID -> user_id
+    const { data: organizer } = await adminSupabase
       .from('organizers')
       .select('user_id')
       .eq('id', organizerUserId)
       .maybeSingle()
-
-    if (organizerRow?.user_id) {
-      resolvedOrganizerUserId = organizerRow.user_id
+    if (organizer?.user_id) {
+      // Double check that user_id exists in users
+      const { data: user2 } = await adminSupabase
+        .from('users')
+        .select('id')
+        .eq('id', organizer.user_id)
+        .maybeSingle()
+      if (user2?.id) {
+        resolvedOrganizerUserId = user2.id
+        userRow = user2
+        organizerRow = organizer
+      }
     }
   }
 
   if (!resolvedOrganizerUserId) {
-    return NextResponse.json({ error: 'Invalid organizer user id' }, { status: 400 })
+    console.error('[organizer-fees] Invalid organizerUserId:', organizerUserId, 'Resolved:', resolvedOrganizerUserId, 'userRow:', userRow, 'organizerRow:', organizerRow)
+    return NextResponse.json({
+      error: 'Invalid organizer user id (must be a valid user in auth.users)',
+      received: organizerUserId,
+      resolved: resolvedOrganizerUserId,
+      userRow,
+      organizerRow
+    }, { status: 400 })
   }
 
   if (rawPercent === null || rawPercent === undefined || rawPercent === '') {
@@ -76,7 +112,8 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: deleteError.message }, { status: 500 })
     }
 
-    return NextResponse.json({ success: true, organizerUserId: resolvedOrganizerUserId, platformFeePercent: null })
+    // No override, so default applies
+    return NextResponse.json({ success: true, organizerUserId: resolvedOrganizerUserId, platformFeePercent: 10, default: true })
   }
 
   const platformFeePercent = Number(rawPercent)
