@@ -112,20 +112,27 @@ export default function EventSettingsPage() {
 
     // Upload new image if selected
     if (image) {
-      const fileExt = image.name.split('.').pop()
-      const fileName = `${user.id}-${Date.now()}.${fileExt}`
+      const uploadForm = new FormData()
+      uploadForm.append('image', image)
 
-      const { error } = await supabase.storage
-        .from('event-images')
-        .upload(fileName, image)
+      const uploadRes = await fetch('/api/organizer/upload-event-image', {
+        method: 'POST',
+        body: uploadForm,
+      })
 
-      if (!error) {
-        const { data } = supabase.storage
-          .from('event-images')
-          .getPublicUrl(fileName)
+      const uploadPayload = await uploadRes.json().catch(() => ({}))
 
-        imageUrl = data.publicUrl
+      if (!uploadRes.ok || !uploadPayload?.imageUrl) {
+        toast({
+          title: 'Upload failed',
+          description: uploadPayload?.error || 'Could not upload event image',
+          variant: 'destructive',
+        })
+        setSaving(false)
+        return
       }
+
+      imageUrl = uploadPayload.imageUrl
     }
 
     const votePrice = Number(form.cost_per_vote || 0)

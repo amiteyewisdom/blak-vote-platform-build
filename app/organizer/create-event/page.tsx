@@ -101,24 +101,27 @@ export default function CreateEventPage() {
     let imageUrl = null
 
     if (image) {
-      const fileExt = image.name.split('.').pop()
-      const fileName = `${user.id}-${Date.now()}.${fileExt}`
+      const uploadForm = new FormData()
+      uploadForm.append('image', image)
 
-      const { error: uploadError } = await supabase.storage
-        .from('event-images')
-        .upload(fileName, image)
+      const uploadRes = await fetch('/api/organizer/upload-event-image', {
+        method: 'POST',
+        body: uploadForm,
+      })
 
-      if (uploadError) {
-        toast({ title: 'Upload failed', description: uploadError.message, variant: 'destructive' })
+      const uploadPayload = await uploadRes.json().catch(() => ({}))
+
+      if (!uploadRes.ok || !uploadPayload?.imageUrl) {
+        toast({
+          title: 'Upload failed',
+          description: uploadPayload?.error || 'Could not upload event image',
+          variant: 'destructive',
+        })
         setLoading(false)
         return
       }
 
-      const { data } = supabase.storage
-        .from('event-images')
-        .getPublicUrl(fileName)
-
-      imageUrl = data.publicUrl
+      imageUrl = uploadPayload.imageUrl
     }
 
     // =========================
