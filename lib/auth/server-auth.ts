@@ -700,7 +700,7 @@ export async function sendOtpEmail(input: {
     process.env.OTP_FROM_EMAIL ||
     process.env.RESEND_FROM_EMAIL ||
     process.env.RESEND_FROM ||
-    'BlakVote <noreply@blakvote.com>'
+    'BlakVote <noreply@mail.blakvote.com>'
   const greeting = input.fullName ? `Hi ${splitFullName(input.fullName).firstName},` : 'Hello,'
   const subject =
     input.purpose === 'signup'
@@ -722,7 +722,15 @@ export async function sendOtpEmail(input: {
   })
 
   if (!response.ok) {
-    throw new Error(`Resend API error ${response.status}: ${await response.text()}`)
+    const responseText = await response.text()
+
+    if (response.status === 403 && responseText.toLowerCase().includes('domain is not verified')) {
+      throw new Error(
+        `OTP sender domain is not verified in Resend. Configure OTP_FROM_EMAIL (or RESEND_FROM_EMAIL / RESEND_FROM) with a Resend-verified sender. Current sender: ${from}`
+      )
+    }
+
+    throw new Error(`Resend API error ${response.status}: ${responseText}`)
   }
 }
 

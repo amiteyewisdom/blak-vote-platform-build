@@ -71,7 +71,7 @@ async function sendViaResend(
   const apiKey = process.env.RESEND_API_KEY
   if (!apiKey) throw new Error('RESEND_API_KEY is not configured.')
 
-  const from    = process.env.OTP_FROM_EMAIL ?? 'BlakVote <noreply@blakvote.com>'
+  const from    = process.env.OTP_FROM_EMAIL ?? 'BlakVote <noreply@mail.blakvote.com>'
   const subject = type === 'signup' ? 'Your BlakVote verification code' : 'Your BlakVote password reset code'
   const greeting = fullName ? 'Hi ' + fullName.split(' ')[0] + ',' : 'Hello,'
   const html = buildEmailHtml(type, otp, greeting)

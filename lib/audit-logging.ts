@@ -71,12 +71,17 @@ export async function logAudit(log: AuditLog): Promise<void> {
   const supabase = getSupabaseAdminClient()
 
   try {
-    await supabase
+    const { error } = await supabase
       .from('audit_logs')
       .insert({
         ...log,
         timestamp: log.timestamp || new Date().toISOString(),
       })
+
+    if (error) {
+      console.error('[AUDIT_LOG_ERROR]', error.message)
+      return
+    }
 
     // If critical, log to console as well
     if (log.severity === 'critical') {
