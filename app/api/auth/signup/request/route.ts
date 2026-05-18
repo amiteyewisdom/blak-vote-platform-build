@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getPasswordPolicyError } from '@/lib/server-security'
 import {
+  deleteOtpChallenge,
   generateOtpCode,
   getLatestOtp,
   getUserRecordByEmail,
-  hashOtpCode,
   logAuthEvent,
   normalizeEmail,
   sendOtpEmail,
@@ -91,14 +91,30 @@ export async function POST(request: NextRequest) {
     }
 
     const otp = generateOtpCode()
-    await storeOtpChallenge({
-      email,
-      purpose: 'signup',
-      otp,
-      fullName,
-      password,
-    })
-    await sendOtpEmail({ email, otp, purpose: 'signup', fullName })
+    try {
+      await storeOtpChallenge({
+        email,
+        purpose: 'signup',
+        otp,
+        fullName,
+        password,
+      })
+      await sendOtpEmail({ email, otp, purpose: 'signup', fullName })
+    } catch (error) {
+      await deleteOtpChallenge(email, 'signup').catch(() => undefined)
+
+      await logAuthEvent({
+        action: 'AUTH_SIGNUP_OTP_SEND_FAILED',
+        severity: 'warning',
+        ipAddress,
+        details: {
+          email,
+          error: error instanceof Error ? error.message : 'Unknown error',
+        },
+      }).catch(() => undefined)
+
+      throw error
+    }
 
     await logAuthEvent({
       action: 'AUTH_SIGNUP_OTP_SENT',

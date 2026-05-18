@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import {
+  deleteOtpChallenge,
   generateOtpCode,
   getLatestOtp,
   getUserRecordByEmail,
@@ -70,17 +71,33 @@ export async function POST(request: NextRequest) {
     const userRecord = await getUserRecordByEmail(email)
     if (userRecord?.status === 'active' || !userRecord?.status) {
       const otp = generateOtpCode()
-      await storeOtpChallenge({
-        email,
-        purpose: 'reset_password',
-        otp,
-      })
-      await sendOtpEmail({
-        email,
-        otp,
-        purpose: 'reset_password',
-        fullName: userRecord?.full_name || [userRecord?.first_name, userRecord?.last_name].filter(Boolean).join(' ') || undefined,
-      })
+      try {
+        await storeOtpChallenge({
+          email,
+          purpose: 'reset_password',
+          otp,
+        })
+        await sendOtpEmail({
+          email,
+          otp,
+          purpose: 'reset_password',
+          fullName: userRecord?.full_name || [userRecord?.first_name, userRecord?.last_name].filter(Boolean).join(' ') || undefined,
+        })
+      } catch (error) {
+        await deleteOtpChallenge(email, 'reset_password').catch(() => undefined)
+
+        await logAuthEvent({
+          action: 'AUTH_PASSWORD_RESET_OTP_SEND_FAILED',
+          severity: 'warning',
+          ipAddress,
+          details: {
+            email,
+            error: error instanceof Error ? error.message : 'Unknown error',
+          },
+        }).catch(() => undefined)
+
+        throw error
+      }
     }
 
     await logAuthEvent({

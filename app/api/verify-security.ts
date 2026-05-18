@@ -11,6 +11,10 @@ function hasEnv(name: string) {
   return Boolean(process.env[name]?.trim())
 }
 
+function hasAnyEnv(names: string[]) {
+  return names.some((name) => hasEnv(name))
+}
+
 export async function verifySecuritySetup(): Promise<SecurityCheckResult[]> {
   const supabase = getSupabaseAdminClient()
   const results: SecurityCheckResult[] = []
@@ -32,6 +36,38 @@ export async function verifySecuritySetup(): Promise<SecurityCheckResult[]> {
         ? 'Required payment and database environment variables are present'
         : 'One or more required environment variables are missing',
     details: missingEnv.length === 0 ? { checked: envChecks } : { missing: missingEnv },
+  })
+
+  const customAuthSecretPresent = hasAnyEnv(['AUTH_JWT_SECRET', 'SESSION_SECRET'])
+  results.push({
+    name: 'Custom Auth Signing Secret',
+    status: customAuthSecretPresent ? 'pass' : 'fail',
+    message: customAuthSecretPresent
+      ? 'A signing secret is configured for custom session cookies'
+      : 'Missing AUTH_JWT_SECRET or SESSION_SECRET for custom authentication',
+    details: customAuthSecretPresent ? undefined : { requiredOneOf: ['AUTH_JWT_SECRET', 'SESSION_SECRET'] },
+  })
+
+  const authEncryptionPresent = hasAnyEnv(['AUTH_DATA_ENCRYPTION_KEY', 'AUTH_JWT_SECRET', 'SESSION_SECRET'])
+  results.push({
+    name: 'Signup Payload Encryption Secret',
+    status: authEncryptionPresent ? 'pass' : 'fail',
+    message: authEncryptionPresent
+      ? 'A secret is configured to encrypt pending signup payloads'
+      : 'Missing AUTH_DATA_ENCRYPTION_KEY or fallback signing secret for signup OTP payloads',
+    details: authEncryptionPresent
+      ? undefined
+      : { requiredOneOf: ['AUTH_DATA_ENCRYPTION_KEY', 'AUTH_JWT_SECRET', 'SESSION_SECRET'] },
+  })
+
+  const otpSenderConfigured = hasAnyEnv(['OTP_FROM_EMAIL', 'RESEND_FROM_EMAIL', 'RESEND_FROM'])
+  results.push({
+    name: 'OTP Sender Address',
+    status: otpSenderConfigured ? 'pass' : 'warning',
+    message: otpSenderConfigured
+      ? 'An explicit sender address is configured for OTP email delivery'
+      : 'No explicit OTP sender address configured; default sender will be used and must be verified in Resend',
+    details: otpSenderConfigured ? undefined : { acceptedNames: ['OTP_FROM_EMAIL', 'RESEND_FROM_EMAIL', 'RESEND_FROM'] },
   })
 
   // Check 1: Payments table is accessible with required columns

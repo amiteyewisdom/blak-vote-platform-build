@@ -76,6 +76,8 @@ create index if not exists sessions_user_id_expires_idx
 create table if not exists public.email_otps (
   id uuid primary key default gen_random_uuid(),
   email text not null,
+  otp text,
+  type text,
   otp_hash text,
   purpose text,
   expires_at timestamptz not null,
@@ -87,12 +89,17 @@ create table if not exists public.email_otps (
   created_at timestamptz not null default timezone('utc', now())
 );
 
+alter table public.email_otps add column if not exists otp text;
+alter table public.email_otps add column if not exists type text;
 alter table public.email_otps add column if not exists otp_hash text;
 alter table public.email_otps add column if not exists purpose text;
 alter table public.email_otps add column if not exists attempts integer not null default 0;
 alter table public.email_otps add column if not exists payload jsonb;
 alter table public.email_otps add column if not exists resend_available_at timestamptz;
 alter table public.email_otps add column if not exists verified_at timestamptz;
+
+alter table public.email_otps alter column otp drop not null;
+alter table public.email_otps alter column type drop not null;
 
 update public.email_otps
 set purpose = case

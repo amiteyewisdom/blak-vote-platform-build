@@ -482,7 +482,9 @@ export async function storeOtpChallenge(input: {
 
   const { error } = await supabase.from('email_otps').insert({
     email: normalizedEmail,
+    otp: hashOtpCode(normalizedEmail, input.purpose, input.otp),
     otp_hash: hashOtpCode(normalizedEmail, input.purpose, input.otp),
+    type: input.purpose === 'signup' ? 'signup' : 'reset',
     purpose: input.purpose,
     expires_at: expiresAt,
     attempts: 0,
@@ -498,6 +500,20 @@ export async function storeOtpChallenge(input: {
   return {
     expiresAt,
     resendAvailableAt,
+  }
+}
+
+export async function deleteOtpChallenge(email: string, purpose: 'signup' | 'reset_password') {
+  const supabase = getSupabaseAdminClient()
+  const { error } = await supabase
+    .from('email_otps')
+    .delete()
+    .eq('email', normalizeEmail(email))
+    .eq('purpose', purpose)
+    .eq('verified', false)
+
+  if (error) {
+    throw new Error(error.message)
   }
 }
 
@@ -675,12 +691,16 @@ export async function sendOtpEmail(input: {
   purpose: 'signup' | 'reset_password'
   fullName?: string
 }) {
-  const apiKey = process.env.RESEND_API_KEY
+  const apiKey = process.env.RESEND_API_KEY || process.env.RESEND_TOKEN || process.env.RESEND_KEY
   if (!apiKey) {
     throw new Error('RESEND_API_KEY is not configured.')
   }
 
-  const from = process.env.OTP_FROM_EMAIL || 'BlakVote <noreply@blakvote.com>'
+  const from =
+    process.env.OTP_FROM_EMAIL ||
+    process.env.RESEND_FROM_EMAIL ||
+    process.env.RESEND_FROM ||
+    'BlakVote <noreply@blakvote.com>'
   const greeting = input.fullName ? `Hi ${splitFullName(input.fullName).firstName},` : 'Hello,'
   const subject =
     input.purpose === 'signup'
