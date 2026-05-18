@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { supabase } from '@/lib/supabaseClient'
 import { isLiveEventStatus } from '@/lib/event-status'
 import { Settings, Edit, Clock } from 'lucide-react'
 
@@ -29,29 +28,25 @@ export default function OrganizerDashboard() {
 
   const fetchEvents = async () => {
     setLoading(true)
+    try {
+      const response = await fetch('/api/organizer/dashboard', { cache: 'no-store' })
+      const payload = await response.json().catch(() => ({}))
 
-    const {
-      data: { user },
-      error: userError,
-    } = await supabase.auth.getUser()
+      if (response.status === 401) {
+        router.push('/auth/login')
+        return
+      }
 
-    if (userError || !user) {
-      router.push('/auth/sign-in')
-      return
+      if (!response.ok) {
+        throw new Error(payload?.error || 'Failed to load organizer dashboard')
+      }
+
+      setEvents(Array.isArray(payload?.events) ? payload.events : [])
+    } catch (error) {
+      console.error(error)
+    } finally {
+      setLoading(false)
     }
-
-    const { data, error } = await supabase
-      .from('events')
-      .select('*')
-      .eq('organizer_id', user.id)
-      .neq('status', 'deleted')
-      .order('created_at', { ascending: false })
-
-    if (!error) {
-      setEvents(data ?? [])
-    }
-
-    setLoading(false)
   }
 
   const publishEvent = async (eventId: string) => {

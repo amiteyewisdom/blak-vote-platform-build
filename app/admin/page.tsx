@@ -1,8 +1,6 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { supabase } from '@/lib/supabaseClient'
-import { LIVE_EVENT_STATUSES } from '@/lib/event-status'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -38,26 +36,18 @@ export default function AdminDashboard() {
   useEffect(() => {
     const fetchStats = async () => {
       try {
-        const [
-          { count: usersCount },
-          { count: eventsCount },
-          { count: votesCount },
-          { count: activeEventsCount },
-        ] = await Promise.all([
-          supabase.from('users').select('*', { count: 'exact', head: true }),
-          supabase.from('events').select('*', { count: 'exact', head: true }),
-          supabase.from('votes').select('*', { count: 'exact', head: true }),
-          supabase
-            .from('events')
-            .select('*', { count: 'exact', head: true })
-            .in('status', [...LIVE_EVENT_STATUSES]),
-        ])
+        const response = await fetch('/api/admin/dashboard', { cache: 'no-store' })
+        const payload = await response.json()
+
+        if (!response.ok) {
+          throw new Error(payload?.error || 'Failed to fetch dashboard stats')
+        }
 
         setStats({
-          totalUsers: usersCount || 0,
-          totalEvents: eventsCount || 0,
-          totalVotes: votesCount || 0,
-          activeEvents: activeEventsCount || 0,
+          totalUsers: Number(payload.totalUsers || 0),
+          totalEvents: Number(payload.totalEvents || 0),
+          totalVotes: Number(payload.totalVotes || 0),
+          activeEvents: Number(payload.activeEvents || 0),
         })
       } catch (error) {
         console.error('Error fetching stats:', error)

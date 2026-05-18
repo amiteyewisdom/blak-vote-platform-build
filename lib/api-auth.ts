@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
+import { getAuthenticatedUser } from '@/lib/auth/server-auth'
 
-type Role = "admin" | "organizer"
+type Role = "admin" | "organizer" | "voter"
 
 type RoleCheckResult =
   | {
@@ -14,28 +15,19 @@ type RoleCheckResult =
     }
 
 export async function requireRole(
-  supabase: any,
+  _supabase: any,
   allowedRoles: Role[]
 ): Promise<RoleCheckResult> {
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser()
+  const user = await getAuthenticatedUser()
 
-  if (authError || !user) {
+  if (!user) {
     return {
       ok: false,
       response: NextResponse.json({ error: "Unauthorized" }, { status: 401 }),
     }
   }
 
-  const { data: actor, error: actorError } = await supabase
-    .from("users")
-    .select("role")
-    .eq("id", user.id)
-    .maybeSingle()
-
-  if (actorError || !actor?.role || !allowedRoles.includes(actor.role as Role)) {
+  if (!allowedRoles.includes(user.role as Role)) {
     return {
       ok: false,
       response: NextResponse.json({ error: "Forbidden" }, { status: 403 }),
@@ -45,7 +37,7 @@ export async function requireRole(
   return {
     ok: true,
     userId: user.id,
-    role: actor.role as Role,
+    role: user.role as Role,
   }
 }
 

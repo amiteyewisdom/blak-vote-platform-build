@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { supabase } from '@/lib/supabaseClient'
 import { TrendingUp, Users, Vote, DollarSign } from 'lucide-react'
 import { DSCard } from '@/components/ui/design-system'
 
@@ -32,25 +31,12 @@ export default function AnalyticsPage() {
 
   const fetchAnalytics = async () => {
     try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser()
+      const dashboardRes = await fetch('/api/admin/dashboard', { cache: 'no-store' })
+      const dashboardData = await dashboardRes.json()
 
-      if (!user) {
-        window.location.href = '/auth/sign-in'
-        return
+      if (!dashboardRes.ok) {
+        throw new Error(dashboardData?.error || 'Failed to fetch admin dashboard stats')
       }
-
-      const [usersResult, eventsResult, votesResult] =
-        await Promise.all([
-          supabase.from('users').select('id', { count: 'exact', head: true }),
-          supabase.from('events').select('id', { count: 'exact', head: true }),
-          supabase.from('votes').select('id', { count: 'exact', head: true }),
-        ])
-
-      const totalUsers = usersResult.count || 0
-      const totalEvents = eventsResult.count || 0
-      const totalVotes = votesResult.count || 0
 
       const revenueRes = await fetch('/api/admin/revenue')
 
@@ -65,9 +51,9 @@ export default function AnalyticsPage() {
         : []
 
       setStats({
-        totalUsers,
-        totalEvents,
-        totalVotes,
+        totalUsers: Number(dashboardData.totalUsers || 0),
+        totalEvents: Number(dashboardData.totalEvents || 0),
+        totalVotes: Number(dashboardData.totalVotes || 0),
         totalPlatformRevenue: Number(revenueSummary.total_platform_revenue || 0),
         totalGrossRevenue: Number(revenueSummary.total_gross_revenue || 0),
         totalRevenueTransactions: Number(revenueSummary.total_transactions || 0),

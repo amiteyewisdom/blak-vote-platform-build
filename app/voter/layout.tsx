@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react'
 import { Header } from '@/components/header'
-import { supabase } from '@/lib/supabaseClient'
 
 export default function VoterLayout({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<any>(null)
@@ -10,12 +9,27 @@ export default function VoterLayout({ children }: { children: React.ReactNode })
 
   useEffect(() => {
     const loadUser = async () => {
-      const { data } = await supabase.auth.getUser()
-      setUser(data.user ?? null)
-      setLoading(false)
+      try {
+        const res = await fetch('/api/auth/session', { cache: 'no-store' })
+        const payload = await res.json()
+
+        if (!res.ok || !payload?.authenticated) {
+          window.location.replace('/auth/login?redirectTo=%2Fvoter')
+          return
+        }
+
+        if (payload.user?.role !== 'voter') {
+          window.location.replace(payload.user?.role === 'admin' ? '/admin' : '/organizer')
+          return
+        }
+
+        setUser(payload.user)
+      } finally {
+        setLoading(false)
+      }
     }
 
-    loadUser()
+    void loadUser()
   }, [])
 
   if (loading) {

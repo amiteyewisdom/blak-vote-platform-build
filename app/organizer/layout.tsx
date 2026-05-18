@@ -2,7 +2,6 @@
 
 import { useEffect, useState, type ReactNode } from 'react'
 import { usePathname } from 'next/navigation'
-import { supabase } from '@/lib/supabaseClient'
 import { Header } from '@/components/header'
 import { SidebarNav } from '@/components/sidebar-nav'
 import { BarChart3, Plus, Settings, Wallet } from 'lucide-react'
@@ -15,11 +14,26 @@ export default function OrganizerLayout({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const loadUser = async () => {
-      const { data } = await supabase.auth.getUser()
-      setUser(data.user ?? null)
-      setLoading(false)
+      try {
+        const res = await fetch('/api/auth/session', { cache: 'no-store' })
+        const payload = await res.json()
+
+        if (!res.ok || !payload?.authenticated) {
+          window.location.replace('/auth/login?redirectTo=%2Forganizer')
+          return
+        }
+
+        if (payload.user?.role !== 'organizer') {
+          window.location.replace(payload.user?.role === 'admin' ? '/admin' : '/voter')
+          return
+        }
+
+        setUser(payload.user)
+      } finally {
+        setLoading(false)
+      }
     }
-    loadUser()
+    void loadUser()
   }, [])
 
   useEffect(() => {

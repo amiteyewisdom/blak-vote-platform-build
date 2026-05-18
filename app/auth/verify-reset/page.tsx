@@ -65,10 +65,10 @@ function VerifyResetContent() {
 
     setLoading(true)
     try {
-      const res = await fetch('/api/verify-otp', {
+      const res = await fetch('/api/auth/password-reset/verify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, otp: token, type: 'reset' }),
+        body: JSON.stringify({ email, otp: token }),
       })
       const data: { success?: boolean; error?: string } = await res.json()
       if (!res.ok) throw new Error(data.error ?? 'Verification failed.')
@@ -92,10 +92,10 @@ function VerifyResetContent() {
     if (!email) return
     setResending(true); setError(null); setInfo(null)
     try {
-      const res = await fetch('/api/send-otp', {
+      const res = await fetch('/api/auth/password-reset/request', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, type: 'reset' }),
+        body: JSON.stringify({ email }),
       })
       const data: { error?: string } = await res.json()
       if (!res.ok) throw new Error(data.error ?? 'Failed to resend.')

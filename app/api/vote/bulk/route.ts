@@ -5,6 +5,7 @@ import { createClient } from '@supabase/supabase-js';
 import { createClient as createServerClient } from '@/lib/supabase/server';
 import { checkRateLimit, extractClientIp } from '@/lib/server-security';
 import { isVotingOpenStatus } from '@/lib/event-status';
+import { requireRole } from '@/lib/api-auth';
 
 // Admin client used for role lookup, event validation, and process_vote RPC.
 function getAdminClient() {
@@ -41,31 +42,16 @@ const bulkVoteSchema = z.object({
 export async function POST(req: Request) {
   try {
     const sessionClient = await createServerClient();
-    const { data: { user }, error: authError } = await sessionClient.auth.getUser();
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const auth = await requireRole(sessionClient, ['admin', 'organizer']);
+    if (!auth.ok) {
+      return auth.response;
     }
 
     const supabase = getAdminClient();
 
-    const { data: dbUser, error: userError } = await supabase
-      .from('users')
-      .select('id, role')
-      .eq('id', user.id)
-      .maybeSingle();
-
-    if (userError || !dbUser?.role) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    }
-
-    // Bulk entry is restricted to admin and organizer roles only.
-    if (!['admin', 'organizer'].includes(dbUser.role)) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    }
-
     // Per-user rate limit: 30 bulk submissions per minute.
     const ipAddress = extractClientIp(req as unknown as Request);
-    const rateKey = `bulk:user:${user.id}`;
+    const rateKey = `bulk:user:${auth.userId}`;
     const limit = checkRateLimit(rateKey, 30, 60 * 1000);
     if (!limit.allowed) {
       return NextResponse.json(
@@ -184,8 +170,8 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Selected nominee does not belong to the selected category' }, { status: 400 });
     }
 
-    if (dbUser.role === 'organizer') {
-      const hasForeignEvent = normalizedVotes.some((vote) => eventOrganizerMap.get(vote.event_id) !== user.id);
+    if (auth.role === 'organizer') {
+      const hasForeignEvent = normalizedVotes.some((vote) => eventOrganizerMap.get(vote.event_id) !== auth.userId);
       if (hasForeignEvent) {
         return NextResponse.json({ error: 'Forbidden for one or more events' }, { status: 403 });
       }
@@ -216,7 +202,7 @@ export async function POST(req: Request) {
         .from('vote_manual_audit_context')
         .insert({
           transaction_id: transactionId,
-          added_by_user_id: user.id,
+          added_by_user_id: auth.userId,
           manual_entry_mode: v.method,
           reason: v.reason,
           category_id: v.category_id ?? null,

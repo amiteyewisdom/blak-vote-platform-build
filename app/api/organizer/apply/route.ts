@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createClient } from '@supabase/supabase-js';
 import { createClient as createServerClient } from '@/lib/supabase/server';
+import { randomUUID } from 'crypto';
+import { requireRole } from '@/lib/api-auth';
 
 function getSupabase() {
   const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -15,13 +17,11 @@ function getSupabase() {
 }
 
 const organizerApplicationSchema = z.object({
-  company: z.string().min(2),
-  website: z.string().url().optional(),
-  bio: z.string().min(10),
-  phone: z.string().min(7),
-  email: z.string().email(),
-  id_type: z.enum(['national_id', 'passport', 'drivers_license', 'voter_id']),
-  id_number: z.string().min(3, 'ID number must be at least 3 characters'),
+  organization_name: z.string().trim().min(2),
+  organization_id: z.string().trim().min(3),
+  address: z.string().trim().min(5),
+  phone_number: z.string().trim().min(7),
+  description: z.string().trim().min(10),
 });
 
 export async function POST(req: Request) {
@@ -33,19 +33,15 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Supabase admin credentials are not configured' }, { status: 500 });
     }
 
-    const {
-      data: { user },
-      error: authError,
-    } = await sessionClient.auth.getUser();
-
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const auth = await requireRole(sessionClient, ['voter']);
+    if (!auth.ok) {
+      return auth.response;
     }
 
     const { data: dbUser, error: userError } = await supabase
       .from('users')
       .select('id, role, email')
-      .eq('id', user.id)
+      .eq('id', auth.userId)
       .maybeSingle();
 
     if (userError || !dbUser) {
@@ -56,17 +52,37 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Only voters can apply to be organizer' }, { status: 403 });
     }
 
-    const body = await req.json();
-    const parseResult = organizerApplicationSchema.safeParse(body);
+    const formData = await req.formData();
+    const parseResult = organizerApplicationSchema.safeParse({
+      organization_name: formData.get('organizationName'),
+      organization_id: formData.get('organizationId'),
+      address: formData.get('address'),
+      phone_number: formData.get('phoneNumber'),
+      description: formData.get('description'),
+    });
     if (!parseResult.success) {
       return NextResponse.json({ error: 'Invalid input', details: parseResult.error.errors }, { status: 400 });
     }
-    const { company, website, bio, phone, email, id_type, id_number } = parseResult.data;
+
+    const document = formData.get('document');
+    if (!(document instanceof File) || document.size === 0) {
+      return NextResponse.json({ error: 'A supporting document is required.' }, { status: 400 });
+    }
+
+    if (document.size > 5 * 1024 * 1024) {
+      return NextResponse.json({ error: 'Supporting document must be 5MB or smaller.' }, { status: 400 });
+    }
+
+    if (!['application/pdf', 'image/jpeg', 'image/png', 'image/webp'].includes(document.type)) {
+      return NextResponse.json({ error: 'Only PDF, JPG, PNG, or WEBP files are allowed.' }, { status: 400 });
+    }
+
+    const { organization_name, organization_id, address, phone_number, description } = parseResult.data;
 
     const { data: existing } = await supabase
       .from('organizer_applications')
       .select('id, status')
-      .eq('user_id', user.id)
+      .eq('user_id', auth.userId)
       .in('status', ['pending', 'approved'])
       .limit(1)
       .maybeSingle();
@@ -75,36 +91,39 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'You already have an active organizer application' }, { status: 409 });
     }
 
-    // Insert application into organizer_applications table
-    const firstAttempt = await supabase.from('organizer_applications').insert({
-      user_id: user.id,
-      company,
-      website,
-      bio,
-      phone,
-      email: email || dbUser.email,
-      id_type,
-      id_number,
-      status: 'pending',
-      submitted_at: new Date().toISOString(),
-    });
-
-    if (firstAttempt.error) {
-      const fallbackAttempt = await supabase.from('organizer_applications').insert({
-        company,
-        website,
-        bio,
-        phone,
-        email: email || dbUser.email,
-        id_type,
-        id_number,
-        status: 'pending',
-        submitted_at: new Date().toISOString(),
+    const fileExtension = document.name.includes('.') ? document.name.split('.').pop()?.toLowerCase() || 'bin' : 'bin';
+    const storagePath = `${auth.userId}/${Date.now()}-${randomUUID()}.${fileExtension}`;
+    const upload = await supabase.storage
+      .from('organizer-documents')
+      .upload(storagePath, Buffer.from(await document.arrayBuffer()), {
+        contentType: document.type,
+        upsert: false,
       });
 
-      if (fallbackAttempt.error) {
-        return NextResponse.json({ error: 'Database error', details: fallbackAttempt.error.message }, { status: 500 });
-      }
+    if (upload.error) {
+      return NextResponse.json({ error: upload.error.message || 'Failed to upload document.' }, { status: 500 });
+    }
+
+    const insertResult = await supabase.from('organizer_applications').insert({
+      user_id: auth.userId,
+      organization_name,
+      organization_id,
+      address,
+      phone_number,
+      description,
+      document_url: storagePath,
+      status: 'pending',
+      created_at: new Date().toISOString(),
+      submitted_at: new Date().toISOString(),
+      company: organization_name,
+      bio: description,
+      phone: phone_number,
+      email: dbUser.email,
+      id_number: organization_id,
+    });
+
+    if (insertResult.error) {
+      return NextResponse.json({ error: 'Database error', details: insertResult.error.message }, { status: 500 });
     }
 
     return NextResponse.json({ message: 'Application submitted successfully' });

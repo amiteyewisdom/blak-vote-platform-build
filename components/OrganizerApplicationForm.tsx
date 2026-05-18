@@ -11,23 +11,39 @@ type OrganizerApplicationFormProps = {
 export default function OrganizerApplicationForm({ successHref = '/voter' }: OrganizerApplicationFormProps) {
   const router = useRouter();
   const { toast } = useToast();
-  const [company, setCompany] = useState('');
-  const [website, setWebsite] = useState('');
-  const [bio, setBio] = useState('');
-  const [phone, setPhone] = useState('');
-  const [email, setEmail] = useState('');
-  const [idType, setIdType] = useState('national_id');
-  const [idNumber, setIdNumber] = useState('');
+  const [organizationName, setOrganizationName] = useState('');
+  const [organizationId, setOrganizationId] = useState('');
+  const [address, setAddress] = useState('');
+  const [description, setDescription] = useState('');
+  const [phoneNumber, setPhoneNumber] = useState('');
+  const [documentFile, setDocumentFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (!documentFile) {
+      toast({
+        title: 'Supporting document required',
+        description: 'Upload a PDF or image before submitting your application.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     setLoading(true);
+
+    const body = new FormData();
+    body.set('organizationName', organizationName);
+    body.set('organizationId', organizationId);
+    body.set('address', address);
+    body.set('description', description);
+    body.set('phoneNumber', phoneNumber);
+    body.set('document', documentFile);
 
     const res = await fetch('/api/organizer/apply', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ company, website, bio, phone, email, id_type: idType, id_number: idNumber }),
+      body,
     });
 
     const payload = await res.json();
@@ -53,62 +69,52 @@ export default function OrganizerApplicationForm({ successHref = '/voter' }: Org
         <input
           className="w-full rounded-xl border border-input bg-background p-2 text-foreground placeholder:text-muted-foreground"
           type="text"
-          placeholder="Company/Organization Name"
-          value={company}
-          onChange={e => setCompany(e.target.value)}
+          placeholder="Organization Name"
+          value={organizationName}
+          onChange={e => setOrganizationName(e.target.value)}
           required
         />
         <input
           className="w-full rounded-xl border border-input bg-background p-2 text-foreground placeholder:text-muted-foreground"
-          type="url"
-          placeholder="Website (optional)"
-          value={website}
-          onChange={e => setWebsite(e.target.value)}
+          type="text"
+          placeholder="Organization ID / Registration Number"
+          value={organizationId}
+          onChange={e => setOrganizationId(e.target.value)}
+          required
+        />
+        <input
+          className="w-full rounded-xl border border-input bg-background p-2 text-foreground placeholder:text-muted-foreground"
+          type="text"
+          placeholder="Organization Address"
+          value={address}
+          onChange={e => setAddress(e.target.value)}
+          required
         />
         <textarea
           className="w-full rounded-xl border border-input bg-background p-2 text-foreground placeholder:text-muted-foreground"
-          placeholder="Brief Bio / Reason for Applying"
-          value={bio}
-          onChange={e => setBio(e.target.value)}
+          placeholder="Describe your organization and why you are applying"
+          value={description}
+          onChange={e => setDescription(e.target.value)}
           required
         />
         <input
           className="w-full rounded-xl border border-input bg-background p-2 text-foreground placeholder:text-muted-foreground"
           type="tel"
           placeholder="Phone Number"
-          value={phone}
-          onChange={e => setPhone(e.target.value)}
-          required
-        />
-        <input
-          className="w-full rounded-xl border border-input bg-background p-2 text-foreground placeholder:text-muted-foreground"
-          type="email"
-          placeholder="Contact Email"
-          value={email}
-          onChange={e => setEmail(e.target.value)}
+          value={phoneNumber}
+          onChange={e => setPhoneNumber(e.target.value)}
           required
         />
         <div className="space-y-2">
-          <label className="text-sm font-medium text-foreground">Government-Issued ID</label>
-          <select
-            className="w-full rounded-xl border border-input bg-background p-2 text-foreground"
-            value={idType}
-            onChange={e => setIdType(e.target.value)}
-            required
-          >
-            <option value="national_id">National ID</option>
-            <option value="passport">Passport</option>
-            <option value="drivers_license">Driver&apos;s License</option>
-            <option value="voter_id">Voter ID</option>
-          </select>
+          <label className="text-sm font-medium text-foreground">Supporting Document</label>
           <input
             className="w-full rounded-xl border border-input bg-background p-2 text-foreground placeholder:text-muted-foreground"
-            type="text"
-            placeholder="ID Number"
-            value={idNumber}
-            onChange={e => setIdNumber(e.target.value)}
+            type="file"
+            accept=".pdf,image/jpeg,image/png,image/webp"
+            onChange={e => setDocumentFile(e.target.files?.[0] ?? null)}
             required
           />
+          <p className="text-xs text-muted-foreground">Accepted: PDF, JPG, PNG, WEBP up to 5MB.</p>
         </div>
         <button
           type="submit"

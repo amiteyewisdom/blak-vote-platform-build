@@ -85,16 +85,17 @@ function NewPasswordContent() {
 
     setLoading(true)
     try {
-      const res = await fetch('/api/update-password', {
+      const res = await fetch('/api/auth/password-reset/complete', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, newPassword: password }),
+        credentials: 'include',
+        body: JSON.stringify({ password }),
       })
-      const data: { success?: boolean; error?: string } = await res.json()
+      const data: { success?: boolean; error?: string; redirectTo?: string } = await res.json()
       if (!res.ok) throw new Error(data.error ?? 'Failed to update password.')
       sessionStorage.removeItem(RESET_STATE_KEY)
       setDone(true)
-      setTimeout(() => router.replace('/auth/login'), 2500)
+      setTimeout(() => window.location.replace(data.redirectTo || '/voter'), 2500)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to update password.')
     } finally {

@@ -23,7 +23,7 @@ export function getRedirectPathForRole(role: AppRole | null): string {
     return '/organizer'
   }
 
-  return '/vote'
+  return '/voter'
 }
 
 export async function getAuthenticatedUserRole(

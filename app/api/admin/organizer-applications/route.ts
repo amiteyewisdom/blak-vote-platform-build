@@ -26,14 +26,33 @@ export async function GET() {
 
   const { data, error } = await adminSupabase
     .from('organizer_applications')
-    .select('*')
-    .order('submitted_at', { ascending: false })
+    .select('id, user_id, organization_name, organization_id, address, phone_number, description, document_url, status, created_at, submitted_at, reviewed_at, company, bio, phone, email, id_number')
+    .order('created_at', { ascending: false })
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 
-  return NextResponse.json({ applications: data || [] })
+  const applications = await Promise.all(
+    (data || []).map(async (application) => {
+      let documentSignedUrl: string | null = null
+
+      if (application.document_url) {
+        const signed = await adminSupabase.storage
+          .from('organizer-documents')
+          .createSignedUrl(application.document_url, 10 * 60)
+
+        documentSignedUrl = signed.data?.signedUrl || null
+      }
+
+      return {
+        ...application,
+        document_signed_url: documentSignedUrl,
+      }
+    })
+  )
+
+  return NextResponse.json({ applications })
 }
 
 export async function POST(req: Request) {
@@ -77,13 +96,13 @@ export async function POST(req: Request) {
     const userId = app.user_id || null
 
     if (userId) {
-      await adminSupabase.from('users').update({ role: 'organizer' }).eq('id', userId)
+      await adminSupabase.from('users').update({ role: 'organizer', updated_at: new Date().toISOString() }).eq('id', userId)
 
       const organizerPayload = {
         user_id: userId,
-        business_name: app.company || 'Organizer',
-        business_description: app.bio || null,
-        mobile_money_number: app.phone || null,
+        business_name: app.organization_name || app.company || 'Organizer',
+        business_description: app.description || app.bio || null,
+        mobile_money_number: app.phone_number || app.phone || null,
         status: 'approved',
       }
 

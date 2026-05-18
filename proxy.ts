@@ -1,7 +1,6 @@
-import { createServerClient } from "@supabase/ssr";
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse, type NextRequest } from "next/server";
-import { getSupabaseBrowserConfig } from "./lib/supabase/client-config";
+import { ACCESS_COOKIE_NAME, REFRESH_COOKIE_NAME, type AccessTokenPayload, verifySessionToken } from "./lib/auth/session-token";
 import { applySecurityHeaders } from "./lib/server-security";
 
 function toLoginRedirect(req: NextRequest) {
@@ -12,43 +11,20 @@ function toLoginRedirect(req: NextRequest) {
 
 export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
-  const isProtectedRoute = pathname.startsWith("/admin") || pathname.startsWith("/organizer");
+  const isProtectedRoute = pathname.startsWith("/admin") || pathname.startsWith("/organizer") || pathname.startsWith("/voter");
   const isMaintenancePage = pathname === "/maintenance";
 
-  const config = getSupabaseBrowserConfig();
-
-  if (!config) {
-    if (isProtectedRoute) {
-      return toLoginRedirect(req);
-    }
-
-    return applySecurityHeaders(NextResponse.next());
-  }
-
-  const { url: supabaseUrl, publishableKey: supabaseKey } = config;
-
-  const res = NextResponse.next();
-
-  const supabase = createServerClient(supabaseUrl, supabaseKey, {
-    cookies: {
-      get(name: string) {
-        return req.cookies.get(name)?.value;
-      },
-      set(name: string, value: string, options) {
-        res.cookies.set({ name, value, ...options });
-      },
-      remove(name: string, options) {
-        res.cookies.set({ name, value: "", ...options });
-      },
-    },
-  });
-
+  const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SECRET_KEY;
   const adminSupabase = serviceRoleKey
-    ? createClient(supabaseUrl, serviceRoleKey)
+    ? createClient(supabaseUrl || '', serviceRoleKey)
     : null;
 
   let maintenanceMode = false;
+  const accessToken = req.cookies.get(ACCESS_COOKIE_NAME)?.value || null;
+  const refreshToken = req.cookies.get(REFRESH_COOKIE_NAME)?.value || null;
+  const tokenPayload = accessToken ? await verifySessionToken<AccessTokenPayload>(accessToken) : null;
+  const role = tokenPayload?.role ?? null;
 
   if (adminSupabase) {
     const { data: maintenanceSettings, error: maintenanceError } = await adminSupabase
@@ -60,32 +36,6 @@ export async function proxy(req: NextRequest) {
     if (!maintenanceError) {
       maintenanceMode = maintenanceSettings?.maintenance_mode === true;
     }
-  } else {
-    const { data: maintenanceSettings } = await supabase
-      .from("platform_settings")
-      .select("maintenance_mode")
-      .limit(1)
-      .maybeSingle();
-
-    maintenanceMode = maintenanceSettings?.maintenance_mode === true;
-  }
-
-  // Validate the authenticated user from the token instead of trusting cookie session presence alone.
-  const {
-    data: { user },
-    error: userError,
-  } = await supabase.auth.getUser();
-
-  let role: string | null = null;
-
-  if (!userError && user) {
-    const { data: dbUser } = await supabase
-      .from("users")
-      .select("role")
-      .eq("id", user.id)
-      .maybeSingle();
-
-    role = dbUser?.role ?? null;
   }
 
   if (maintenanceMode && role !== "admin" && !isMaintenancePage) {
@@ -97,26 +47,26 @@ export async function proxy(req: NextRequest) {
   }
 
   if (!isProtectedRoute) {
-    return applySecurityHeaders(res);
+    return applySecurityHeaders(NextResponse.next());
   }
 
-  if (userError || !user) {
+  if (!tokenPayload && !refreshToken) {
     return toLoginRedirect(req);
   }
 
-  if (!role) {
-    return toLoginRedirect(req);
+  if (pathname.startsWith("/admin") && role && role !== "admin") {
+    return applySecurityHeaders(NextResponse.redirect(new URL(role === 'organizer' ? '/organizer' : '/voter', req.url)));
   }
 
-  if (pathname.startsWith("/admin") && role !== "admin") {
-    return applySecurityHeaders(NextResponse.redirect(new URL("/", req.url)));
+  if (pathname.startsWith("/organizer") && role && role !== "organizer") {
+    return applySecurityHeaders(NextResponse.redirect(new URL(role === 'admin' ? '/admin' : '/voter', req.url)));
   }
 
-  if (pathname.startsWith("/organizer") && role !== "organizer") {
-    return applySecurityHeaders(NextResponse.redirect(new URL("/", req.url)));
+  if (pathname.startsWith("/voter") && role && role !== "voter") {
+    return applySecurityHeaders(NextResponse.redirect(new URL(role === 'admin' ? '/admin' : '/organizer', req.url)));
   }
 
-  return applySecurityHeaders(res);
+  return applySecurityHeaders(NextResponse.next());
 }
 
 export const config = {

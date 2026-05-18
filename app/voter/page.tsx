@@ -6,12 +6,12 @@ import { useRouter } from 'next/navigation'
 import OrganizerApplicationForm from '@/components/OrganizerApplicationForm'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
-import { supabase } from '@/lib/supabaseClient'
 import { BadgeCheck, ClipboardList, Vote, WalletCards } from 'lucide-react'
 
 type ApplicationStatus = {
   id: string
   status: string
+  created_at?: string | null
   submitted_at?: string | null
   reviewed_at?: string | null
 }
@@ -29,7 +29,9 @@ function StatusPanel({ application }: { application: ApplicationStatus | null })
     return null
   }
 
-  const submittedAt = application.submitted_at ? new Date(application.submitted_at).toLocaleString() : null
+  const submittedAt = (application.created_at || application.submitted_at)
+    ? new Date(application.created_at || application.submitted_at || '').toLocaleString()
+    : null
   const reviewedAt = application.reviewed_at ? new Date(application.reviewed_at).toLocaleString() : null
 
   if (application.status === 'pending') {
@@ -65,48 +67,33 @@ export default function VoterDashboardPage() {
 
   useEffect(() => {
     const loadDashboard = async () => {
-      const {
-        data: { user },
-        error: userError,
-      } = await supabase.auth.getUser()
+      try {
+        const res = await fetch('/api/voter/profile', { cache: 'no-store' })
+        const payload = await res.json()
 
-      if (userError || !user) {
-        router.replace('/auth/sign-in')
-        return
+        if (res.status === 401) {
+          router.replace('/auth/login')
+          return
+        }
+
+        if (res.status === 403 && payload?.redirectTo) {
+          window.location.href = payload.redirectTo
+          return
+        }
+
+        if (!res.ok || !payload?.profile) {
+          router.replace('/auth/login')
+          return
+        }
+
+        setProfile(payload.profile)
+        setApplication(payload.application ?? null)
+      } finally {
+        setLoading(false)
       }
-
-      const [{ data: profileData, error: profileError }, { data: appData }] = await Promise.all([
-        supabase.from('users').select('id, email, first_name, last_name, role').eq('id', user.id).maybeSingle(),
-        supabase
-          .from('organizer_applications')
-          .select('id, status, submitted_at, reviewed_at')
-          .eq('user_id', user.id)
-          .order('submitted_at', { ascending: false })
-          .limit(1)
-          .maybeSingle(),
-      ])
-
-      if (profileError || !profileData) {
-        router.replace('/auth/sign-in')
-        return
-      }
-
-      if (profileData.role === 'admin') {
-        window.location.href = '/admin'
-        return
-      }
-
-      if (profileData.role === 'organizer') {
-        window.location.href = '/organizer'
-        return
-      }
-
-      setProfile(profileData)
-      setApplication(appData ?? null)
-      setLoading(false)
     }
 
-    loadDashboard()
+    void loadDashboard()
   }, [router])
 
   if (loading) {

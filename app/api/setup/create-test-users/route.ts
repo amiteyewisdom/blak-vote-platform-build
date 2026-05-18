@@ -1,18 +1,7 @@
-import { createClient as createAdminSupabaseClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient as createServerClient } from '@/lib/supabase/server'
-
-// Admin client for creating users
-const getAdminClient = () => {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-
-  if (!url || !serviceKey) {
-    throw new Error('Missing Supabase environment variables')
-  }
-
-  return createAdminSupabaseClient(url, serviceKey)
-}
+import { requireRole } from '@/lib/api-auth'
+import { hashPassword } from '@/lib/auth/server-auth'
 
 export async function POST(request: NextRequest) {
   try {
@@ -22,27 +11,12 @@ export async function POST(request: NextRequest) {
     }
 
     const sessionClient = await createServerClient()
-
-    const {
-      data: { user },
-      error: authError,
-    } = await sessionClient.auth.getUser()
-
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const auth = await requireRole(sessionClient, ['admin'])
+    if (!auth.ok) {
+      return auth.response
     }
 
-    const { data: actor, error: actorError } = await sessionClient
-      .from('users')
-      .select('role')
-      .eq('id', user.id)
-      .maybeSingle()
-
-    if (actorError || actor?.role !== 'admin') {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-    }
-
-    const admin = getAdminClient()
+    const admin = sessionClient
 
     // Test users to create
     const testUsers = [
@@ -66,33 +40,30 @@ export async function POST(request: NextRequest) {
 
     for (const user of testUsers) {
       try {
-        // Create user in Supabase Auth
-        const { data: authUser, error: authError } = await admin.auth.admin.createUser({
-          email: user.email,
-          password: user.password,
-          email_confirm: true,
-        })
+        const passwordHash = await hashPassword(user.password)
+        const fullName = `${user.firstName} ${user.lastName}`.trim()
+        const { data: existingUser } = await admin
+          .from('users')
+          .select('id')
+          .eq('email', user.email)
+          .maybeSingle()
 
-        if (authError) {
-          results.push({
-            email: user.email,
-            success: false,
-            error: authError.message,
-          })
-          continue
+        const payload = {
+          email: user.email,
+          role: user.role,
+          full_name: fullName,
+          first_name: user.firstName,
+          last_name: user.lastName,
+          password_hash: passwordHash,
+          email_verified: true,
+          status: 'active',
         }
 
-        // Create user profile in database
-        const { error: dbError } = await admin
-          .from('users')
-          .insert({
-            id: authUser.user.id,
-            email: user.email,
-            role: user.role,
-            first_name: user.firstName,
-            last_name: user.lastName,
-            status: 'active',
-          })
+        const operation = existingUser?.id
+          ? admin.from('users').update(payload).eq('id', existingUser.id)
+          : admin.from('users').insert({ id: crypto.randomUUID(), ...payload })
+
+        const { error: dbError } = await operation
 
         if (dbError) {
           results.push({
@@ -106,7 +77,6 @@ export async function POST(request: NextRequest) {
         results.push({
           email: user.email,
           success: true,
-          userId: authUser.user.id,
           // Do not return plaintext credentials in API responses.
           password: '[REDACTED]',
         })

@@ -2,7 +2,6 @@
 
 import { useEffect, useState, type ReactNode } from 'react'
 import { usePathname } from 'next/navigation'
-import { supabase } from '@/lib/supabaseClient'
 import { Header } from '@/components/header'
 import { SidebarNav } from '@/components/sidebar-nav'
 import { BarChart3, Users, Settings, CreditCard, Calendar, FileCheck, ScrollText } from 'lucide-react'
@@ -15,11 +14,26 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const loadUser = async () => {
-      const { data } = await supabase.auth.getUser()
-      setUser(data.user ?? null)
-      setLoading(false)
+      try {
+        const res = await fetch('/api/auth/session', { cache: 'no-store' })
+        const payload = await res.json()
+
+        if (!res.ok || !payload?.authenticated) {
+          window.location.replace('/auth/login?redirectTo=%2Fadmin')
+          return
+        }
+
+        if (payload.user?.role !== 'admin') {
+          window.location.replace(payload.user?.role === 'organizer' ? '/organizer' : '/voter')
+          return
+        }
+
+        setUser(payload.user)
+      } finally {
+        setLoading(false)
+      }
     }
-    loadUser()
+    void loadUser()
   }, [])
 
   useEffect(() => {

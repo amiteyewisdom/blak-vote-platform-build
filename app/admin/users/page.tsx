@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { supabase } from '@/lib/supabaseClient'
 import { Search } from 'lucide-react'
 import { DSCard, DSInput, DSPrimaryButton, DSSecondaryButton, DSSelect } from '@/components/ui/design-system'
 
@@ -29,14 +28,12 @@ export default function AdminUsersPage() {
   }, [])
 
   const fetchUsers = async () => {
-    const { data } = await supabase
-      .from('users')
-      .select('*')
-      .order('created_at', { ascending: false })
+    const res = await fetch('/api/admin/users', { cache: 'no-store' })
+    const payload = await res.json().catch(() => ({}))
 
-    if (data) {
-      setUsers(data)
-      setFilteredUsers(data)
+    if (res.ok && Array.isArray(payload?.users)) {
+      setUsers(payload.users)
+      setFilteredUsers(payload.users)
     }
 
     await fetchOrganizerFees()
@@ -75,8 +72,12 @@ export default function AdminUsersPage() {
   }
 
   const updateRole = async (id: string, newRole: string) => {
-    await supabase.from('users').update({ role: newRole }).eq('id', id)
-    fetchUsers()
+    await fetch('/api/admin/users', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId: id, role: newRole }),
+    })
+    void fetchUsers()
   }
 
   const suspendOrganizer = async (organizerId: string) => {

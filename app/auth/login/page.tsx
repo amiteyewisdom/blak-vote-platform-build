@@ -1,53 +1,25 @@
 'use client'
 
-import { FormEvent, useState } from 'react'
+import { FormEvent, useMemo, useState } from 'react'
 import Link from 'next/link'
+import { useSearchParams } from 'next/navigation'
 import { AlertCircle, Eye, EyeOff, LogIn } from 'lucide-react'
 import BrandLogo from '@/components/BrandLogo'
 import { Button } from '@/components/ui/button'
 import { supabase } from '@/lib/supabaseClient'
 import { getAuthenticatedUserRole, getRedirectPathForRole } from '@/lib/auth/role-routing'
-import { SUPPORT_EMAIL_HREF } from '@/lib/support-contact'
-
-async function getLoginErrorMessage(email: string, error: unknown) {
-  const message = error instanceof Error ? error.message : 'Failed to sign in.'
-  const normalizedMessage = message.toLowerCase()
-
-  if (
-    normalizedMessage.includes('invalid login credentials') ||
-    normalizedMessage.includes('invalid credentials')
-  ) {
-    try {
-      const res = await fetch('/api/auth/login-diagnostics', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email }),
-      })
-
-      const data: { message?: string } = await res.json()
-      if (typeof data.message === 'string' && data.message.trim()) {
-        return data.message
-      }
-    } catch {
-      // Fall through to the generic credential error if diagnostics are unavailable.
-    }
-
-    return 'Email or password is incorrect. If you recently changed your password, try again or reset it.'
-  }
-
-  if (normalizedMessage.includes('email not confirmed')) {
-    return 'Your account is not ready for password sign-in yet. Reset your password or contact support for help.'
-  }
-
-  return message
-}
 
 export default function LoginPage() {
+  const searchParams = useSearchParams()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const redirectTo = useMemo(() => {
+    const candidate = searchParams.get('redirectTo')
+    return candidate && candidate.startsWith('/') ? candidate : null
+  }, [searchParams])
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -74,10 +46,10 @@ export default function LoginPage() {
       if (!user) throw new Error('Sign-in succeeded but no user account was returned.')
 
       const role = await getAuthenticatedUserRole(supabase, user)
-      const nextPath = getRedirectPathForRole(role)
+      const nextPath = redirectTo ?? getRedirectPathForRole(role)
       window.location.replace(nextPath)
     } catch (loginError) {
-      setError(await getLoginErrorMessage(normalizedEmail, loginError))
+      setError(loginError instanceof Error ? loginError.message : 'Failed to sign in.')
     } finally {
       setLoading(false)
     }
@@ -162,9 +134,7 @@ export default function LoginPage() {
 
         <div className="mt-8 text-center text-sm text-muted-foreground">
           Need an account?{' '}
-          <a href={SUPPORT_EMAIL_HREF} className="font-medium text-gold transition hover:opacity-80">
-            Contact us for setup
-          </a>
+          <Link href="/auth/signup" className="font-medium text-gold transition hover:opacity-80">Create one</Link>
         </div>
       </div>
     </div>

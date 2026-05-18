@@ -30,10 +30,10 @@ export default function ForgotPasswordPage() {
 
     setLoading(true)
     try {
-      const res = await fetch('/api/send-otp', {
+      const res = await fetch('/api/auth/password-reset/request', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: normalizedEmail, type: 'reset' }),
+        body: JSON.stringify({ email: normalizedEmail }),
       })
       const data: { success?: boolean; error?: string } = await res.json()
       if (!res.ok) throw new Error(data.error ?? 'Failed to send reset code.')
