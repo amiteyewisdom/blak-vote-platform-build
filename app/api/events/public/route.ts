@@ -128,24 +128,45 @@ async function fetchCandidatesForPublicEvent(supabase: any, eventId: string) {
 
   const withCategory = await supabase
     .from('nominations')
-    .select('id, nominee_name, bio, photo_url, voting_code, short_code, vote_count, category_id, status')
+    .select('*')
     .eq('event_id', eventId)
     .in('status', publicNominationStatuses)
     .order('vote_count', { ascending: false })
 
   if (!withCategory.error) {
-    return { data: withCategory.data ?? [], error: null }
+    const normalized = (withCategory.data ?? []).map((row: any) => ({
+      id: row.id,
+      nominee_name: row.nominee_name ?? row.name ?? null,
+      bio: row.bio ?? null,
+      photo_url: row.photo_url ?? row.image_url ?? row.nominee_image_url ?? null,
+      voting_code: row.voting_code ?? null,
+      short_code: row.short_code ?? null,
+      vote_count: row.vote_count ?? 0,
+      category_id: row.category_id ?? null,
+      status: row.status ?? null,
+    }))
+    return { data: normalized, error: null }
   }
 
   const withoutCategory = await supabase
     .from('nominations')
-    .select('id, nominee_name, bio, photo_url, voting_code, short_code, vote_count, status')
+    .select('*')
     .eq('event_id', eventId)
     .in('status', publicNominationStatuses)
     .order('vote_count', { ascending: false })
 
   if (!withoutCategory.error) {
-    const normalized = (withoutCategory.data ?? []).map((row: any) => ({ ...row, category_id: null }))
+    const normalized = (withoutCategory.data ?? []).map((row: any) => ({
+      id: row.id,
+      nominee_name: row.nominee_name ?? row.name ?? null,
+      bio: row.bio ?? null,
+      photo_url: row.photo_url ?? row.image_url ?? row.nominee_image_url ?? null,
+      voting_code: row.voting_code ?? null,
+      short_code: row.short_code ?? null,
+      vote_count: row.vote_count ?? 0,
+      category_id: null,
+      status: row.status ?? null,
+    }))
     return { data: normalized, error: null }
   }
 

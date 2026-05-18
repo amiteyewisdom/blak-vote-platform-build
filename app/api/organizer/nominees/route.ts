@@ -42,7 +42,16 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: categoriesError?.message || nomineesError?.message || 'Failed to load nominees' }, { status: 500 })
   }
 
-  return NextResponse.json({ categories: categories ?? [], nominees: nominees ?? [] })
+  const normalizedNominees = (nominees ?? []).map((nominee: Record<string, any>) => ({
+    ...nominee,
+    photo_url:
+      nominee.photo_url ??
+      nominee.image_url ??
+      nominee.nominee_image_url ??
+      null,
+  }))
+
+  return NextResponse.json({ categories: categories ?? [], nominees: normalizedNominees })
 }
 
 export async function POST(request: Request) {
@@ -100,6 +109,48 @@ export async function POST(request: Request) {
       category_id: categoryId,
       photo_url: photoUrl,
       vote_count: 0,
+      nominated_by_user_id: auth.userId,
+      status: 'approved',
+    },
+    {
+      event_id: eventId,
+      nominee_name: nomineeName,
+      nominee_email: null,
+      nominee_phone: null,
+      bio: bio || null,
+      category_id: categoryId,
+      image_url: photoUrl,
+      vote_count: 0,
+      nominated_by_user_id: auth.userId,
+      status: 'candidate',
+    },
+    {
+      event_id: eventId,
+      nominee_name: nomineeName,
+      nominee_email: null,
+      nominee_phone: null,
+      bio: bio || null,
+      category_id: categoryId,
+      image_url: photoUrl,
+      vote_count: 0,
+      nominated_by_user_id: auth.userId,
+      status: 'approved',
+    },
+    {
+      event_id: eventId,
+      nominee_name: nomineeName,
+      bio: bio || null,
+      category_id: categoryId,
+      image_url: photoUrl,
+      nominated_by_user_id: auth.userId,
+      status: 'candidate',
+    },
+    {
+      event_id: eventId,
+      nominee_name: nomineeName,
+      bio: bio || null,
+      category_id: categoryId,
+      image_url: photoUrl,
       nominated_by_user_id: auth.userId,
       status: 'approved',
     },
