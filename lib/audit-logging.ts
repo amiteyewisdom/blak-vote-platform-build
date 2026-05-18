@@ -23,6 +23,8 @@ interface AuditSummaryRow {
   action: string
 }
 
+let auditWritesDisabled = false
+
 function getErrorMessage(error: unknown): string {
   if (error && typeof error === 'object' && 'message' in error && typeof (error as { message?: unknown }).message === 'string') {
     return (error as { message: string }).message
@@ -33,6 +35,14 @@ function getErrorMessage(error: unknown): string {
 
 function isMissingColumn(error: unknown, column: string): boolean {
   return getErrorMessage(error).toLowerCase().includes(`could not find the '${column.toLowerCase()}' column`)
+}
+
+function isStackDepthError(error: unknown): boolean {
+  return getErrorMessage(error).toLowerCase().includes('stack depth limit exceeded')
+}
+
+function isSchemaCacheColumnError(error: unknown): boolean {
+  return getErrorMessage(error).toLowerCase().includes("could not find the '")
 }
 
 const SUSPICIOUS_PATTERNS = {
@@ -79,48 +89,86 @@ function getPaymentFailurePattern(reason: string): SuspiciousPatternKey | null {
  * Log a security audit event
  */
 export async function logAudit(log: AuditLog): Promise<void> {
-  const supabase = getSupabaseAdminClient()
-  const basePayload = {
-    action: log.action,
-    user_id: log.user_id,
-    ip_address: log.ip_address,
-    details: {
-      ...log.details,
-      severity: log.severity,
-    },
+  if (auditWritesDisabled) {
+    return
   }
 
+  const supabase = getSupabaseAdminClient()
+  const corePayload = {
+    action: log.action,
+  }
+  const enrichedDetails = {
+    ...log.details,
+    severity: log.severity,
+  }
+
+  const variants: Array<Record<string, unknown>> = [
+    {
+      ...corePayload,
+      user_id: log.user_id,
+      ip_address: log.ip_address,
+      details: enrichedDetails,
+      timestamp: log.timestamp || new Date().toISOString(),
+    },
+    {
+      ...corePayload,
+      user_id: log.user_id,
+      ip_address: log.ip_address,
+      details: enrichedDetails,
+    },
+    {
+      ...corePayload,
+      ip_address: log.ip_address,
+      details: enrichedDetails,
+    },
+    {
+      ...corePayload,
+      details: enrichedDetails,
+    },
+    {
+      ...corePayload,
+    },
+  ]
+
   try {
-    let { error } = await supabase
-      .from('audit_logs')
-      .insert({
-        ...basePayload,
-        timestamp: log.timestamp || new Date().toISOString(),
-      })
-
-    if (error && isMissingColumn(error, 'timestamp')) {
-      const retry = await supabase
+    for (const payload of variants) {
+      const { error } = await supabase
         .from('audit_logs')
-        .insert(basePayload)
+        .insert(payload)
 
-      error = retry.error
-    }
+      if (!error) {
+        // If critical, log to console as well
+        if (log.severity === 'critical') {
+          console.error('[AUDIT_CRITICAL]', {
+            action: log.action,
+            user_id: log.user_id,
+            ip_address: log.ip_address,
+            details: log.details,
+          })
+        }
+        return
+      }
 
-    if (error) {
+      if (isStackDepthError(error) || isSchemaCacheColumnError(error)) {
+        if (isStackDepthError(error)) {
+          auditWritesDisabled = true
+        }
+        continue
+      }
+
       console.error('[AUDIT_LOG_ERROR]', error.message)
       return
     }
 
-    // If critical, log to console as well
-    if (log.severity === 'critical') {
-      console.error('[AUDIT_CRITICAL]', {
-        action: log.action,
-        user_id: log.user_id,
-        ip_address: log.ip_address,
-        details: log.details,
-      })
+    if (!auditWritesDisabled) {
+      console.error('[AUDIT_LOG_ERROR]', 'Failed to write audit log with available schema-compatible payloads.')
+    } else {
+      console.error('[AUDIT_LOG_ERROR]', 'Audit log writes disabled due to database stack depth errors.')
     }
   } catch (error) {
+    if (isStackDepthError(error)) {
+      auditWritesDisabled = true
+    }
     console.error('[AUDIT_LOG_ERROR]', error)
   }
 }
@@ -142,26 +190,41 @@ export async function checkSuspiciousActivity(
 
   const supabase = getSupabaseAdminClient()
 
-  const query = supabase
+  const { data, error } = await supabase
     .from('audit_logs')
-    .select('id')
+    .select('*')
     .eq('action', pattern)
-    .gte('created_at', since)
-
-  if (userId) {
-    query.eq('user_id', userId)
-  } else if (ipAddress) {
-    query.eq('ip_address', ipAddress)
-  }
-
-  const { data, error } = await query
+    .limit(500)
 
   if (error) {
     console.error('[SUSPICIOUS_ACTIVITY_CHECK_ERROR]', error)
     return null
   }
 
-  const count = data?.length || 0
+  const count = (data || []).filter((row) => {
+    const rowUserId = typeof row.user_id === 'string' ? row.user_id : null
+    const rowIpAddress = typeof row.ip_address === 'string' ? row.ip_address : null
+    const rowTimestamp =
+      typeof row.timestamp === 'string'
+        ? row.timestamp
+        : typeof row.created_at === 'string'
+        ? row.created_at
+        : null
+
+    if (!rowTimestamp || rowTimestamp < since) {
+      return false
+    }
+
+    if (userId) {
+      return rowUserId === userId
+    }
+
+    if (ipAddress) {
+      return rowIpAddress === ipAddress
+    }
+
+    return true
+  }).length
   const flagged = count >= patternConfig.threshold
 
   const activity: SuspiciousActivity = {
@@ -213,16 +276,6 @@ export async function getRecentAuditLogs(
   if (filter?.action) {
     query = query.eq('action', filter.action)
   }
-  if (filter?.severity) {
-    query = query.eq('severity', filter.severity)
-  }
-  if (filter?.userId) {
-    query = query.eq('user_id', filter.userId)
-  }
-  if (filter?.ipAddress) {
-    query = query.eq('ip_address', filter.ipAddress)
-  }
-
   let { data, error } = await query
 
   if (error && isMissingColumn(error, 'timestamp')) {
@@ -235,15 +288,6 @@ export async function getRecentAuditLogs(
     if (filter?.action) {
       fallbackQuery = fallbackQuery.eq('action', filter.action)
     }
-    if (filter?.severity) {
-      fallbackQuery = fallbackQuery.contains('details', { severity: filter.severity })
-    }
-    if (filter?.userId) {
-      fallbackQuery = fallbackQuery.eq('user_id', filter.userId)
-    }
-    if (filter?.ipAddress) {
-      fallbackQuery = fallbackQuery.eq('ip_address', filter.ipAddress)
-    }
 
     const fallbackResult = await fallbackQuery
     data = fallbackResult.data
@@ -255,7 +299,36 @@ export async function getRecentAuditLogs(
     return []
   }
 
-  return data || []
+  const filtered = (data || []).filter((row) => {
+    if (filter?.severity) {
+      const rowSeverity =
+        typeof row.severity === 'string'
+          ? row.severity
+          : row.details && typeof row.details === 'object' && typeof row.details.severity === 'string'
+          ? row.details.severity
+          : null
+
+      if (rowSeverity !== filter.severity) {
+        return false
+      }
+    }
+
+    if (filter?.userId) {
+      if (row.user_id !== filter.userId) {
+        return false
+      }
+    }
+
+    if (filter?.ipAddress) {
+      if (row.ip_address !== filter.ipAddress) {
+        return false
+      }
+    }
+
+    return true
+  })
+
+  return filtered
 }
 
 /**
