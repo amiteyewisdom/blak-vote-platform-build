@@ -1,13 +1,14 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useParams } from 'next/navigation'
+import { useParams, useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
 import { resolveEventVotePrice } from '@/lib/event-pricing'
 import { isVotingOpenStatus } from '@/lib/event-status'
 import { Vote, Users, Trophy, Heart, Calendar, Clock, Sparkles, ArrowLeft, ChevronDown, ChevronRight } from 'lucide-react'
 import Link from 'next/link'
 import { useToast } from '@/hooks/use-toast'
+import { useIsMobile } from '@/hooks/use-mobile'
 
 interface BulkVotePackage {
   id: string
@@ -18,7 +19,9 @@ interface BulkVotePackage {
 
 export default function EventPage() {
   const params = useParams()
+  const router = useRouter()
   const eventCode = params?.eventId as string
+  const isMobile = useIsMobile()
 
   const [event, setEvent] = useState<any>(null)
   const [candidates, setCandidates] = useState<any[]>([])
@@ -501,7 +504,13 @@ export default function EventPage() {
                               ? 'border-[hsl(var(--gold))]/70 bg-[hsl(var(--gold))]/8 shadow-lg shadow-[hsl(var(--gold))]/15 scale-[1.01]'
                               : 'border-white/8 hover:border-[hsl(var(--gold))]/40 hover:bg-[hsl(var(--gold))]/5'
                           }`}
-                          onClick={() => setSelectedCandidate(candidate.id)}
+                          onClick={() => {
+                            if (isMobile) {
+                              router.push(`/events/${encodeURIComponent(eventCode)}/vote/${encodeURIComponent(candidate.id)}`)
+                              return
+                            }
+                            setSelectedCandidate(candidate.id)
+                          }}
                           style={{ animationDelay: `${index * 30}ms` }}
                         >
                           <div className="flex items-start justify-between gap-4">

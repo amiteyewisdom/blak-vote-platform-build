@@ -18,7 +18,7 @@ function getSupabase() {
 
 const organizerApplicationSchema = z.object({
   organization_name: z.string().trim().min(2),
-  organization_id: z.string().trim().min(3),
+  organization_id: z.string().trim().min(3).optional().or(z.literal('')),
   address: z.string().trim().min(5),
   phone_number: z.string().trim().min(7),
   description: z.string().trim().min(10),
@@ -78,6 +78,9 @@ export async function POST(req: Request) {
     }
 
     const { organization_name, organization_id, address, phone_number, description } = parseResult.data;
+    const normalizedOrganizationId = typeof organization_id === 'string' && organization_id.trim().length > 0
+      ? organization_id.trim()
+      : null;
 
     const { data: existing } = await supabase
       .from('organizer_applications')
@@ -107,7 +110,7 @@ export async function POST(req: Request) {
     const insertResult = await supabase.from('organizer_applications').insert({
       user_id: auth.userId,
       organization_name,
-      organization_id,
+      organization_id: normalizedOrganizationId,
       address,
       phone_number,
       description,
@@ -119,7 +122,8 @@ export async function POST(req: Request) {
       bio: description,
       phone: phone_number,
       email: dbUser.email,
-      id_number: organization_id,
+      id_type: 'Ghana Card or Voter ID',
+      id_number: normalizedOrganizationId,
     });
 
     if (insertResult.error) {

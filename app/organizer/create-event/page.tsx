@@ -114,7 +114,7 @@ export default function CreateEventPage() {
         startDate: form.startDate,
         endDate: form.endDate,
         imageUrl,
-        votingType: form.votingType,
+        votingType: form.votingType === 'social' ? 'free' : form.votingType,
         costPerVote:
           form.votingType === 'paid'
             ? Number(form.costPerVote)
@@ -233,24 +233,30 @@ export default function CreateEventPage() {
           />
 
           {/* Dates */}
-          <div className="grid grid-cols-2 gap-4">
-            <DSInput
-              type="date"
-              onChange={(e) =>
-                update('startDate', e.target.value)
-              }
-            />
-            <DSInput
-              type="date"
-              onChange={(e) =>
-                update('endDate', e.target.value)
-              }
-            />
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <label className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Inscription start date</label>
+              <DSInput
+                type="date"
+                onChange={(e) =>
+                  update('startDate', e.target.value)
+                }
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Inscription end date</label>
+              <DSInput
+                type="date"
+                onChange={(e) =>
+                  update('endDate', e.target.value)
+                }
+              />
+            </div>
           </div>
 
           {/* Voting Type */}
           <div className="flex gap-4">
-            {['paid', 'social'].map((type) => (
+            {['paid', 'free'].map((type) => (
               <Button
                 key={type}
                 type="button"
@@ -266,7 +272,7 @@ export default function CreateEventPage() {
               >
                 {type === 'paid'
                   ? 'Paid Voting'
-                  : 'Social Voting'}
+                  : 'Free Voting'}
               </Button>
             ))}
           </div>

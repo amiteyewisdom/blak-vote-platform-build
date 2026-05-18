@@ -12,12 +12,12 @@ export default function OrganizerApplicationForm({ successHref = '/voter' }: Org
   const router = useRouter();
   const { toast } = useToast();
   const [organizationName, setOrganizationName] = useState('');
-  const [organizationId, setOrganizationId] = useState('');
   const [address, setAddress] = useState('');
   const [description, setDescription] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
   const [documentFile, setDocumentFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -35,7 +35,6 @@ export default function OrganizerApplicationForm({ successHref = '/voter' }: Org
 
     const body = new FormData();
     body.set('organizationName', organizationName);
-    body.set('organizationId', organizationId);
     body.set('address', address);
     body.set('description', description);
     body.set('phoneNumber', phoneNumber);
@@ -59,8 +58,27 @@ export default function OrganizerApplicationForm({ successHref = '/voter' }: Org
     }
 
     toast({ title: 'Application submitted', description: 'Your application will be reviewed by admin.' });
-    router.push(successHref);
+    setSubmitted(true);
+    router.refresh();
   };
+
+  if (submitted) {
+    return (
+      <div className="mx-auto mt-10 max-w-lg rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-6 shadow-lg">
+        <h2 className="text-2xl font-bold text-foreground">Application Submitted</h2>
+        <p className="mt-3 text-sm text-foreground/80">
+          Done. Your organizer application has been sent for admin review.
+        </p>
+        <button
+          type="button"
+          onClick={() => router.push(successHref)}
+          className="mt-5 w-full rounded-xl bg-gradient-to-br from-gold to-gold-deep py-3 font-semibold text-gold-foreground transition-all duration-200 hover:brightness-110"
+        >
+          Back to Dashboard
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="mx-auto mt-10 max-w-lg rounded-2xl border border-border bg-card p-6 shadow-lg">
@@ -72,14 +90,6 @@ export default function OrganizerApplicationForm({ successHref = '/voter' }: Org
           placeholder="Organization Name"
           value={organizationName}
           onChange={e => setOrganizationName(e.target.value)}
-          required
-        />
-        <input
-          className="w-full rounded-xl border border-input bg-background p-2 text-foreground placeholder:text-muted-foreground"
-          type="text"
-          placeholder="Organization ID / Registration Number"
-          value={organizationId}
-          onChange={e => setOrganizationId(e.target.value)}
           required
         />
         <input
@@ -106,7 +116,7 @@ export default function OrganizerApplicationForm({ successHref = '/voter' }: Org
           required
         />
         <div className="space-y-2">
-          <label className="text-sm font-medium text-foreground">Supporting Document</label>
+          <label className="text-sm font-medium text-foreground">Supporting Document (Ghana Card or Voter ID)</label>
           <input
             className="w-full rounded-xl border border-input bg-background p-2 text-foreground placeholder:text-muted-foreground"
             type="file"
@@ -114,7 +124,7 @@ export default function OrganizerApplicationForm({ successHref = '/voter' }: Org
             onChange={e => setDocumentFile(e.target.files?.[0] ?? null)}
             required
           />
-          <p className="text-xs text-muted-foreground">Accepted: PDF, JPG, PNG, WEBP up to 5MB.</p>
+          <p className="text-xs text-muted-foreground">Upload Ghana Card or Voter ID as PDF, JPG, PNG, or WEBP (max 5MB).</p>
         </div>
         <button
           type="submit"

@@ -42,18 +42,41 @@ export async function POST(req: Request) {
   }
 
   const adminSupabase = getSupabaseAdminClient()
+  let resolvedOrganizerUserId = organizerUserId
+
+  const { data: userRow } = await adminSupabase
+    .from('users')
+    .select('id')
+    .eq('id', organizerUserId)
+    .maybeSingle()
+
+  if (!userRow?.id) {
+    const { data: organizerRow } = await adminSupabase
+      .from('organizers')
+      .select('user_id')
+      .eq('id', organizerUserId)
+      .maybeSingle()
+
+    if (organizerRow?.user_id) {
+      resolvedOrganizerUserId = organizerRow.user_id
+    }
+  }
+
+  if (!resolvedOrganizerUserId) {
+    return NextResponse.json({ error: 'Invalid organizer user id' }, { status: 400 })
+  }
 
   if (rawPercent === null || rawPercent === undefined || rawPercent === '') {
     const { error: deleteError } = await adminSupabase
       .from('organizer_fee_overrides')
       .delete()
-      .eq('organizer_user_id', organizerUserId)
+      .eq('organizer_user_id', resolvedOrganizerUserId)
 
     if (deleteError) {
       return NextResponse.json({ error: deleteError.message }, { status: 500 })
     }
 
-    return NextResponse.json({ success: true, organizerUserId, platformFeePercent: null })
+    return NextResponse.json({ success: true, organizerUserId: resolvedOrganizerUserId, platformFeePercent: null })
   }
 
   const platformFeePercent = Number(rawPercent)
@@ -65,7 +88,7 @@ export async function POST(req: Request) {
     .from('organizer_fee_overrides')
     .upsert(
       {
-        organizer_user_id: organizerUserId,
+        organizer_user_id: resolvedOrganizerUserId,
         platform_fee_percent: Number(platformFeePercent.toFixed(2)),
         updated_by_user_id: auth.userId,
         updated_at: new Date().toISOString(),
