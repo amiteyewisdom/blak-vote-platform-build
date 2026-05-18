@@ -4,6 +4,7 @@ import {
   buildClientSession,
   getUserRecordByEmail,
   logAuthEvent,
+  migrateLegacyPasswordLogin,
   normalizeEmail,
   startUserSession,
   verifyPassword,
@@ -58,7 +59,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const userRecord = await getUserRecordByEmail(email)
+    let userRecord = await getUserRecordByEmail(email)
     if (!userRecord) {
       await logAuthEvent({
         action: 'AUTH_LOGIN_FAILED',
@@ -78,6 +79,21 @@ export async function POST(request: NextRequest) {
         details: { reason: 'inactive_user', email, status: userRecord.status },
       })
       return jsonNoStore({ error: 'This account is currently unavailable.' }, { status: 403 })
+    }
+
+    if (!userRecord.password_hash) {
+      const migratedUser = await migrateLegacyPasswordLogin(userRecord, password)
+
+      if (migratedUser?.password_hash) {
+        userRecord = migratedUser
+
+        await logAuthEvent({
+          action: 'AUTH_LOGIN_LEGACY_PASSWORD_MIGRATED',
+          userId: userRecord.id,
+          ipAddress,
+          details: { email },
+        })
+      }
     }
 
     if (!userRecord.password_hash) {

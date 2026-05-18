@@ -1,6 +1,7 @@
 import 'server-only'
 
 import bcrypt from 'bcrypt'
+import { createClient } from '@supabase/supabase-js'
 import {
   createCipheriv,
   createDecipheriv,
@@ -239,6 +240,25 @@ export async function hashPassword(password: string) {
 
 export async function verifyPassword(password: string, passwordHash: string) {
   return bcrypt.compare(password, passwordHash)
+}
+
+function getSupabasePublishableClient() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const publishableKey =
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+
+  if (!url || !publishableKey) {
+    return null
+  }
+
+  return createClient(url, publishableKey, {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+      detectSessionInUrl: false,
+    },
+  })
 }
 
 export async function clearAuthCookies(response: NextResponse) {
@@ -621,6 +641,29 @@ export async function updatePasswordForUser(userId: string, newPassword: string)
   if (error) {
     throw new Error(error.message)
   }
+}
+
+export async function migrateLegacyPasswordLogin(userRecord: UserRow, password: string) {
+  const supabase = getSupabasePublishableClient()
+  if (!supabase) {
+    return null
+  }
+
+  const { data, error } = await supabase.auth.signInWithPassword({
+    email: normalizeEmail(userRecord.email),
+    password,
+  })
+
+  if (error || !data.user) {
+    return null
+  }
+
+  if (typeof data.user.email !== 'string' || normalizeEmail(data.user.email) !== normalizeEmail(userRecord.email)) {
+    return null
+  }
+
+  await updatePasswordForUser(userRecord.id, password)
+  return getUserRecordByEmail(userRecord.email)
 }
 
 export async function setResetCookie(response: NextResponse, email: string, otpId: string) {

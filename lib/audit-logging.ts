@@ -21,7 +21,6 @@ export interface SuspiciousActivity {
 
 interface AuditSummaryRow {
   action: string
-  severity: AuditLog['severity']
 }
 
 const SUSPICIOUS_PATTERNS = {
@@ -74,7 +73,13 @@ export async function logAudit(log: AuditLog): Promise<void> {
     const { error } = await supabase
       .from('audit_logs')
       .insert({
-        ...log,
+        action: log.action,
+        user_id: log.user_id,
+        ip_address: log.ip_address,
+        details: {
+          ...log.details,
+          severity: log.severity,
+        },
         timestamp: log.timestamp || new Date().toISOString(),
       })
 
@@ -215,8 +220,7 @@ export async function getSuspiciousActivitySummary() {
 
   const { data, error } = await supabase
     .from('audit_logs')
-    .select('action, severity')
-    .eq('severity', 'critical')
+    .select('action')
     .gte('timestamp', since)
 
   if (error) {
