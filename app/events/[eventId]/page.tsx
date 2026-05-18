@@ -65,7 +65,7 @@ export default function EventPage() {
 
   const fetchEventData = async () => {
     try {
-      const res = await fetch(`/api/events/public?code=${eventCode}`)
+      const res = await fetch(`/api/events/public?code=${eventCode}`, { cache: 'no-store' })
       const data = await res.json()
 
       if (!res.ok || !data.event) {

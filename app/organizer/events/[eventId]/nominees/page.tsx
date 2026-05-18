@@ -30,7 +30,7 @@ export default function NomineesPage() {
   }, [eventId])
 
   const fetchData = async () => {
-    const res = await fetch(`/api/organizer/nominees?eventId=${eventId}`)
+    const res = await fetch(`/api/organizer/nominees?eventId=${eventId}`, { cache: 'no-store' })
     const payload = await res.json()
 
     if (!res.ok) {

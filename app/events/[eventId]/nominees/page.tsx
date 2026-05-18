@@ -34,7 +34,7 @@ export default function PublicNomineesPage() {
 
     const fetchData = async () => {
       try {
-        const res = await fetch(`/api/events/public?code=${eventCode}`)
+        const res = await fetch(`/api/events/public?code=${eventCode}`, { cache: 'no-store' })
         const payload = await res.json()
 
         if (!res.ok || !payload?.event) {

@@ -15,6 +15,27 @@ type PublicCandidate = {
   category_id?: string | null
 }
 
+function resolveNomineePhotoUrl(candidate: Record<string, any>): string | null {
+  const imageCandidates = [
+    candidate.photo_url,
+    candidate.image_url,
+    candidate.nominee_image_url,
+    candidate.nominee_photo_url,
+    candidate.nominee_photo,
+    candidate.photo,
+    candidate.image,
+    candidate.avatar_url,
+  ]
+
+  for (const value of imageCandidates) {
+    if (typeof value === 'string' && value.trim()) {
+      return value
+    }
+  }
+
+  return null
+}
+
 export async function GET(request: NextRequest) {
   try {
     const supabase = getSupabaseAdminClient()
@@ -138,7 +159,7 @@ async function fetchCandidatesForPublicEvent(supabase: any, eventId: string) {
       id: row.id,
       nominee_name: row.nominee_name ?? row.name ?? null,
       bio: row.bio ?? null,
-      photo_url: row.photo_url ?? row.image_url ?? row.nominee_image_url ?? null,
+      photo_url: resolveNomineePhotoUrl(row),
       voting_code: row.voting_code ?? null,
       short_code: row.short_code ?? null,
       vote_count: row.vote_count ?? 0,
@@ -160,7 +181,7 @@ async function fetchCandidatesForPublicEvent(supabase: any, eventId: string) {
       id: row.id,
       nominee_name: row.nominee_name ?? row.name ?? null,
       bio: row.bio ?? null,
-      photo_url: row.photo_url ?? row.image_url ?? row.nominee_image_url ?? null,
+      photo_url: resolveNomineePhotoUrl(row),
       voting_code: row.voting_code ?? null,
       short_code: row.short_code ?? null,
       vote_count: row.vote_count ?? 0,

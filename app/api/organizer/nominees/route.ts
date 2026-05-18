@@ -8,6 +8,27 @@ function isInvalidId(value: unknown): boolean {
   return !normalized || normalized === 'undefined' || normalized === 'null'
 }
 
+function resolveNomineePhotoUrl(nominee: Record<string, any>): string | null {
+  const candidates = [
+    nominee.photo_url,
+    nominee.image_url,
+    nominee.nominee_image_url,
+    nominee.nominee_photo_url,
+    nominee.nominee_photo,
+    nominee.photo,
+    nominee.image,
+    nominee.avatar_url,
+  ]
+
+  for (const value of candidates) {
+    if (typeof value === 'string' && value.trim()) {
+      return value
+    }
+  }
+
+  return null
+}
+
 export async function GET(request: Request) {
   const sessionClient = await createServerClient()
   const auth = await requireRole(sessionClient, ['organizer', 'admin'])
@@ -44,11 +65,7 @@ export async function GET(request: Request) {
 
   const normalizedNominees = (nominees ?? []).map((nominee: Record<string, any>) => ({
     ...nominee,
-    photo_url:
-      nominee.photo_url ??
-      nominee.image_url ??
-      nominee.nominee_image_url ??
-      null,
+    photo_url: resolveNomineePhotoUrl(nominee),
   }))
 
   return NextResponse.json({ categories: categories ?? [], nominees: normalizedNominees })
@@ -109,6 +126,48 @@ export async function POST(request: Request) {
       category_id: categoryId,
       photo_url: photoUrl,
       vote_count: 0,
+      nominated_by_user_id: auth.userId,
+      status: 'approved',
+    },
+    {
+      event_id: eventId,
+      nominee_name: nomineeName,
+      nominee_email: null,
+      nominee_phone: null,
+      bio: bio || null,
+      category_id: categoryId,
+      nominee_photo_url: photoUrl,
+      vote_count: 0,
+      nominated_by_user_id: auth.userId,
+      status: 'candidate',
+    },
+    {
+      event_id: eventId,
+      nominee_name: nomineeName,
+      nominee_email: null,
+      nominee_phone: null,
+      bio: bio || null,
+      category_id: categoryId,
+      nominee_photo_url: photoUrl,
+      vote_count: 0,
+      nominated_by_user_id: auth.userId,
+      status: 'approved',
+    },
+    {
+      event_id: eventId,
+      nominee_name: nomineeName,
+      bio: bio || null,
+      category_id: categoryId,
+      nominee_photo_url: photoUrl,
+      nominated_by_user_id: auth.userId,
+      status: 'candidate',
+    },
+    {
+      event_id: eventId,
+      nominee_name: nomineeName,
+      bio: bio || null,
+      category_id: categoryId,
+      nominee_photo_url: photoUrl,
       nominated_by_user_id: auth.userId,
       status: 'approved',
     },
