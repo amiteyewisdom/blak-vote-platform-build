@@ -1,35 +1,61 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { requireRole } from '@/lib/api-auth'
+import { getOrganizerEventEarningsData, resolveOrganizerRefs } from '@/lib/organizer-wallet'
+import { getSupabaseAdminClient } from '@/lib/server-security'
 
 export async function GET() {
   try {
     const supabase = await createClient()
+    const adminSupabase = getSupabaseAdminClient()
     const auth = await requireRole(supabase, ['organizer'])
     if (!auth.ok) {
       return auth.response
     }
 
-    const { data: organizerRecord } = await supabase
-      .from('organizers')
-      .select('id')
-      .eq('user_id', auth.userId)
-      .maybeSingle()
+    const refs = await resolveOrganizerRefs(adminSupabase, auth.userId)
 
-    const organizerIds = organizerRecord?.id ? [auth.userId, organizerRecord.id] : [auth.userId]
+    const [eventEarnings, eventRowsResult] = await Promise.all([
+      getOrganizerEventEarningsData(adminSupabase, auth.userId),
+      adminSupabase
+        .from('events')
+        .select('id, title, description, status, start_date, end_date, image_url, is_active, created_at')
+        .in('organizer_id', refs.aliases)
+        .neq('status', 'deleted')
+        .order('created_at', { ascending: false }),
+    ])
 
-    const { data, error } = await supabase
-      .from('events')
-      .select('id, title, description, status, total_revenue, start_date, end_date, image_url, is_active')
-      .in('organizer_id', organizerIds)
-      .neq('status', 'deleted')
-      .order('created_at', { ascending: false })
+    const { data: eventRows, error } = eventRowsResult
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
-    return NextResponse.json({ events: data || [] })
+    const earningMap = new Map(
+      eventEarnings.map((earning: Record<string, unknown>) => [String(earning.event_id || ''), earning])
+    )
+
+    const events = (eventRows || []).map((event: Record<string, unknown>) => {
+      const eventId = String(event.id || '')
+      const earning = earningMap.get(eventId)
+
+      return {
+        id: eventId,
+        title: String(event.title || ''),
+        description: String(event.description || ''),
+        status: String(event.status || ''),
+        start_date: event.start_date || null,
+        end_date: event.end_date || null,
+        image_url: event.image_url || null,
+        is_active: Boolean(event.is_active),
+        total_revenue: Number(earning?.total_revenue || 0),
+        net_revenue: Number(earning?.net_earnings || 0),
+        revenue_left: Number(earning?.revenue_left || 0),
+        cashed_out_amount: Number(earning?.cashed_out_amount || 0),
+      }
+    })
+
+    return NextResponse.json({ events })
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : 'Failed to load organizer dashboard' }, { status: 500 })
   }

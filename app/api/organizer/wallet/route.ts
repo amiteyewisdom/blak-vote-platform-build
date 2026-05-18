@@ -50,9 +50,16 @@ export async function GET(request: NextRequest) {
 
     const wallet = await getOrganizerWalletSummaryData(adminSupabase, auth.userId)
 
+    const {
+      platform_fees_deducted: _platformFeesDeducted,
+      vote_platform_fees_deducted: _votePlatformFeesDeducted,
+      ticket_platform_fees_deducted: _ticketPlatformFeesDeducted,
+      ...walletWithoutFeeAmounts
+    } = wallet
+
     return NextResponse.json(
       {
-        ...wallet,
+        ...walletWithoutFeeAmounts,
         effective_platform_fee_percent: effectivePlatformFeePercent,
         fee_source: feeSource,
       },

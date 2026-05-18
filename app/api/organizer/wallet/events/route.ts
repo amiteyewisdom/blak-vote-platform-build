@@ -54,13 +54,23 @@ export async function GET(request: NextRequest) {
     const queryParams = parsedQuery.data
 
     const results = await getOrganizerEventEarningsData(adminSupabase, auth.userId)
+    const sanitizedResults = results.map((item: Record<string, unknown>) => {
+      const {
+        platform_fee_deducted: _platformFeeDeducted,
+        vote_platform_fee_deducted: _votePlatformFeeDeducted,
+        ticket_platform_fee_deducted: _ticketPlatformFeeDeducted,
+        ...rest
+      } = item
+
+      return rest
+    })
 
     // Apply pagination
-    const paginated = results.slice(queryParams.offset, queryParams.offset + queryParams.limit)
+    const paginated = sanitizedResults.slice(queryParams.offset, queryParams.offset + queryParams.limit)
 
     return NextResponse.json(
       {
-        total: results.length,
+        total: sanitizedResults.length,
         limit: queryParams.limit,
         offset: queryParams.offset,
         earnings: paginated,

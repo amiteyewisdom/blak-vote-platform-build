@@ -11,6 +11,7 @@ type OrganizerRefs = {
 
 type WalletSummaryData = {
   total_revenue: number
+  gross_revenue: number
   vote_revenue: number
   ticket_revenue: number
   total_paid_votes: number
@@ -22,6 +23,7 @@ type WalletSummaryData = {
   net_balance: number
   available_balance: number
   pending_withdrawals: number
+  total_cashed_out: number
   last_updated: string
 }
 
@@ -151,6 +153,8 @@ async function buildOrganizerEventMetrics(adminSupabase: SupabaseLike, userId: s
     vote_platform_fee_deducted: number
     ticket_platform_fee_deducted: number
     net_earnings: number
+      cashed_out_amount: number
+      revenue_left: number
     updated_at: string
   }>()
 
@@ -171,6 +175,8 @@ async function buildOrganizerEventMetrics(adminSupabase: SupabaseLike, userId: s
       vote_platform_fee_deducted: 0,
       ticket_platform_fee_deducted: 0,
       net_earnings: 0,
+      cashed_out_amount: 0,
+      revenue_left: 0,
       updated_at: event.updated_at || new Date().toISOString(),
     })
   }
@@ -296,18 +302,90 @@ async function buildOrganizerEventMetrics(adminSupabase: SupabaseLike, userId: s
     }
 
     metric.net_earnings = Number((metric.total_revenue - metric.platform_fee_deducted).toFixed(2))
+    metric.cashed_out_amount = 0
+    metric.revenue_left = metric.net_earnings
     return metric
+  })
+}
+
+async function getOrganizerProcessedWithdrawalTotal(adminSupabase: SupabaseLike, userId: string) {
+  const { data: processedRows, error } = await adminSupabase
+    .from('organizer_withdrawals')
+    .select('amount_requested')
+    .eq('organizer_id', userId)
+    .eq('status', 'processed')
+
+  if (error) {
+    throw new Error(error.message)
+  }
+
+  return (processedRows || []).reduce(
+    (sum: number, row: { amount_requested?: number | null }) => sum + toNumber(row.amount_requested),
+    0,
+  )
+}
+
+function distributeProcessedWithdrawalsAcrossEvents(
+  metrics: Array<Record<string, unknown>>,
+  organizerProcessedWithdrawals: number,
+) {
+  const cappedProcessedTotal = Math.max(toNumber(organizerProcessedWithdrawals), 0)
+  const totalNetEarnings = metrics.reduce(
+    (sum, metric) => sum + Math.max(toNumber(metric.net_earnings), 0),
+    0,
+  )
+
+  if (cappedProcessedTotal <= 0 || totalNetEarnings <= 0 || metrics.length === 0) {
+    return metrics.map((metric) => {
+      const net = Math.max(toNumber(metric.net_earnings), 0)
+      return {
+        ...metric,
+        cashed_out_amount: 0,
+        revenue_left: net,
+      }
+    })
+  }
+
+  const maxAllocatable = Math.min(cappedProcessedTotal, totalNetEarnings)
+  let allocatedRunningTotal = 0
+
+  return metrics.map((metric, index) => {
+    const net = Math.max(toNumber(metric.net_earnings), 0)
+
+    let cashedOut = 0
+    if (index === metrics.length - 1) {
+      cashedOut = Number(Math.max(maxAllocatable - allocatedRunningTotal, 0).toFixed(2))
+    } else {
+      const rawShare = (net / totalNetEarnings) * maxAllocatable
+      cashedOut = Number(rawShare.toFixed(2))
+      allocatedRunningTotal += cashedOut
+    }
+
+    if (cashedOut > net) {
+      cashedOut = net
+    }
+
+    const revenueLeft = Number(Math.max(net - cashedOut, 0).toFixed(2))
+
+    return {
+      ...metric,
+      cashed_out_amount: cashedOut,
+      revenue_left: revenueLeft,
+    }
   })
 }
 
 export async function getOrganizerWalletSummaryData(adminSupabase: SupabaseLike, userId: string): Promise<WalletSummaryData> {
   const eventMetrics = await buildOrganizerEventMetrics(adminSupabase, userId)
 
-  const { data: pendingRows, error: pendingError } = await adminSupabase
-    .from('organizer_withdrawals')
-    .select('amount_requested,status')
-    .eq('organizer_id', userId)
-    .in('status', WITHDRAWAL_PENDING_STATUSES)
+  const [{ data: pendingRows, error: pendingError }, processedWithdrawals] = await Promise.all([
+    adminSupabase
+      .from('organizer_withdrawals')
+      .select('amount_requested,status')
+      .eq('organizer_id', userId)
+      .in('status', WITHDRAWAL_PENDING_STATUSES),
+    getOrganizerProcessedWithdrawalTotal(adminSupabase, userId),
+  ])
 
   if (pendingError) {
     throw new Error(pendingError.message)
@@ -340,6 +418,7 @@ export async function getOrganizerWalletSummaryData(adminSupabase: SupabaseLike,
     },
     {
       total_revenue: 0,
+      gross_revenue: 0,
       vote_revenue: 0,
       ticket_revenue: 0,
       total_paid_votes: 0,
@@ -351,11 +430,15 @@ export async function getOrganizerWalletSummaryData(adminSupabase: SupabaseLike,
       net_balance: 0,
       available_balance: 0,
       pending_withdrawals: 0,
+      total_cashed_out: 0,
       last_updated: new Date(0).toISOString(),
     },
   )
 
+  summary.gross_revenue = summary.total_revenue
   summary.pending_withdrawals = pendingWithdrawals
+  summary.total_cashed_out = Number(processedWithdrawals.toFixed(2))
+  summary.total_revenue = summary.net_balance
   summary.available_balance = Math.max(summary.net_balance - pendingWithdrawals, 0)
   if (summary.last_updated === new Date(0).toISOString()) {
     summary.last_updated = new Date().toISOString()
@@ -366,8 +449,10 @@ export async function getOrganizerWalletSummaryData(adminSupabase: SupabaseLike,
 
 export async function getOrganizerEventEarningsData(adminSupabase: SupabaseLike, userId: string) {
   const metrics = await buildOrganizerEventMetrics(adminSupabase, userId)
+  const processedWithdrawals = await getOrganizerProcessedWithdrawalTotal(adminSupabase, userId)
+  const withCashedOut = distributeProcessedWithdrawalsAcrossEvents(metrics, processedWithdrawals)
 
-  return metrics.sort((left, right) => String(right.updated_at).localeCompare(String(left.updated_at)))
+  return withCashedOut.sort((left, right) => String(right.updated_at).localeCompare(String(left.updated_at)))
 }
 
 export async function getOrganizerWithdrawalHistoryData(
@@ -407,8 +492,8 @@ export async function createOrganizerWithdrawalRequest(
   }
 
   const feePercent = Math.max(toNumber(input.platformFeePercent), 0)
-  const feeAmount = Number(((input.amount * feePercent) / 100).toFixed(2))
-  const netAmount = Number(Math.max(input.amount - feeAmount, 0).toFixed(2))
+  const feeAmount = 0
+  const netAmount = Number(Math.max(input.amount, 0).toFixed(2))
 
   const { data, error } = await adminSupabase
     .from('organizer_withdrawals')

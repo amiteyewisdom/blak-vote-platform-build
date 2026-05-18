@@ -11,6 +11,9 @@ interface VotingEvent {
   description: string
   status: string
   total_revenue: number
+  net_revenue: number
+  revenue_left: number
+  cashed_out_amount: number
   start_date: string
   end_date: string
   image_url?: string
@@ -78,6 +81,11 @@ export default function OrganizerDashboard() {
   }
 
   const totalRevenue = events.reduce(
+    (sum, e) => sum + (e.net_revenue || 0),
+    0
+  )
+
+  const totalGrossRevenue = events.reduce(
     (sum, e) => sum + (e.total_revenue || 0),
     0
   )
@@ -105,12 +113,10 @@ export default function OrganizerDashboard() {
 
       {/* Metrics */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 md:gap-6">
-        <MetricCard title="Total Revenue" value={`GHS ${totalRevenue.toFixed(2)}`} />
+        <MetricCard title="Total Revenue (After Fee)" value={`GHS ${totalRevenue.toFixed(2)}`} />
+        <MetricCard title="Gross Revenue" value={`GHS ${totalGrossRevenue.toFixed(2)}`} />
         <MetricCard title="Total Events" value={events.length.toString()} />
-        <MetricCard
-          title="Live Events"
-          value={events.filter((e) => isLiveEventStatus(e.status)).length.toString()}
-        />
+        <MetricCard title="Live Events" value={events.filter((e) => isLiveEventStatus(e.status)).length.toString()} />
       </div>
 
       {/* Empty State */}
@@ -176,14 +182,26 @@ export default function OrganizerDashboard() {
                 </div>
               </div>
 
-              <div className="rounded-lg border border-white/8 bg-white/5 p-3 sm:p-4">
-                <div className="text-foreground/50 text-xs font-semibold uppercase tracking-wider mb-2">
-                  Total Revenue
+              <div className="rounded-lg border border-white/8 bg-white/5 p-3 sm:p-4 space-y-2.5">
+                <div>
+                  <div className="text-foreground/50 text-[11px] font-semibold uppercase tracking-wider mb-1">Total Revenue</div>
+                  <div className="text-lg font-bold text-gold">
+                    GHS {Number(event.total_revenue || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </div>
                 </div>
-                <div className="mb-3 text-2xl font-bold text-gold sm:text-3xl">
-                  GHS {Number(event.total_revenue || 0).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                <div>
+                  <div className="text-foreground/50 text-[11px] font-semibold uppercase tracking-wider mb-1">Revenue Left</div>
+                  <div className="text-base font-semibold text-emerald-300">
+                    GHS {Number(event.revenue_left || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </div>
                 </div>
-                <div className="flex items-center gap-1 text-foreground/40 text-xs">
+                <div>
+                  <div className="text-foreground/50 text-[11px] font-semibold uppercase tracking-wider mb-1">Cashed Out</div>
+                  <div className="text-base font-semibold text-orange-300">
+                    GHS {Number(event.cashed_out_amount || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </div>
+                </div>
+                <div className="flex items-center gap-1 text-foreground/40 text-xs pt-1">
                   <Clock className="w-3.5 h-3.5" />
                   <span>
                     {event.start_date ? new Date(event.start_date).toLocaleDateString() : 'No date'}

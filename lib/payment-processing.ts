@@ -494,6 +494,109 @@ async function createVoteFallback(params: {
   }
 }
 
+async function ensureAdminRevenueCapturedForVote(params: {
+  supabase: ReturnType<typeof getSupabaseAdminClient>
+  payment: any
+  verificationReference: string
+  voteId: string
+  amountPaid: number
+  processedAtIso: string
+}) {
+  const { supabase, payment, verificationReference, voteId, amountPaid, processedAtIso } = params
+
+  const paymentId = String(payment?.id || '').trim()
+  const eventId = String(payment?.event_id || '').trim()
+
+  if (!paymentId || !eventId || amountPaid <= 0) {
+    return
+  }
+
+  const { data: existing } = await supabase
+    .from('admin_revenue_transactions')
+    .select('id')
+    .eq('payment_id', paymentId)
+    .maybeSingle()
+
+  if (existing?.id) {
+    return
+  }
+
+  const { data: eventRow } = await supabase
+    .from('events')
+    .select('title, organizer_id')
+    .eq('id', eventId)
+    .maybeSingle()
+
+  let feePercent = 10
+  try {
+    const { data: rpcFee } = await supabase.rpc('get_effective_platform_fee_percent', {
+      p_organizer_ref: eventRow?.organizer_id || null,
+    })
+
+    if (Number.isFinite(Number(rpcFee))) {
+      feePercent = Number(rpcFee)
+    } else {
+      const { data: platformSettings } = await supabase
+        .from('platform_settings')
+        .select('platform_fee_percent')
+        .limit(1)
+        .maybeSingle()
+      if (Number.isFinite(Number(platformSettings?.platform_fee_percent))) {
+        feePercent = Number(platformSettings.platform_fee_percent)
+      }
+    }
+  } catch {
+    // Keep default fallback when fee RPC/settings are unavailable.
+  }
+
+  const platformFeeAmount = Number(((amountPaid * feePercent) / 100).toFixed(2))
+  const organizerNetAmount = Number((amountPaid - platformFeeAmount).toFixed(2))
+
+  const payloadVariants: Array<Record<string, unknown>> = [
+    {
+      payment_id: paymentId,
+      payment_reference: verificationReference,
+      event_id: eventId,
+      event_title: eventRow?.title || null,
+      organizer_id: eventRow?.organizer_id || null,
+      vote_id: voteId,
+      vote_type: 'paid',
+      payment_context: 'vote',
+      gross_amount: Number(amountPaid.toFixed(2)),
+      platform_fee_percent: Number(feePercent.toFixed(2)),
+      platform_fee_amount: platformFeeAmount,
+      organizer_net_amount: organizerNetAmount,
+      processed_at: processedAtIso,
+    },
+    {
+      payment_id: paymentId,
+      payment_reference: verificationReference,
+      event_id: eventId,
+      event_title: eventRow?.title || null,
+      organizer_id: eventRow?.organizer_id || null,
+      vote_id: voteId,
+      vote_type: 'paid',
+      gross_amount: Number(amountPaid.toFixed(2)),
+      platform_fee_percent: Number(feePercent.toFixed(2)),
+      platform_fee_amount: platformFeeAmount,
+      organizer_net_amount: organizerNetAmount,
+      processed_at: processedAtIso,
+    },
+  ]
+
+  for (const payload of payloadVariants) {
+    const insertAttempt = await supabase.from('admin_revenue_transactions').insert(payload)
+    if (!insertAttempt.error) {
+      return
+    }
+
+    const message = String(insertAttempt.error.message || '').toLowerCase()
+    if (message.includes('duplicate key value') || message.includes('unique constraint')) {
+      return
+    }
+  }
+}
+
 async function issueTicketPurchaseFallback(params: {
   supabase: ReturnType<typeof getSupabaseAdminClient>
   planId: string
@@ -1616,6 +1719,8 @@ export async function processConfirmedPayment(verification: PaymentVerificationP
       }
     }
 
+    const processedAtIso = new Date().toISOString()
+
     const { error: paymentUpdateError } = await supabase
       .from('payments')
       .update({
@@ -1623,13 +1728,22 @@ export async function processConfirmedPayment(verification: PaymentVerificationP
         status: CANONICAL_PAID_PAYMENT_STATUS,
         gateway_status: verification.status,
         verified_at: verificationStartedAt,
-        processed_at: new Date().toISOString(),
+        processed_at: processedAtIso,
       })
       .eq('reference', verification.reference)
 
     if (paymentUpdateError) {
       console.error('[VOTE_PAYMENT_UPDATE_FAIL]', paymentUpdateError)
     }
+
+    await ensureAdminRevenueCapturedForVote({
+      supabase,
+      payment: effectivePayment,
+      verificationReference: verification.reference,
+      voteId: fallbackVote.voteId,
+      amountPaid,
+      processedAtIso,
+    })
 
     return {
       ok: true as const,

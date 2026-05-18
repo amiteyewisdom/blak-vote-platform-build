@@ -12,6 +12,15 @@ function readTrimmedString(record: Record<string, unknown>, key: string) {
   return typeof value === 'string' ? value.trim() : ''
 }
 
+function sanitizeWithdrawal(item: Record<string, unknown>) {
+  const {
+    platform_fee_amount: _platformFeeAmount,
+    ...rest
+  } = item
+
+  return rest
+}
+
 export async function GET(request: NextRequest) {
   try {
     const supabase = await createClient()
@@ -33,7 +42,7 @@ export async function GET(request: NextRequest) {
       {
         limit,
         offset,
-        withdrawals: data || [],
+        withdrawals: (data || []).map((item) => sanitizeWithdrawal(item as Record<string, unknown>)),
       },
       { status: 200 }
     )
@@ -133,7 +142,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       {
         success: true,
-        withdrawal,
+        withdrawal: withdrawal ? sanitizeWithdrawal(withdrawal as Record<string, unknown>) : null,
       },
       { status: 200 }
     )

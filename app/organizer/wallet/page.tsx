@@ -13,11 +13,12 @@ interface TransferOption {
 
 interface WalletSummary {
   total_revenue: number
+  gross_revenue: number
   total_paid_votes: number
-  platform_fees_deducted: number
   net_balance: number
   available_balance: number
   pending_withdrawals: number
+  total_cashed_out: number
   last_updated: string
   effective_platform_fee_percent?: number
   fee_source?: 'custom' | 'default'
@@ -31,8 +32,9 @@ interface EventEarning {
   free_votes: number
   total_revenue: number
   platform_fee_percent: number
-  platform_fee_deducted: number
   net_earnings: number
+  cashed_out_amount: number
+  revenue_left: number
   updated_at: string
 }
 
@@ -381,14 +383,14 @@ export default function OrganizerWalletPage() {
     <div className="space-y-6 sm:space-y-8 p-4 sm:p-6 md:p-8">
       <div className="space-y-2">
         <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold">Wallet & Earnings</h1>
-        <p className="text-muted-foreground">Track your revenue, platform fees, and manage withdrawals</p>
+        <p className="text-muted-foreground">Track your net revenue, platform fee rate, and manage withdrawals</p>
       </div>
 
       {wallet && (
         <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
-          <MetricCard title="Gross Revenue" value={formatCurrency(wallet.total_revenue)} />
-          <MetricCard title="Platform Fees" value={formatCurrency(wallet.platform_fees_deducted)} />
-          <MetricCard title="Net Earnings" value={formatCurrency(wallet.net_balance)} />
+          <MetricCard title="Total Revenue (After Fee)" value={formatCurrency(wallet.total_revenue)} />
+          <MetricCard title="Gross Revenue" value={formatCurrency(wallet.gross_revenue)} />
+          <MetricCard title="Cashed Out" value={formatCurrency(wallet.total_cashed_out)} />
           <MetricCard title="Reserved" value={formatCurrency(wallet.pending_withdrawals)} />
           <MetricCard title="Available to Request" value={formatCurrency(wallet.available_balance)} />
           <MetricCard title="Paid Votes" value={wallet.total_paid_votes.toLocaleString()} />
@@ -551,8 +553,6 @@ export default function OrganizerWalletPage() {
               <thead className="border-b border-border">
                 <tr className="text-left text-muted-foreground">
                   <th className="pb-3 font-semibold">Requested</th>
-                  <th className="pb-3 font-semibold">Fee</th>
-                  <th className="pb-3 font-semibold">Net</th>
                   <th className="pb-3 font-semibold">Method</th>
                   <th className="pb-3 font-semibold">Status</th>
                   <th className="pb-3 font-semibold">Date</th>
@@ -562,8 +562,6 @@ export default function OrganizerWalletPage() {
                 {withdrawals.map((item) => (
                   <tr key={item.id}>
                     <td className="py-3">{formatCurrency(Number(item.amount_requested || 0))}</td>
-                    <td className="py-3 text-orange-400">{formatCurrency(Number(item.platform_fee_amount || 0))}</td>
-                    <td className="py-3 text-emerald-400">{formatCurrency(Number(item.net_amount || 0))}</td>
                     <td className="py-3 capitalize">{(item.method || 'bank_transfer').replace('_', ' ')}</td>
                     <td className="py-3 uppercase text-xs">{getWithdrawalDisplayStatus(item)}</td>
                     <td className="py-3">
@@ -599,10 +597,10 @@ export default function OrganizerWalletPage() {
                 <tr className="text-left text-muted-foreground">
                   <th className="pb-3 font-semibold">Event</th>
                   <th className="pb-3 font-semibold">Total Votes</th>
-                  <th className="pb-3 font-semibold">Paid Votes</th>
-                  <th className="pb-3 font-semibold">Revenue</th>
-                  <th className="pb-3 font-semibold">Platform Fee</th>
-                  <th className="pb-3 font-semibold">Net Earnings</th>
+                  <th className="pb-3 font-semibold">Gross Revenue</th>
+                  <th className="pb-3 font-semibold">Fee Rate</th>
+                  <th className="pb-3 font-semibold">Cashed Out</th>
+                  <th className="pb-3 font-semibold">Revenue Left</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border/60">
@@ -617,16 +615,10 @@ export default function OrganizerWalletPage() {
                       </div>
                     </td>
                     <td className="py-4">{earning.total_votes.toLocaleString()}</td>
-                    <td className="py-4 font-semibold text-green-400">
-                      {earning.paid_votes.toLocaleString()}
-                    </td>
                     <td className="py-4 font-semibold">{formatCurrency(earning.total_revenue)}</td>
-                    <td className="py-4 text-orange-400">
-                      {formatCurrency(earning.platform_fee_deducted)} ({earning.platform_fee_percent}%)
-                    </td>
-                    <td className="py-4 font-semibold text-blue-400">
-                      {formatCurrency(earning.net_earnings)}
-                    </td>
+                    <td className="py-4">{Number(earning.platform_fee_percent || 0).toFixed(2)}%</td>
+                    <td className="py-4 text-orange-400">{formatCurrency(earning.cashed_out_amount || 0)}</td>
+                    <td className="py-4 font-semibold text-blue-400">{formatCurrency(earning.revenue_left || 0)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -647,13 +639,13 @@ export default function OrganizerWalletPage() {
           <li className="flex gap-3">
             <span className="text-orange-500">•</span>
             <span>
-              <strong>Platform Fee:</strong> Deducted from revenue using your configured rate ({Number(wallet?.effective_platform_fee_percent || 0).toFixed(2)}%).
+              <strong>Platform Fee Rate:</strong> Applied to each paid vote using your configured percentage ({Number(wallet?.effective_platform_fee_percent || 0).toFixed(2)}%).
             </span>
           </li>
           <li className="flex gap-3">
             <span className="text-green-500">•</span>
             <span>
-              <strong>Net Earnings:</strong> Lifetime organizer earnings after platform fees
+              <strong>Total Revenue (After Fee):</strong> Lifetime organizer earnings after platform fees
             </span>
           </li>
           <li className="flex gap-3">
