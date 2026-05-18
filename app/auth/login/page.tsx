@@ -7,7 +7,7 @@ import { AlertCircle, Eye, EyeOff, LogIn } from 'lucide-react'
 import BrandLogo from '@/components/BrandLogo'
 import { Button } from '@/components/ui/button'
 import { supabase } from '@/lib/supabaseClient'
-import { getAuthenticatedUserRole, getRedirectPathForRole } from '@/lib/auth/role-routing'
+import { getRedirectPathForRole } from '@/lib/auth/role-routing'
 
 export default function LoginPage() {
   const searchParams = useSearchParams()
@@ -45,7 +45,12 @@ export default function LoginPage() {
       if (authError) throw authError
       if (!user) throw new Error('Sign-in succeeded but no user account was returned.')
 
-      const role = await getAuthenticatedUserRole(supabase, user)
+      const metadataRole = user.user_metadata?.role
+      const role =
+        metadataRole === 'admin' || metadataRole === 'organizer' || metadataRole === 'voter'
+          ? metadataRole
+          : null
+
       const nextPath = redirectTo ?? getRedirectPathForRole(role)
       window.location.replace(nextPath)
     } catch (loginError) {
