@@ -154,11 +154,18 @@ export default function AdminUsersPage() {
 
     setSavingFeeId(organizerId)
 
+    // Find the user by ID (should always be a user.id, not organizer.id)
+    const user = users.find((u) => u.id === organizerId)
+    if (!user) {
+      alert('User not found for this organizer')
+      return
+    }
+
     const res = await fetch('/api/admin/organizer-fees', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        organizerUserId: organizerId,
+        organizerUserId: user.id, // always user.id
         platformFeePercent: parsed,
       }),
     })
@@ -174,11 +181,18 @@ export default function AdminUsersPage() {
   const resetOrganizerFee = async (organizerId: string) => {
     setSavingFeeId(organizerId)
 
+    // Find the user by ID (should always be a user.id, not organizer.id)
+    const user = users.find((u) => u.id === organizerId)
+    if (!user) {
+      alert('User not found for this organizer')
+      return
+    }
+
     const res = await fetch('/api/admin/organizer-fees', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        organizerUserId: organizerId,
+        organizerUserId: user.id, // always user.id
         platformFeePercent: null,
       }),
     })
