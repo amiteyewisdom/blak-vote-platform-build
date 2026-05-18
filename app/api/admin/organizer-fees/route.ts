@@ -3,7 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { requireRole } from '@/lib/api-auth'
 import { getSupabaseAdminClient } from '@/lib/server-security'
 
-export async function GET() {
+export async function GET(req: Request) {
   const sessionClient = await createClient()
 
   const auth = await requireRole(sessionClient, ['admin'])
@@ -25,7 +25,7 @@ export async function GET() {
   // Always return the default (10%) for organizers not in the overrides list
   // If you want to fetch for a specific organizer, pass ?organizerUserId=...
   // Otherwise, return all overrides and note the default
-  const searchParams = new URLSearchParams(globalThis.location?.search || '')
+  const searchParams = new URL(req.url).searchParams
   const organizerUserId = searchParams.get('organizerUserId')
   if (organizerUserId) {
     const found = (data || []).find((row) => row.organizer_user_id === organizerUserId)
@@ -136,6 +136,17 @@ export async function POST(req: Request) {
     .single()
 
   if (error) {
+    // Helpful response when DB schema has not been migrated yet.
+    if ((error as { code?: string; constraint?: string }).code === '23503') {
+      return NextResponse.json(
+        {
+          error: 'Database foreign-key mismatch for organizer fee overrides. Apply latest migrations.',
+          details: error.message,
+          constraint: (error as { constraint?: string }).constraint,
+        },
+        { status: 500 }
+      )
+    }
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 
