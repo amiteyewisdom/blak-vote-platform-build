@@ -7,6 +7,9 @@ import { useToast } from '@/hooks/use-toast'
 import { DSInput, DSPrimaryButton, DSTextarea } from '@/components/ui/design-system'
 import { Button } from '@/components/ui/button'
 
+const SUPPORTED_EVENT_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp']
+const MAX_EVENT_IMAGE_SIZE_BYTES = 5 * 1024 * 1024
+
 export default function CreateEventPage() {
   const router = useRouter()
   const { toast } = useToast()
@@ -30,6 +33,24 @@ export default function CreateEventPage() {
     setForm({ ...form, [key]: value })
 
   const handleImage = (file: File) => {
+    if (!SUPPORTED_EVENT_IMAGE_TYPES.includes(file.type)) {
+      toast({
+        title: 'Unsupported image format',
+        description: 'Please upload a JPG, PNG, or WebP image.',
+        variant: 'destructive',
+      })
+      return
+    }
+
+    if (file.size > MAX_EVENT_IMAGE_SIZE_BYTES) {
+      toast({
+        title: 'Image too large',
+        description: 'Image size must be 5MB or less.',
+        variant: 'destructive',
+      })
+      return
+    }
+
     setImage(file)
     setPreview(URL.createObjectURL(file))
   }
@@ -208,7 +229,7 @@ export default function CreateEventPage() {
             <DSInput
               type="file"
               hidden
-              accept="image/*"
+              accept="image/jpeg,image/png,image/webp"
               onChange={(e) =>
                 e.target.files &&
                 handleImage(e.target.files[0])

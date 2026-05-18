@@ -8,6 +8,9 @@ import { ArrowLeft, Trash2 } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import { DSInput, DSPrimaryButton, DSTextarea } from '@/components/ui/design-system'
 
+const SUPPORTED_EVENT_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp']
+const MAX_EVENT_IMAGE_SIZE_BYTES = 5 * 1024 * 1024
+
 type BulkPackageDraft = {
   votes: string
   price: string
@@ -304,13 +307,31 @@ export default function EventSettingsPage() {
 
           <DSInput
             type="file"
-            accept="image/*"
+            accept="image/jpeg,image/png,image/webp"
             onChange={(e) => {
               if (e.target.files) {
-                setImage(e.target.files[0])
+                const nextFile = e.target.files[0]
+                if (!SUPPORTED_EVENT_IMAGE_TYPES.includes(nextFile.type)) {
+                  toast({
+                    title: 'Unsupported image format',
+                    description: 'Please upload a JPG, PNG, or WebP image.',
+                    variant: 'destructive',
+                  })
+                  return
+                }
+                if (nextFile.size > MAX_EVENT_IMAGE_SIZE_BYTES) {
+                  toast({
+                    title: 'Image too large',
+                    description: 'Image size must be 5MB or less.',
+                    variant: 'destructive',
+                  })
+                  return
+                }
+
+                setImage(nextFile)
                 setPreview(
                   URL.createObjectURL(
-                    e.target.files[0]
+                    nextFile
                   )
                 )
               }
