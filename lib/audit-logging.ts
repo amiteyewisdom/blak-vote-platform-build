@@ -23,6 +23,18 @@ interface AuditSummaryRow {
   action: string
 }
 
+function getErrorMessage(error: unknown): string {
+  if (error && typeof error === 'object' && 'message' in error && typeof (error as { message?: unknown }).message === 'string') {
+    return (error as { message: string }).message
+  }
+
+  return String(error ?? '')
+}
+
+function isMissingColumn(error: unknown, column: string): boolean {
+  return getErrorMessage(error).toLowerCase().includes(`could not find the '${column.toLowerCase()}' column`)
+}
+
 const SUSPICIOUS_PATTERNS = {
   RAPID_PAYMENT_FAILURES: { threshold: 5, window: 300 }, // 5 failures in 5 minutes
   DUPLICATE_PAYMENT_ATTEMPTS: { threshold: 3, window: 60 }, // 3 attempts in 1 minute
@@ -68,20 +80,31 @@ function getPaymentFailurePattern(reason: string): SuspiciousPatternKey | null {
  */
 export async function logAudit(log: AuditLog): Promise<void> {
   const supabase = getSupabaseAdminClient()
+  const basePayload = {
+    action: log.action,
+    user_id: log.user_id,
+    ip_address: log.ip_address,
+    details: {
+      ...log.details,
+      severity: log.severity,
+    },
+  }
 
   try {
-    const { error } = await supabase
+    let { error } = await supabase
       .from('audit_logs')
       .insert({
-        action: log.action,
-        user_id: log.user_id,
-        ip_address: log.ip_address,
-        details: {
-          ...log.details,
-          severity: log.severity,
-        },
+        ...basePayload,
         timestamp: log.timestamp || new Date().toISOString(),
       })
+
+    if (error && isMissingColumn(error, 'timestamp')) {
+      const retry = await supabase
+        .from('audit_logs')
+        .insert(basePayload)
+
+      error = retry.error
+    }
 
     if (error) {
       console.error('[AUDIT_LOG_ERROR]', error.message)
@@ -200,7 +223,32 @@ export async function getRecentAuditLogs(
     query = query.eq('ip_address', filter.ipAddress)
   }
 
-  const { data, error } = await query
+  let { data, error } = await query
+
+  if (error && isMissingColumn(error, 'timestamp')) {
+    let fallbackQuery = supabase
+      .from('audit_logs')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(limit)
+
+    if (filter?.action) {
+      fallbackQuery = fallbackQuery.eq('action', filter.action)
+    }
+    if (filter?.severity) {
+      fallbackQuery = fallbackQuery.contains('details', { severity: filter.severity })
+    }
+    if (filter?.userId) {
+      fallbackQuery = fallbackQuery.eq('user_id', filter.userId)
+    }
+    if (filter?.ipAddress) {
+      fallbackQuery = fallbackQuery.eq('ip_address', filter.ipAddress)
+    }
+
+    const fallbackResult = await fallbackQuery
+    data = fallbackResult.data
+    error = fallbackResult.error
+  }
 
   if (error) {
     console.error('[GET_AUDIT_LOGS_ERROR]', error)
@@ -218,10 +266,20 @@ export async function getSuspiciousActivitySummary() {
 
   const since = new Date(Date.now() - 3600000).toISOString() // Last hour
 
-  const { data, error } = await supabase
+  let { data, error } = await supabase
     .from('audit_logs')
     .select('action')
     .gte('timestamp', since)
+
+  if (error && isMissingColumn(error, 'timestamp')) {
+    const fallback = await supabase
+      .from('audit_logs')
+      .select('action')
+      .gte('created_at', since)
+
+    data = fallback.data
+    error = fallback.error
+  }
 
   if (error) {
     console.error('[SUSPICIOUS_ACTIVITY_SUMMARY_ERROR]', error)
