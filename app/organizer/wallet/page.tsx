@@ -388,8 +388,8 @@ export default function OrganizerWalletPage() {
 
       {wallet && (
         <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
-          <MetricCard title="Total Revenue (After Fee)" value={formatCurrency(wallet.total_revenue)} />
-          <MetricCard title="Gross Revenue" value={formatCurrency(wallet.gross_revenue)} />
+          <MetricCard title="Total Revenue" value={formatCurrency(wallet.total_revenue)} />
+          <MetricCard title="Revenue Left" value={formatCurrency(wallet.net_balance)} />
           <MetricCard title="Cashed Out" value={formatCurrency(wallet.total_cashed_out)} />
           <MetricCard title="Reserved" value={formatCurrency(wallet.pending_withdrawals)} />
           <MetricCard title="Available to Request" value={formatCurrency(wallet.available_balance)} />

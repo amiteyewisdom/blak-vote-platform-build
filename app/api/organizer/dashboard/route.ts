@@ -48,8 +48,7 @@ export async function GET() {
         end_date: event.end_date || null,
         image_url: event.image_url || null,
         is_active: Boolean(event.is_active),
-        total_revenue: Number(earning?.total_revenue || 0),
-        net_revenue: Number(earning?.net_earnings || 0),
+        total_revenue: Number(earning?.net_earnings || 0),
         revenue_left: Number(earning?.revenue_left || 0),
         cashed_out_amount: Number(earning?.cashed_out_amount || 0),
       }

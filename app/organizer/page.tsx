@@ -11,7 +11,6 @@ interface VotingEvent {
   description: string
   status: string
   total_revenue: number
-  net_revenue: number
   revenue_left: number
   cashed_out_amount: number
   start_date: string
@@ -81,11 +80,6 @@ export default function OrganizerDashboard() {
   }
 
   const totalRevenue = events.reduce(
-    (sum, e) => sum + (e.net_revenue || 0),
-    0
-  )
-
-  const totalGrossRevenue = events.reduce(
     (sum, e) => sum + (e.total_revenue || 0),
     0
   )
@@ -113,8 +107,7 @@ export default function OrganizerDashboard() {
 
       {/* Metrics */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 md:gap-6">
-        <MetricCard title="Total Revenue (After Fee)" value={`GHS ${totalRevenue.toFixed(2)}`} />
-        <MetricCard title="Gross Revenue" value={`GHS ${totalGrossRevenue.toFixed(2)}`} />
+        <MetricCard title="Total Revenue" value={`GHS ${totalRevenue.toFixed(2)}`} />
         <MetricCard title="Total Events" value={events.length.toString()} />
         <MetricCard title="Live Events" value={events.filter((e) => isLiveEventStatus(e.status)).length.toString()} />
       </div>
