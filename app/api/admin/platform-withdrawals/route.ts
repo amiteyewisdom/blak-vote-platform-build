@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { requireRole } from '@/lib/api-auth'
 import { getSupabaseAdminClient } from '@/lib/server-security'
+import { syncMissingAdminRevenueTransactions } from '@/lib/admin-revenue-sync'
 
 export async function GET(request: NextRequest) {
   try {
@@ -12,6 +13,8 @@ export async function GET(request: NextRequest) {
     if (!auth.ok) {
       return auth.response
     }
+
+    await syncMissingAdminRevenueTransactions(adminSupabase)
 
     const { searchParams } = new URL(request.url)
     const limit = Math.min(Math.max(Number(searchParams.get('limit') || 50), 1), 100)
@@ -84,6 +87,8 @@ export async function POST(request: NextRequest) {
     if (!auth.ok) {
       return auth.response
     }
+
+    await syncMissingAdminRevenueTransactions(adminSupabase)
 
     const body = await request.json().catch(() => ({}))
     const amount = Number(body.amount)

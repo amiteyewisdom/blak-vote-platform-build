@@ -122,7 +122,7 @@ async function buildOrganizerEventMetrics(adminSupabase: SupabaseLike, userId: s
 
   const { data: eventRows, error: eventsError } = await adminSupabase
     .from('events')
-    .select('id,title,organizer_id,updated_at')
+    .select('id,title,organizer_id,updated_at,status')
     .in('organizer_id', refs.aliases)
 
   if (eventsError) {
@@ -134,9 +134,15 @@ async function buildOrganizerEventMetrics(adminSupabase: SupabaseLike, userId: s
     title?: string | null
     organizer_id?: string | null
     updated_at?: string | null
+    status?: string | null
   }>
 
-  const eventIds = events.map((event) => String(event.id))
+  const activeEvents = events.filter((event) => {
+    const status = String(event.status || '').toLowerCase()
+    return status !== 'deleted' && status !== 'cancelled'
+  })
+
+  const eventIds = activeEvents.map((event) => String(event.id))
   const metrics = new Map<string, {
     event_id: string
     event_title: string
@@ -158,7 +164,7 @@ async function buildOrganizerEventMetrics(adminSupabase: SupabaseLike, userId: s
     updated_at: string
   }>()
 
-  for (const event of events) {
+  for (const event of activeEvents) {
     metrics.set(String(event.id), {
       event_id: String(event.id),
       event_title: event.title || 'Untitled event',

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { requireRole } from '@/lib/api-auth'
 import { getSupabaseAdminClient } from '@/lib/server-security'
+import { syncMissingAdminRevenueTransactions } from '@/lib/admin-revenue-sync'
 
 export async function GET() {
   try {
@@ -13,6 +14,7 @@ export async function GET() {
     }
 
     const adminSupabase = getSupabaseAdminClient()
+    await syncMissingAdminRevenueTransactions(adminSupabase)
 
     const { data: summaryRows, error: summaryError } = await adminSupabase
       .rpc('get_admin_revenue_summary')
