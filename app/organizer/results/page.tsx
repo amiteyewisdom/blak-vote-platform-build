@@ -1,10 +1,10 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { supabase } from '@/lib/supabaseClient'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'
 import { LoadingSpinner } from '@/components/loading-spinner'
+import { useToast } from '@/hooks/use-toast'
 
 interface VotingResult {
   candidateName: string
@@ -25,63 +25,38 @@ const COLORS = ['hsl(var(--chart-1))', 'hsl(var(--chart-3))', 'hsl(var(--success
 export default function ResultsPage() {
   const [events, setEvents] = useState<EventWithResults[]>([])
   const [loading, setLoading] = useState(true)
-  const [user, setUser] = useState<any>(null)
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const { toast } = useToast()
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const {
-          data: { user: sessionUser },
-        } = await supabase.auth.getUser()
+        setLoadError(null)
+        const response = await fetch('/api/organizer/results/events')
 
-        if (!sessionUser) {
+        if (response.status === 401) {
           window.location.href = '/auth/sign-in'
           return
         }
 
-        setUser(sessionUser)
+        if (!response.ok) {
+          const fallbackMessage = `Failed to fetch results: ${response.status}`
+          const payload = await response.json().catch(() => ({}))
+          const message = typeof payload?.error === 'string' ? payload.error : fallbackMessage
+          throw new Error(message)
+        }
 
-        // Fetch organizer's events with results
-        const { data: eventsData, error: eventsError } = await supabase
-          .from('events')
-          .select(`
-            id,
-            title,
-            status,
-            candidates(
-              id,
-              name,
-              votes(id)
-            )
-          `)
-          .eq('organizer_id', sessionUser.id)
-
-        if (eventsError) throw eventsError
-
-        const processedEvents = eventsData.map((event: any) => {
-          const totalVotes = event.candidates.reduce(
-            (sum: number, candidate: any) => sum + candidate.votes.length,
-            0
-          )
-
-          const results = event.candidates.map((candidate: any) => ({
-            candidateName: candidate.name,
-            voteCount: candidate.votes.length,
-            percentage: totalVotes > 0 ? ((candidate.votes.length / totalVotes) * 100).toFixed(1) : 0,
-          }))
-
-          return {
-            id: event.id,
-            title: event.title,
-            status: event.status,
-            totalVotes,
-            results,
-          }
-        })
-
-        setEvents(processedEvents)
+        const payload = await response.json().catch(() => ({}))
+        setEvents(Array.isArray(payload?.events) ? payload.events : [])
       } catch (error) {
         console.error('Error fetching results:', error)
+        const message = error instanceof Error ? error.message : 'Could not load election results.'
+        setLoadError(message)
+        toast({
+          title: 'Results unavailable',
+          description: message,
+          variant: 'destructive',
+        })
       } finally {
         setLoading(false)
       }
@@ -98,6 +73,13 @@ export default function ResultsPage() {
     return (
       <div className="p-8">
         <h1 className="text-3xl font-bold mb-8 text-foreground">Election Results</h1>
+        {loadError && (
+          <Card className="mb-6 border-red-200 bg-red-50 dark:border-red-900/50 dark:bg-red-950/20">
+            <CardContent className="pt-6">
+              <p className="text-center text-red-700 dark:text-red-300">{loadError}</p>
+            </CardContent>
+          </Card>
+        )}
         <Card>
           <CardContent className="pt-6">
             <p className="text-center text-muted-foreground">

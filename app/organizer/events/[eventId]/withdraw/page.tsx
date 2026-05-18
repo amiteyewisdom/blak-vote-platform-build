@@ -19,11 +19,12 @@ export default function WithdrawPage() {
   }, [])
 
   const fetchData = async () => {
-    const { data: eventData } = await supabase
-      .from('events')
-      .select('*')
-      .eq('id', eventId)
-      .single()
+    const normalizedEventId = Array.isArray(eventId) ? eventId[0] : eventId
+    const eventResponse = normalizedEventId
+      ? await fetch(`/api/organizer/event/${encodeURIComponent(normalizedEventId)}`)
+      : null
+    const eventPayload = eventResponse && eventResponse.ok ? await eventResponse.json().catch(() => ({})) : null
+    const eventData = eventPayload?.event ?? null
 
     const { data: { user } } = await supabase.auth.getUser()
     const walletResponse = user ? await fetch('/api/organizer/wallet') : null

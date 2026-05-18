@@ -51,21 +51,20 @@ export default function EventSettingsPage() {
   }, [eventId])
 
   const fetchEvent = async () => {
-    const {
-      data: { session },
-    } = await supabase.auth.getSession()
+    const response = await fetch(`/api/organizer/event/${encodeURIComponent(eventId)}`)
 
-    if (!session?.user) {
+    if (response.status === 401) {
       router.replace('/auth/sign-in')
       return
     }
 
-    const { data } = await supabase
-      .from('events')
-      .select('*')
-      .eq('id', eventId)
-      .eq('organizer_id', session.user.id)
-      .single()
+    if (!response.ok) {
+      setLoading(false)
+      return
+    }
+
+    const payload = await response.json().catch(() => ({}))
+    const data = payload?.event
 
     if (!data) return
 

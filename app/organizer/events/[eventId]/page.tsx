@@ -40,21 +40,22 @@ export default function EventDashboardPage() {
         data: { user },
       } = await supabase.auth.getUser()
 
-      console.log('Logged in user:', user?.email)
-
       if (!user) {
         router.push('/auth/sign-in')
         return
       }
 
-      const { data } = await supabase
-        .from('events')
-        .select('*')
-        .eq('id', id)
-        .eq('organizer_id', user.id)
-        .maybeSingle()
+      const response = await fetch(`/api/organizer/event/${encodeURIComponent(id)}`)
 
-      setEvent(data ?? null)
+      if (response.ok) {
+        const payload = await response.json().catch(() => ({}))
+        setEvent(payload?.event ?? null)
+      } else if (response.status === 401) {
+        router.push('/auth/sign-in')
+      } else {
+        setEvent(null)
+      }
+
       setLoading(false)
     }
 
