@@ -3,9 +3,43 @@ import { createClient as createServerClient } from '@/lib/supabase/server'
 import { ensureEventOwnedByOrganizer, requireRole } from '@/lib/api-auth'
 import { getSupabaseAdminClient } from '@/lib/server-security'
 
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
+
 function isInvalidId(value: unknown): boolean {
   const normalized = String(value || '').trim()
   return !normalized || normalized === 'undefined' || normalized === 'null'
+}
+
+function toPublicNomineeImageUrl(rawValue: unknown): string | null {
+  if (typeof rawValue !== 'string') {
+    return null
+  }
+
+  const value = rawValue.trim()
+  if (!value) {
+    return null
+  }
+
+  if (/^https?:\/\//i.test(value)) {
+    return value
+  }
+
+  const supabaseBaseUrl =
+    process.env.SUPABASE_URL ||
+    process.env.NEXT_PUBLIC_SUPABASE_URL ||
+    ''
+
+  if (!supabaseBaseUrl) {
+    return value
+  }
+
+  const normalizedBase = supabaseBaseUrl.replace(/\/$/, '')
+  const storagePath = value
+    .replace(/^\/?storage\/v1\/object\/public\/nominee-images\//, '')
+    .replace(/^\/?nominee-images\//, '')
+
+  return `${normalizedBase}/storage/v1/object/public/nominee-images/${storagePath}`
 }
 
 function resolveNomineePhotoUrl(nominee: Record<string, any>): string | null {
@@ -21,8 +55,9 @@ function resolveNomineePhotoUrl(nominee: Record<string, any>): string | null {
   ]
 
   for (const value of candidates) {
-    if (typeof value === 'string' && value.trim()) {
-      return value
+    const normalized = toPublicNomineeImageUrl(value)
+    if (normalized) {
+      return normalized
     }
   }
 

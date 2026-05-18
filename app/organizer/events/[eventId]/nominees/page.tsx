@@ -5,7 +5,6 @@ import { useParams, useRouter } from 'next/navigation'
 import { ArrowLeft, Plus, Trash2, Upload } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import { DSCard, DSInput, DSPrimaryButton, DSSelect, DSTextarea } from '@/components/ui/design-system'
-import { supabase } from '@/lib/supabaseClient'
 
 export default function NomineesPage() {
   const params = useParams()
@@ -50,22 +49,22 @@ export default function NomineesPage() {
   }
 
   const uploadImage = async (file: File) => {
-    const fileExt = file.name.split('.').pop()
-    const fileName = `${eventId}/${Date.now()}.${fileExt}`
+    const formData = new FormData()
+    formData.append('eventId', eventId)
+    formData.append('image', file)
 
-    const { error } = await supabase.storage
-      .from('nominee-images')
-      .upload(fileName, file)
+    const uploadRes = await fetch('/api/organizer/upload-nominee-image', {
+      method: 'POST',
+      body: formData,
+    })
 
-    if (error) {
-      throw error
+    const uploadPayload = await uploadRes.json().catch(() => ({}))
+
+    if (!uploadRes.ok || !uploadPayload?.imageUrl) {
+      throw new Error(uploadPayload?.error || 'Could not upload nominee image')
     }
 
-    const { data } = supabase.storage
-      .from('nominee-images')
-      .getPublicUrl(fileName)
-
-    return data.publicUrl
+    return String(uploadPayload.imageUrl)
   }
 
   const handleCreate = async () => {
@@ -93,16 +92,7 @@ export default function NomineesPage() {
       let imageUrl = null
 
       if (imageFile) {
-        try {
-          imageUrl = await uploadImage(imageFile)
-        } catch (uploadError: any) {
-          toast({
-            title: 'Image upload failed',
-            description: uploadError?.message || 'Continuing without image',
-            variant: 'destructive',
-          })
-          imageUrl = null
-        }
+        imageUrl = await uploadImage(imageFile)
       }
 
       const res = await fetch('/api/organizer/nominees', {
