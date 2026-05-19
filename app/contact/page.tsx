@@ -39,7 +39,7 @@ export default function ContactPage() {
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gold">Contact</p>
           <h1 className="mt-3 text-2xl font-bold tracking-tight sm:text-4xl">We are here to help</h1>
           <p className="mt-3 max-w-3xl text-sm leading-relaxed text-muted-foreground sm:text-base">
-            Reach Blak Vote Business for support, event operations, security-related requests, or manual account creation. New voter, organizer, and admin accounts are provisioned by our team. We typically respond within one business day.
+            Reach Blak Vote Business for support, event operations, security-related requests, and account assistance. We typically respond within one business day.
           </p>
         </section>
 

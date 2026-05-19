@@ -65,10 +65,10 @@ export default async function HomePage() {
     }
   }
 
-  const primaryCtaHref = isAppHost ? '/contact' : '/contact'
-  const primaryCtaLabel = 'Contact Us'
-  const secondaryCtaHref = isAppHost ? '/contact' : '/contact'
-  const secondaryCtaLabel = 'Request Account Access'
+  const primaryCtaHref = '/auth/signup'
+  const primaryCtaLabel = 'Sign Up'
+  const secondaryCtaHref = '/auth/signup'
+  const secondaryCtaLabel = 'Create Account'
   const adminEmailHref = `${SUPPORT_EMAIL_HREF}?subject=${encodeURIComponent('BlakVote Admin Request')}`
   const adminWhatsAppHref = buildSupportWhatsAppHref('Hello Admin, I need support with BlakVote.')
 

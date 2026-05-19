@@ -14,7 +14,7 @@ const sections = [
   },
   {
     title: '3. Account Responsibilities',
-    body: 'Accounts are provisioned by BlakVote. You are responsible for safeguarding credentials and for activities performed through your assigned account.',
+    body: 'Users can create accounts through the signup flow. You are responsible for safeguarding credentials and for activities performed through your account.',
   },
   {
     title: '4. Payments and Refunds',
@@ -30,7 +30,7 @@ const sections = [
   },
   {
     title: '7. Contact',
-    body: `Questions regarding these terms, including account creation requests, can be sent to ${SUPPORT_EMAIL} or via WhatsApp at ${SUPPORT_WHATSAPP_HREF}.`,
+    body: `Questions regarding these terms can be sent to ${SUPPORT_EMAIL} or via WhatsApp at ${SUPPORT_WHATSAPP_HREF}.`,
   },
 ]
 
