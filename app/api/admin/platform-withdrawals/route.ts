@@ -4,6 +4,93 @@ import { requireRole } from '@/lib/api-auth'
 import { getSupabaseAdminClient } from '@/lib/server-security'
 import { syncMissingAdminRevenueTransactions } from '@/lib/admin-revenue-sync'
 
+function toNumber(value: unknown) {
+  const numericValue = Number(value)
+  return Number.isFinite(numericValue) ? numericValue : 0
+}
+
+async function resolvePlatformSummary(adminSupabase: any) {
+  const { data: summaryRows, error: summaryError } = await adminSupabase.rpc('get_admin_revenue_summary')
+
+  if (!summaryError) {
+    const rpcSummary = Array.isArray(summaryRows) && summaryRows.length > 0 ? summaryRows[0] : null
+    if (rpcSummary) {
+      return rpcSummary
+    }
+  }
+
+  const { data: fallbackRows, error: fallbackError } = await adminSupabase
+    .from('admin_revenue_transactions')
+    .select('platform_fee_amount,gross_amount,processed_at')
+
+  if (fallbackError) {
+    throw new Error(summaryError?.message || fallbackError.message)
+  }
+
+  const rows = Array.isArray(fallbackRows) ? fallbackRows : []
+  const lastTransactionAt = rows.reduce<string | null>((latest, row) => {
+    const processedAt = typeof row.processed_at === 'string' ? row.processed_at : null
+    if (!processedAt) {
+      return latest
+    }
+
+    return !latest || processedAt > latest ? processedAt : latest
+  }, null)
+
+  return {
+    total_platform_revenue: rows.reduce((sum, row) => sum + toNumber(row.platform_fee_amount), 0),
+    total_gross_revenue: rows.reduce((sum, row) => sum + toNumber(row.gross_amount), 0),
+    total_transactions: rows.length,
+    last_transaction_at: lastTransactionAt,
+  }
+}
+
+async function resolveWithdrawalHistory(adminSupabase: any, limit: number, offset: number) {
+  const { data: historyRows, error: historyError } = await adminSupabase.rpc('get_admin_platform_withdrawal_history', {
+    p_limit: limit,
+    p_offset: offset,
+  })
+
+  if (!historyError) {
+    return Array.isArray(historyRows) ? historyRows : []
+  }
+
+  const { data: tableRows, error: tableError } = await adminSupabase
+    .from('admin_platform_withdrawals')
+    .select('*')
+    .order('created_at', { ascending: false })
+    .range(offset, offset + limit - 1)
+
+  if (tableError) {
+    throw new Error(historyError.message || tableError.message)
+  }
+
+  return (Array.isArray(tableRows) ? tableRows : []).map((row) => ({
+    ...row,
+    withdrawal_id: row.withdrawal_id ?? row.id,
+  }))
+}
+
+async function resolveAvailableBalance(adminSupabase: any, history: Array<Record<string, unknown>>, summary: Record<string, unknown>) {
+  const { data: availableBalance, error: balanceError } = await adminSupabase.rpc('get_admin_available_platform_balance')
+
+  if (!balanceError) {
+    return toNumber(availableBalance)
+  }
+
+  const reservedStatuses = new Set(['pending', 'approved', 'processed'])
+  const reservedAmount = history.reduce((sum, item) => {
+    const status = String(item.status || '').toLowerCase()
+    if (!reservedStatuses.has(status)) {
+      return sum
+    }
+
+    return sum + toNumber(item.amount_requested)
+  }, 0)
+
+  return Math.max(toNumber(summary.total_platform_revenue) - reservedAmount, 0)
+}
+
 export async function GET(request: NextRequest) {
   try {
     const supabase = await createClient()
@@ -14,56 +101,42 @@ export async function GET(request: NextRequest) {
       return auth.response
     }
 
-    await syncMissingAdminRevenueTransactions(adminSupabase)
+    try {
+      await syncMissingAdminRevenueTransactions(adminSupabase)
+    } catch (syncError) {
+      console.warn('Admin platform withdrawals sync warning:', syncError)
+    }
 
     const { searchParams } = new URL(request.url)
     const limit = Math.min(Math.max(Number(searchParams.get('limit') || 50), 1), 100)
     const offset = Math.max(Number(searchParams.get('offset') || 0), 0)
 
-    const [{ data: summaryRows, error: summaryError }, { data: availableBalance, error: balanceError }, { data: historyRows, error: historyError }] = await Promise.all([
-      adminSupabase.rpc('get_admin_revenue_summary'),
-      adminSupabase.rpc('get_admin_available_platform_balance'),
-      adminSupabase.rpc('get_admin_platform_withdrawal_history', {
-        p_limit: limit,
-        p_offset: offset,
-      }),
+    const [resolvedSummary, history] = await Promise.all([
+      resolvePlatformSummary(adminSupabase),
+      resolveWithdrawalHistory(adminSupabase, limit, offset),
     ])
 
-    if (summaryError) {
-      return NextResponse.json({ error: summaryError.message }, { status: 500 })
+    const summary = resolvedSummary || {
+      total_platform_revenue: 0,
+      total_gross_revenue: 0,
+      total_transactions: 0,
+      last_transaction_at: null,
     }
 
-    if (balanceError) {
-      return NextResponse.json({ error: balanceError.message }, { status: 500 })
-    }
-
-    if (historyError) {
-      return NextResponse.json({ error: historyError.message }, { status: 500 })
-    }
-
-    const summary = Array.isArray(summaryRows) && summaryRows.length > 0
-      ? summaryRows[0]
-      : {
-          total_platform_revenue: 0,
-          total_gross_revenue: 0,
-          total_transactions: 0,
-          last_transaction_at: null,
-        }
-
-    const history = Array.isArray(historyRows) ? historyRows : []
+    const availableBalance = await resolveAvailableBalance(adminSupabase, history, summary)
 
     const pendingAmount = history
       .filter((item) => item.status === 'pending')
-      .reduce((sum, item) => sum + Number(item.amount_requested || 0), 0)
+      .reduce((sum, item) => sum + toNumber(item.amount_requested), 0)
 
     const processedAmount = history
       .filter((item) => item.status === 'processed')
-      .reduce((sum, item) => sum + Number(item.amount_requested || 0), 0)
+      .reduce((sum, item) => sum + toNumber(item.amount_requested), 0)
 
     return NextResponse.json(
       {
         summary,
-        availableBalance: Number(availableBalance || 0),
+        availableBalance,
         pendingAmount,
         processedAmount,
         withdrawals: history,
