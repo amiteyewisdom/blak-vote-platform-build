@@ -35,11 +35,11 @@ export default function CandidateVotePage() {
   const [voting, setVoting] = useState(false)
   const [voteEmail, setVoteEmail] = useState('')
   const [votePhone, setVotePhone] = useState('')
-  const [quantity, setQuantity] = useState('1')
+  const [quantity, setQuantity] = useState('')
 
   const votePrice = resolveEventVotePrice(event)
   const votingOpen = isVotingOpenStatus(event?.status)
-  const parsedQty = Number.parseInt(quantity, 10)
+  const parsedQty = quantity.trim() ? Number.parseInt(quantity, 10) : 0
   const validQty = Number.isFinite(parsedQty) && parsedQty >= 1 && parsedQty <= 1000 ? parsedQty : 1
 
   useEffect(() => {
@@ -229,7 +229,7 @@ export default function CandidateVotePage() {
               type="tel"
               value={votePhone}
               onChange={(e) => setVotePhone(e.target.value)}
-              placeholder="+233501234567"
+              placeholder="0501234567"
               className="mt-2 w-full rounded-xl border border-border bg-[hsl(var(--legacy-bg-input))] px-4 py-3"
             />
           </div>
@@ -241,7 +241,7 @@ export default function CandidateVotePage() {
               min="1"
               max="1000"
               value={quantity}
-              onChange={(e) => setQuantity(e.target.value || '1')}
+              onChange={(e) => setQuantity(e.target.value)}
               className="mt-2 w-full rounded-xl border border-border bg-[hsl(var(--legacy-bg-input))] px-4 py-3"
             />
             <p className="mt-2 text-sm text-muted-foreground">Total: GHS {customAmount.toFixed(2)}</p>

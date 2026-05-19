@@ -153,9 +153,9 @@ export default function EventPage() {
 
     // Validate phone if provided
     if (votePhone.trim()) {
-      const phoneRegex = /^\+?[1-9]\d{6,14}$/
+      const phoneRegex = /^[+]?[0-9]{9,15}$/
       if (!phoneRegex.test(votePhone.trim())) {
-        setVoteModalError('Please enter a valid phone number (e.g., +233501234567)')
+        setVoteModalError('Please enter a valid phone number (e.g., 0501234567 or +233501234567)')
         return
       }
     }
@@ -892,7 +892,7 @@ export default function EventPage() {
                     setVotePhone(e.target.value)
                     setVoteModalError('')
                   }}
-                  placeholder="+233501234567"
+                  placeholder="0501234567"
                   className="w-full bg-[hsl(var(--legacy-bg-input))] border border-border rounded-xl px-4 py-3 text-foreground placeholder-white/40 focus:border-[hsl(var(--gold))] focus:outline-none transition"
                 />
                 <p className="text-xs text-muted-foreground mt-1">Used to prevent duplicate votes</p>
