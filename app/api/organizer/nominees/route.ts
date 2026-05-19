@@ -135,7 +135,9 @@ export async function POST(request: Request) {
     .eq('id', categoryId)
     .maybeSingle()
 
-  if (categoryError || !category || category.event_id !== eventId) {
+  // Keep create flow working on mixed-schema deployments where category lookups
+  // can fail; only hard-fail when a category row is returned but mismatched.
+  if (!categoryError && category && category.event_id !== eventId) {
     return NextResponse.json({ error: 'Invalid category for event' }, { status: 400 })
   }
 
@@ -150,6 +152,30 @@ export async function POST(request: Request) {
       photo_url: photoUrl,
       vote_count: 0,
       nominated_by_user_id: auth.userId,
+      status: 'pending',
+    },
+    {
+      event_id: eventId,
+      nominee_name: nomineeName,
+      nominee_email: null,
+      nominee_phone: null,
+      bio: bio || null,
+      category_id: categoryId,
+      photo_url: photoUrl,
+      vote_count: 0,
+      nominated_by_user_id: auth.userId,
+      status: 'approved',
+    },
+    {
+      event_id: eventId,
+      nominee_name: nomineeName,
+      nominee_email: null,
+      nominee_phone: null,
+      bio: bio || null,
+      category_id: categoryId,
+      photo_url: photoUrl,
+      vote_count: 0,
+      nominated_by_user_id: auth.userId,
       status: 'candidate',
     },
     {
@@ -174,6 +200,18 @@ export async function POST(request: Request) {
       nominee_photo_url: photoUrl,
       vote_count: 0,
       nominated_by_user_id: auth.userId,
+      status: 'pending',
+    },
+    {
+      event_id: eventId,
+      nominee_name: nomineeName,
+      nominee_email: null,
+      nominee_phone: null,
+      bio: bio || null,
+      category_id: categoryId,
+      nominee_photo_url: photoUrl,
+      vote_count: 0,
+      nominated_by_user_id: auth.userId,
       status: 'candidate',
     },
     {
@@ -187,6 +225,15 @@ export async function POST(request: Request) {
       vote_count: 0,
       nominated_by_user_id: auth.userId,
       status: 'approved',
+    },
+    {
+      event_id: eventId,
+      nominee_name: nomineeName,
+      bio: bio || null,
+      category_id: categoryId,
+      nominee_photo_url: photoUrl,
+      nominated_by_user_id: auth.userId,
+      status: 'pending',
     },
     {
       event_id: eventId,
@@ -216,6 +263,18 @@ export async function POST(request: Request) {
       image_url: photoUrl,
       vote_count: 0,
       nominated_by_user_id: auth.userId,
+      status: 'pending',
+    },
+    {
+      event_id: eventId,
+      nominee_name: nomineeName,
+      nominee_email: null,
+      nominee_phone: null,
+      bio: bio || null,
+      category_id: categoryId,
+      image_url: photoUrl,
+      vote_count: 0,
+      nominated_by_user_id: auth.userId,
       status: 'candidate',
     },
     {
@@ -229,6 +288,15 @@ export async function POST(request: Request) {
       vote_count: 0,
       nominated_by_user_id: auth.userId,
       status: 'approved',
+    },
+    {
+      event_id: eventId,
+      nominee_name: nomineeName,
+      bio: bio || null,
+      category_id: categoryId,
+      image_url: photoUrl,
+      nominated_by_user_id: auth.userId,
+      status: 'pending',
     },
     {
       event_id: eventId,
@@ -255,6 +323,15 @@ export async function POST(request: Request) {
       category_id: categoryId,
       photo_url: photoUrl,
       nominated_by_user_id: auth.userId,
+      status: 'pending',
+    },
+    {
+      event_id: eventId,
+      nominee_name: nomineeName,
+      bio: bio || null,
+      category_id: categoryId,
+      photo_url: photoUrl,
+      nominated_by_user_id: auth.userId,
       status: 'candidate',
     },
     {
@@ -270,6 +347,12 @@ export async function POST(request: Request) {
       event_id: eventId,
       nominee_name: nomineeName,
       category_id: categoryId,
+      status: 'pending',
+    },
+    {
+      event_id: eventId,
+      nominee_name: nomineeName,
+      category_id: categoryId,
       status: 'candidate',
     },
     {
@@ -277,6 +360,13 @@ export async function POST(request: Request) {
       nominee_name: nomineeName,
       category_id: categoryId,
       status: 'approved',
+    },
+    {
+      event_id: eventId,
+      nominee_name: nomineeName,
+      category_id: categoryId,
+      nominated_by_user_id: auth.userId,
+      status: 'pending',
     },
     {
       event_id: eventId,
