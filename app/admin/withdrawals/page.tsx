@@ -55,6 +55,7 @@ export default function AdminWithdrawalsPage() {
   const [processingId, setProcessingId] = useState<string | null>(null)
   const [processingPayoutId, setProcessingPayoutId] = useState<string | null>(null)
   const [retryingPayoutId, setRetryingPayoutId] = useState<string | null>(null)
+  const [reopeningPayoutId, setReopeningPayoutId] = useState<string | null>(null)
   const [submittingPlatformWithdrawal, setSubmittingPlatformWithdrawal] = useState(false)
   const [processingPlatformId, setProcessingPlatformId] = useState<number | null>(null)
   const [platformAmount, setPlatformAmount] = useState("")
@@ -219,6 +220,40 @@ export default function AdminWithdrawalsPage() {
       })
     } finally {
       setRetryingPayoutId(null)
+    }
+  }
+
+  const reopenWithdrawal = async (id: string) => {
+    setReopeningPayoutId(id)
+
+    try {
+      const response = await fetch('/api/admin/reopen-withdrawal', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ withdrawalId: id }),
+      })
+
+      const payload = await response.json().catch(() => ({}))
+      if (!response.ok) {
+        throw new Error(payload?.error || 'Failed to reopen withdrawal')
+      }
+
+      toast({
+        title: 'Withdrawal reopened',
+        description: 'This payout was moved back to processing state.',
+      })
+
+      await fetchWithdrawals()
+    } catch (error: any) {
+      toast({
+        title: 'Reopen failed',
+        description: error?.message || 'Unable to move this payout back to processing.',
+        variant: 'destructive',
+      })
+    } finally {
+      setReopeningPayoutId(null)
     }
   }
 
@@ -489,7 +524,16 @@ export default function AdminWithdrawalsPage() {
                 </div>
 
                 {w.processed_at && (
-                  <p className="text-xs text-emerald-400 mb-2">Processed</p>
+                  <div className="flex flex-col gap-2 md:items-end mb-2">
+                    <p className="text-xs text-emerald-400">Processed</p>
+                    <button
+                      onClick={() => reopenWithdrawal(w.id)}
+                      disabled={reopeningPayoutId === w.id}
+                      className="min-h-10 border border-amber-400/50 bg-amber-500/10 text-amber-200 px-4 py-2 rounded-xl font-semibold hover:bg-amber-500/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {reopeningPayoutId === w.id ? 'Reopening...' : 'Reopen To Processing'}
+                    </button>
+                  </div>
                 )}
 
                 {w.status === "pending" && (

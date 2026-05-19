@@ -335,8 +335,8 @@ export async function attemptPaystackOrganizerWithdrawalPayout(params: {
     })
 
     await updateOrganizerWithdrawal(supabase, withdrawal.id, {
-      status: 'processed',
-      processed_at: new Date().toISOString(),
+      status: 'approved',
+      processed_at: null,
       payout_failure_reason: null,
       payout_metadata: {
         trigger,
@@ -348,8 +348,8 @@ export async function attemptPaystackOrganizerWithdrawalPayout(params: {
     })
 
     return {
-      status: 'processed',
-      message: 'Payout created in Paystack and marked processed.',
+      status: 'approved',
+      message: 'Payout submitted to Paystack. Keep as processing until funds are received, then mark processed.',
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Paystack payout failed'
