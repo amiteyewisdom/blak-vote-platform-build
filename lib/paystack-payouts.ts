@@ -31,11 +31,26 @@ type PaystackResponse<T> = {
   status?: boolean
   message?: string
   data?: T
+  code?: string
 }
 
 type PayoutAttemptResult = {
   status: 'processed' | 'pending_funds' | 'approved'
   message: string
+}
+
+class PaystackApiError extends Error {
+  status: number
+  code: string | null
+  details: unknown
+
+  constructor(message: string, status: number, code: string | null, details: unknown) {
+    super(message)
+    this.name = 'PaystackApiError'
+    this.status = status
+    this.code = code
+    this.details = details
+  }
 }
 
 type PaystackBalanceSnapshot = {
@@ -70,7 +85,12 @@ async function paystackRequest<T>(path: string, init?: RequestInit): Promise<Pay
   const payload = (await response.json().catch(() => ({}))) as PaystackResponse<T>
 
   if (!response.ok) {
-    throw new Error(payload?.message || `Paystack request failed with status ${response.status}`)
+    throw new PaystackApiError(
+      payload?.message || `Paystack request failed with status ${response.status}`,
+      response.status,
+      typeof payload?.code === 'string' ? payload.code : null,
+      payload?.data ?? null,
+    )
   }
 
   return payload
@@ -328,6 +348,10 @@ export async function attemptPaystackOrganizerWithdrawalPayout(params: {
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Paystack payout failed'
+    const paystackCode = error instanceof PaystackApiError ? error.code : null
+    const paystackStatus = error instanceof PaystackApiError ? error.status : null
+    const paystackDetails = error instanceof PaystackApiError ? error.details : null
+    const providerSuffix = paystackCode ? ` (Paystack code: ${paystackCode})` : ''
 
     if (isInsufficientBalanceMessage(message)) {
       const refreshedBalance = await getPaystackBalanceSnapshot(payoutCurrency)
@@ -335,9 +359,9 @@ export async function attemptPaystackOrganizerWithdrawalPayout(params: {
       const detailedMessage =
         typeof refreshedAvailable === 'number'
           ? refreshedAvailable >= netAmount
-            ? `${message}. Paystack ${keyMode} API reports ${payoutCurrency} ${refreshedAvailable.toFixed(2)} available, but transfer creation still failed. This usually indicates transfer reserves/holds or transfer charge requirements above raw balance.`
-            : `${message}. Paystack ${keyMode} API reports ${payoutCurrency} ${refreshedAvailable.toFixed(2)} available while at least ${payoutCurrency} ${minimumRequired.toFixed(2)} is required.`
-          : `${message}. Could not read Paystack balance during failure handling.`
+            ? `${message}${providerSuffix}. Paystack ${keyMode} API reports ${payoutCurrency} ${refreshedAvailable.toFixed(2)} available, but transfer creation still failed. This usually indicates transfer reserves/holds or transfer charge requirements above raw balance.`
+            : `${message}${providerSuffix}. Paystack ${keyMode} API reports ${payoutCurrency} ${refreshedAvailable.toFixed(2)} available while at least ${payoutCurrency} ${minimumRequired.toFixed(2)} is required.`
+          : `${message}${providerSuffix}. Could not read Paystack balance during failure handling.`
 
       await updateOrganizerWithdrawal(supabase, withdrawal.id, {
         status: 'pending_funds',
@@ -349,6 +373,9 @@ export async function attemptPaystackOrganizerWithdrawalPayout(params: {
           minimum_required_balance: minimumRequired,
           last_available_balance: refreshedAvailable,
           paystack_balance_rows: refreshedBalance.rows,
+          paystack_error_code: paystackCode,
+          paystack_error_status: paystackStatus,
+          paystack_error_details: paystackDetails,
           balance_lookup_error: refreshedBalance.error || null,
         },
       })
@@ -361,9 +388,12 @@ export async function attemptPaystackOrganizerWithdrawalPayout(params: {
 
     await updateOrganizerWithdrawal(supabase, withdrawal.id, {
       status: 'approved',
-      payout_failure_reason: message,
+      payout_failure_reason: `${message}${providerSuffix}`,
       payout_metadata: {
         trigger,
+        paystack_error_code: paystackCode,
+        paystack_error_status: paystackStatus,
+        paystack_error_details: paystackDetails,
       },
     })
 
