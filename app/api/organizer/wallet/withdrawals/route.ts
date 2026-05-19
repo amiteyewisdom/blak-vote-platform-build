@@ -5,6 +5,7 @@ import { getSupabaseAdminClient } from '@/lib/server-security'
 import {
   createOrganizerWithdrawalRequest,
   getOrganizerWithdrawalHistoryData,
+  sendAdminWithdrawalInitiatedNotification,
   sendWithdrawalConfirmationEmail,
 } from '@/lib/organizer-wallet'
 
@@ -148,8 +149,11 @@ export async function POST(request: NextRequest) {
         .eq('id', auth.userId)
         .maybeSingle()
 
-      if (user) {
-        const organizerName = [user.first_name, user.last_name].filter(Boolean).join(' ') || 'Organizer'
+      const organizerName = user
+        ? [user.first_name, user.last_name].filter(Boolean).join(' ') || 'Organizer'
+        : 'Organizer'
+
+      if (user?.email) {
         void sendWithdrawalConfirmationEmail(user.email, organizerName, {
           amount_requested: withdrawal.amount_requested,
           net_amount: withdrawal.net_amount,
@@ -159,6 +163,17 @@ export async function POST(request: NextRequest) {
           account_details: withdrawal.account_details,
         })
       }
+
+      void sendAdminWithdrawalInitiatedNotification({
+        withdrawalId: withdrawal.id,
+        organizerId: auth.userId,
+        organizerEmail: user?.email ?? null,
+        organizerName,
+        amountRequested: withdrawal.amount_requested,
+        netAmount: withdrawal.net_amount,
+        method: withdrawal.method,
+        requestedAt: withdrawal.requested_at,
+      })
     }
 
     return NextResponse.json(

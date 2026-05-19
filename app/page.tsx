@@ -4,8 +4,9 @@ import { redirect } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import PublicNav from '@/components/PublicNav'
+import { SUPPORT_EMAIL_HREF, buildSupportWhatsAppHref } from '@/lib/support-contact'
 import { createClient as createServerClient } from '@/lib/supabase/server'
-import { ArrowRight, CheckCircle, Lock, BarChart3, Users } from 'lucide-react'
+import { ArrowRight, CheckCircle, Lock, BarChart3, Users, Mail, MessageCircle } from 'lucide-react'
 
 export const dynamic = 'force-dynamic'
 
@@ -68,6 +69,8 @@ export default async function HomePage() {
   const primaryCtaLabel = 'Contact Us'
   const secondaryCtaHref = isAppHost ? '/contact' : '/contact'
   const secondaryCtaLabel = 'Request Account Access'
+  const adminEmailHref = `${SUPPORT_EMAIL_HREF}?subject=${encodeURIComponent('BlakVote Admin Request')}`
+  const adminWhatsAppHref = buildSupportWhatsAppHref('Hello Admin, I need support with BlakVote.')
 
   return (
     <div className="flex min-h-screen flex-col bg-background text-foreground">
@@ -107,6 +110,18 @@ export default async function HomePage() {
             </Button>
             <Button asChild variant="secondary" size="lg" className="h-12 w-full text-base sm:h-14 sm:w-auto sm:text-lg">
               <Link href="#features">Learn More</Link>
+            </Button>
+          </div>
+          <div className="mt-5 flex flex-col items-center justify-center gap-2.5 sm:mt-6 sm:flex-row sm:gap-3">
+            <Button asChild variant="outline" size="sm" className="w-full sm:w-auto">
+              <Link href={adminEmailHref}>
+                <Mail className="h-4 w-4" /> Email Admin
+              </Link>
+            </Button>
+            <Button asChild variant="outline" size="sm" className="w-full sm:w-auto">
+              <Link href={adminWhatsAppHref} target="_blank" rel="noreferrer">
+                <MessageCircle className="h-4 w-4" /> WhatsApp Admin
+              </Link>
             </Button>
           </div>
         </div>

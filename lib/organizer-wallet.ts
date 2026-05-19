@@ -1,3 +1,5 @@
+import { SUPPORT_EMAIL, buildSupportWhatsAppHref } from '@/lib/support-contact'
+
 type SupabaseLike = {
   from: (table: string) => any
   rpc: (name: string, args?: Record<string, unknown>) => Promise<{ data: any; error: any }>
@@ -654,6 +656,100 @@ export async function sendWithdrawalConfirmationEmail(
     }
   } catch (error) {
     console.error('Error sending withdrawal confirmation email:', error)
+  }
+}
+
+export async function sendAdminWithdrawalInitiatedNotification(input: {
+  withdrawalId: number
+  organizerId: string
+  organizerEmail: string | null
+  organizerName?: string
+  amountRequested: number
+  netAmount: number
+  method: string
+  requestedAt?: string
+}) {
+  const apiKey = process.env.RESEND_API_KEY
+  const adminEmail = process.env.ADMIN_ALERT_EMAIL?.trim() || SUPPORT_EMAIL
+  const from = process.env.OTP_FROM_EMAIL || 'BlakVote <noreply@mail.blakvote.com>'
+  const methodDisplay = input.method === 'mobile_money' ? 'Mobile Money' : 'Bank Transfer'
+  const requestedAt = input.requestedAt ? new Date(input.requestedAt) : new Date()
+  const whatsappHref = buildSupportWhatsAppHref(
+    `Withdrawal approval needed:\n- Withdrawal ID: ${input.withdrawalId}\n- Organizer: ${input.organizerName || input.organizerId}\n- Amount: GHS ${input.netAmount.toFixed(2)}\nPlease review in admin dashboard.`
+  )
+
+  if (!apiKey) {
+    console.warn('RESEND_API_KEY not configured, skipping admin withdrawal notification email')
+    console.info(`Admin WhatsApp escalation link: ${whatsappHref}`)
+    return
+  }
+
+  const html = `
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>Organizer Withdrawal Pending Approval</title>
+      <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; line-height: 1.5; color: #111827; }
+        .container { max-width: 620px; margin: 0 auto; padding: 20px; }
+        .header { margin-bottom: 20px; }
+        .card { border: 1px solid #e5e7eb; border-radius: 10px; padding: 16px; }
+        .row { display: flex; justify-content: space-between; gap: 16px; padding: 8px 0; border-bottom: 1px solid #f3f4f6; }
+        .row:last-child { border-bottom: none; }
+        .label { color: #6b7280; font-size: 13px; }
+        .value { font-weight: 600; text-align: right; }
+        .cta-wrap { margin-top: 20px; display: flex; gap: 10px; flex-wrap: wrap; }
+        .btn { display: inline-block; padding: 10px 14px; border-radius: 8px; text-decoration: none; font-weight: 600; }
+        .btn-email { background: #0f172a; color: #ffffff !important; }
+        .btn-wa { background: #16a34a; color: #ffffff !important; }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <div class="header">
+          <h2 style="margin: 0;">Organizer withdrawal pending approval</h2>
+          <p style="margin: 6px 0 0 0; color: #6b7280;">A new payout request needs admin review.</p>
+        </div>
+        <div class="card">
+          <div class="row"><span class="label">Withdrawal ID</span><span class="value">${input.withdrawalId}</span></div>
+          <div class="row"><span class="label">Organizer</span><span class="value">${input.organizerName || input.organizerId}</span></div>
+          <div class="row"><span class="label">Organizer Email</span><span class="value">${input.organizerEmail || 'Not found'}</span></div>
+          <div class="row"><span class="label">Requested Amount</span><span class="value">GHS ${input.amountRequested.toFixed(2)}</span></div>
+          <div class="row"><span class="label">Net Amount</span><span class="value">GHS ${input.netAmount.toFixed(2)}</span></div>
+          <div class="row"><span class="label">Method</span><span class="value">${methodDisplay}</span></div>
+          <div class="row"><span class="label">Requested At</span><span class="value">${requestedAt.toISOString()}</span></div>
+        </div>
+        <div class="cta-wrap">
+          <a class="btn btn-email" href="mailto:${adminEmail}?subject=${encodeURIComponent(`Withdrawal Approval Needed #${input.withdrawalId}`)}">Open Admin Email</a>
+          <a class="btn btn-wa" href="${whatsappHref}">Open Admin WhatsApp</a>
+        </div>
+      </div>
+    </body>
+    </html>
+  `
+
+  try {
+    const response = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        from,
+        to: [adminEmail],
+        subject: `Withdrawal Approval Needed #${input.withdrawalId} (GHS ${input.netAmount.toFixed(2)})`,
+        html,
+      }),
+    })
+
+    if (!response.ok) {
+      console.error(`Failed to send admin withdrawal notification email: ${response.status}`)
+    }
+  } catch (error) {
+    console.error('Error sending admin withdrawal notification email:', error)
   }
 }
 
