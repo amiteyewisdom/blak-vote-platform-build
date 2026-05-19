@@ -389,9 +389,23 @@ export async function POST(request: Request) {
     },
   ]
 
+  const statusPriority = auth.role === 'organizer' || auth.role === 'admin'
+    ? ['candidate', 'approved', 'pending']
+    : ['pending', 'approved', 'candidate']
+
+  const prioritizedPayloadVariants = [...payloadVariants].sort((left, right) => {
+    const leftStatus = String(left.status || '')
+    const rightStatus = String(right.status || '')
+    const leftIndex = statusPriority.indexOf(leftStatus)
+    const rightIndex = statusPriority.indexOf(rightStatus)
+    const normalizedLeft = leftIndex === -1 ? statusPriority.length : leftIndex
+    const normalizedRight = rightIndex === -1 ? statusPriority.length : rightIndex
+    return normalizedLeft - normalizedRight
+  })
+
   let insertError: any = null
 
-  for (const payload of payloadVariants) {
+  for (const payload of prioritizedPayloadVariants) {
     const insertAttempt = await adminSupabase
       .from('nominations')
       .insert(payload)
