@@ -120,7 +120,6 @@ export default function NomineesPage() {
 
       setName('')
       setBio('')
-      setCategoryId('')
       setImageFile(null)
       setPreview(null)
 

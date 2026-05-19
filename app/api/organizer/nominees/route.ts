@@ -6,6 +6,8 @@ import { getSupabaseAdminClient } from '@/lib/server-security'
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
 
+const NOMINEE_CODE_CONFLICT_PATTERN = /(short_code|voting_code|idx_nominations_short_code_unique|idx_nominations_voting_code_unique)/i
+
 function isInvalidId(value: unknown): boolean {
   const normalized = String(value || '').trim()
   return !normalized || normalized === 'undefined' || normalized === 'null'
@@ -62,6 +64,38 @@ function resolveNomineePhotoUrl(nominee: Record<string, any>): string | null {
   }
 
   return null
+}
+
+async function insertNomineeWithRetry(
+  adminSupabase: ReturnType<typeof getSupabaseAdminClient>,
+  payload: Record<string, unknown>,
+  maxAttempts = 5
+) {
+  let lastError: any = null
+
+  for (let attemptIndex = 0; attemptIndex < maxAttempts; attemptIndex += 1) {
+    const attempt = await adminSupabase
+      .from('nominations')
+      .insert(payload)
+      .select('*')
+      .limit(1)
+      .maybeSingle()
+
+    if (!attempt.error) {
+      return { data: attempt.data ?? null, error: null }
+    }
+
+    lastError = attempt.error
+    const code = String(lastError?.code || '')
+    const detailText = `${String(lastError?.message || '')} ${String(lastError?.details || '')} ${String(lastError?.hint || '')}`
+    const isRetryableCodeConflict = code === '23505' && NOMINEE_CODE_CONFLICT_PATTERN.test(detailText)
+
+    if (!isRetryableCodeConflict) {
+      break
+    }
+  }
+
+  return { data: null, error: lastError }
 }
 
 export async function GET(request: Request) {
@@ -389,11 +423,13 @@ export async function POST(request: Request) {
     },
   ]
 
-  const statusPriority = auth.role === 'organizer' || auth.role === 'admin'
-    ? ['candidate', 'approved', 'pending']
-    : ['pending', 'approved', 'candidate']
+  // Organizer/admin direct creation must go live immediately.
+  // Public nominations use /api/nominations and remain pending.
+  const statusPriority = ['candidate', 'approved']
 
-  const prioritizedPayloadVariants = [...payloadVariants].sort((left, right) => {
+  const prioritizedPayloadVariants = [...payloadVariants]
+    .filter((payload) => statusPriority.includes(String(payload.status || '')))
+    .sort((left, right) => {
     const leftStatus = String(left.status || '')
     const rightStatus = String(right.status || '')
     const leftIndex = statusPriority.indexOf(leftStatus)
@@ -403,26 +439,17 @@ export async function POST(request: Request) {
     return normalizedLeft - normalizedRight
   })
 
+  if (prioritizedPayloadVariants.length === 0) {
+    return NextResponse.json({ error: 'Nominee payload configuration error' }, { status: 500 })
+  }
+
   let insertError: any = null
 
   for (const payload of prioritizedPayloadVariants) {
-    const insertAttempt = await adminSupabase
-      .from('nominations')
-      .insert(payload)
+    const insertAttempt = await insertNomineeWithRetry(adminSupabase, payload)
 
     if (!insertAttempt.error) {
-      // Fetching the inserted row can fail on some deployments even when insert succeeded.
-      const lookup = await adminSupabase
-        .from('nominations')
-        .select('*')
-        .eq('event_id', eventId)
-        .eq('nominee_name', nomineeName)
-        .eq('category_id', categoryId)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle()
-
-      return NextResponse.json({ nominee: lookup.data ?? null, success: true })
+      return NextResponse.json({ nominee: insertAttempt.data ?? null, success: true })
     }
 
     insertError = insertAttempt.error
