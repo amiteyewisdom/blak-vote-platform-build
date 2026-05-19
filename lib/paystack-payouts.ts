@@ -38,6 +38,15 @@ type PayoutAttemptResult = {
   message: string
 }
 
+type PaystackBalanceSnapshot = {
+  available: number | null
+  rows: Array<{
+    currency: string
+    available: number
+  }>
+  error?: string
+}
+
 function requirePaystackSecret() {
   const secret = process.env.PAYSTACK_SECRET_KEY?.trim()
 
@@ -73,6 +82,20 @@ function formatCurrencyAmount(amount: number) {
 
 function toSubunit(amount: number) {
   return Math.round(amount * 100)
+}
+
+function getPaystackKeyMode() {
+  const secret = requirePaystackSecret()
+
+  if (secret.startsWith('sk_live_')) {
+    return 'live'
+  }
+
+  if (secret.startsWith('sk_test_')) {
+    return 'test'
+  }
+
+  return 'unknown'
 }
 
 function getAccountDetails(accountDetails: Record<string, unknown> | null | undefined) {
@@ -118,6 +141,31 @@ export async function getPaystackAvailablePayoutBalance(currency: string = 'GHS'
   const selected = rows.find((row) => String(row.currency || '').toUpperCase() === currency.toUpperCase())
 
   return Number(selected?.balance || 0) / 100
+}
+
+async function getPaystackBalanceSnapshot(currency: string = 'GHS'): Promise<PaystackBalanceSnapshot> {
+  try {
+    const payload = await paystackRequest<PaystackBalanceRow[]>('/balance')
+    const rows = Array.isArray(payload.data)
+      ? payload.data.map((row) => ({
+          currency: String(row.currency || '').toUpperCase(),
+          available: Number(row.balance || 0) / 100,
+        }))
+      : []
+
+    const selected = rows.find((row) => row.currency === currency.toUpperCase())
+
+    return {
+      available: selected ? selected.available : null,
+      rows,
+    }
+  } catch (error) {
+    return {
+      available: null,
+      rows: [],
+      error: error instanceof Error ? error.message : 'Failed to query Paystack balance',
+    }
+  }
 }
 
 async function ensureTransferRecipient(withdrawal: OrganizerWithdrawalPayoutRow) {
@@ -186,6 +234,7 @@ export async function attemptPaystackOrganizerWithdrawalPayout(params: {
   trigger: 'approval' | 'cron'
 }) : Promise<PayoutAttemptResult> {
   const { supabase, withdrawal, trigger } = params
+  const keyMode = getPaystackKeyMode()
 
   if (withdrawal.processed_at || withdrawal.status === 'processed') {
     return {
@@ -211,17 +260,21 @@ export async function attemptPaystackOrganizerWithdrawalPayout(params: {
     payout_attempted_at: attemptedAt,
   })
 
-  const availableBalance = await getPaystackAvailablePayoutBalance('GHS')
+  const balanceSnapshot = await getPaystackBalanceSnapshot('GHS')
+  const availableBalance = balanceSnapshot.available
 
-  if (availableBalance < netAmount) {
-    const message = `Waiting for Paystack funds. Required ${formatCurrencyAmount(netAmount)}, available ${formatCurrencyAmount(availableBalance)}.`
+  if (typeof availableBalance === 'number' && availableBalance < netAmount) {
+    const message = `Waiting for Paystack funds. Required ${formatCurrencyAmount(netAmount)}, available ${formatCurrencyAmount(availableBalance)} (Paystack ${keyMode} key).`
 
     await updateOrganizerWithdrawal(supabase, withdrawal.id, {
       status: 'pending_funds',
       payout_failure_reason: message,
       payout_metadata: {
         trigger,
+        key_mode: keyMode,
         last_available_balance: availableBalance,
+        paystack_balance_rows: balanceSnapshot.rows,
+        balance_lookup_error: balanceSnapshot.error || null,
       },
     })
 
@@ -249,6 +302,7 @@ export async function attemptPaystackOrganizerWithdrawalPayout(params: {
       payout_failure_reason: null,
       payout_metadata: {
         trigger,
+        key_mode: keyMode,
         transfer_code: transferPayload.data?.transfer_code || null,
         transfer_status: transferPayload.data?.status || null,
       },
@@ -262,17 +316,30 @@ export async function attemptPaystackOrganizerWithdrawalPayout(params: {
     const message = error instanceof Error ? error.message : 'Paystack payout failed'
 
     if (isInsufficientBalanceMessage(message)) {
+      const refreshedBalance = await getPaystackBalanceSnapshot('GHS')
+      const refreshedAvailable = refreshedBalance.available
+      const detailedMessage =
+        typeof refreshedAvailable === 'number'
+          ? refreshedAvailable >= netAmount
+            ? `${message}. Paystack ${keyMode} API reports ${formatCurrencyAmount(refreshedAvailable)} available, so this can indicate transfer reserves/holds, provider transfer charges, or API key/account mismatch.`
+            : `${message}. Paystack ${keyMode} API reports ${formatCurrencyAmount(refreshedAvailable)} available while ${formatCurrencyAmount(netAmount)} is required.`
+          : `${message}. Could not read Paystack balance during failure handling.`
+
       await updateOrganizerWithdrawal(supabase, withdrawal.id, {
         status: 'pending_funds',
-        payout_failure_reason: message,
+        payout_failure_reason: detailedMessage,
         payout_metadata: {
           trigger,
+          key_mode: keyMode,
+          last_available_balance: refreshedAvailable,
+          paystack_balance_rows: refreshedBalance.rows,
+          balance_lookup_error: refreshedBalance.error || null,
         },
       })
 
       return {
         status: 'pending_funds',
-        message,
+        message: detailedMessage,
       }
     }
 

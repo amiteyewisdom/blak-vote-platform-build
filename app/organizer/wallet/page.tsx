@@ -89,11 +89,17 @@ function maskValue(value: string | null) {
 }
 
 function getWithdrawalDisplayStatus(item: WithdrawalHistoryItem) {
-  if (item.processed_at) {
-    return 'processed'
+  if (item.processed_at || item.status === 'processed') {
+    return 'successful'
   }
 
-  return item.status || 'pending'
+  const normalized = (item.status || '').toLowerCase()
+
+  if (normalized === 'rejected' || normalized === 'cancelled') {
+    return 'failed'
+  }
+
+  return 'processing'
 }
 
 export default function OrganizerWalletPage() {
@@ -577,7 +583,6 @@ export default function OrganizerWalletPage() {
                       {item.processed_at ? <div className="text-xs text-emerald-400">Paid out: {new Date(item.processed_at).toLocaleString()}</div> : null}
                       {item.payout_provider ? <div className="text-xs text-muted-foreground uppercase">Provider: {item.payout_provider}</div> : null}
                       {item.payout_reference ? <div className="text-xs text-muted-foreground break-all">Reference: {item.payout_reference}</div> : null}
-                      {item.payout_failure_reason && !item.processed_at ? <div className="text-xs text-amber-300">{item.payout_failure_reason}</div> : null}
                     </td>
                   </tr>
                 ))}
