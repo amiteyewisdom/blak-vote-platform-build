@@ -50,6 +50,7 @@ export default function PublicVotePage() {
   const [candidates, setCandidates] = useState<Candidate[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedVotes, setSelectedVotes] = useState<{ [key: string]: number }>({})
+  const [selectedVoteInputs, setSelectedVoteInputs] = useState<{ [key: string]: string }>({})
   const [selectedAmounts, setSelectedAmounts] = useState<{ [key: string]: number }>({})
   const [selectedPackageIds, setSelectedPackageIds] = useState<{ [key: string]: string }>({})
   const [bulkPackages, setBulkPackages] = useState<BulkVotePackage[]>([])
@@ -273,7 +274,8 @@ export default function PublicVotePage() {
 
         <section className='rounded-2xl border' style={{ backgroundColor: UI.surface, borderColor: 'rgba(255,255,255,0.08)' }}>
           {candidates.map((candidate, index) => {
-            const votes = selectedVotes[candidate.id] || 1
+            const votes = selectedVotes[candidate.id] ?? 1
+            const voteInputValue = selectedVoteInputs[candidate.id] ?? String(votes)
             const baseTotal = Number((votes * votePrice).toFixed(2))
             const total = Number((selectedAmounts[candidate.id] ?? baseTotal).toFixed(2))
             const savings = Math.max(0, Number((baseTotal - total).toFixed(2)))
@@ -341,12 +343,44 @@ export default function PublicVotePage() {
                       <Input
                         type='number'
                         min='1'
-                        value={votes}
+                        value={voteInputValue}
                         onChange={(event) => {
-                          const nextVotes = Math.max(1, Number(event.target.value) || 1)
+                          const rawValue = event.target.value
+                          setSelectedVoteInputs({
+                            ...selectedVoteInputs,
+                            [candidate.id]: rawValue,
+                          })
+
+                          const nextVotes = Number(rawValue)
+                          if (!Number.isFinite(nextVotes) || nextVotes < 1) {
+                            return
+                          }
+
                           setSelectedVotes({
                             ...selectedVotes,
                             [candidate.id]: nextVotes,
+                          })
+                          setSelectedAmounts({
+                            ...selectedAmounts,
+                            [candidate.id]: Number((nextVotes * votePrice).toFixed(2)),
+                          })
+                          setSelectedPackageIds({
+                            ...selectedPackageIds,
+                            [candidate.id]: '',
+                          })
+                        }}
+                        onBlur={() => {
+                          const rawValue = selectedVoteInputs[candidate.id]
+                          const parsedVotes = Number(rawValue)
+                          const nextVotes = Number.isFinite(parsedVotes) && parsedVotes >= 1 ? parsedVotes : 1
+
+                          setSelectedVotes({
+                            ...selectedVotes,
+                            [candidate.id]: nextVotes,
+                          })
+                          setSelectedVoteInputs({
+                            ...selectedVoteInputs,
+                            [candidate.id]: String(nextVotes),
                           })
                           setSelectedAmounts({
                             ...selectedAmounts,

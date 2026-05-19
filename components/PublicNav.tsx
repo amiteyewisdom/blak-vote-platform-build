@@ -46,6 +46,13 @@ export default function PublicNav({
     close()
   }
 
+  const scrollToTop = () => {
+    if (typeof window === 'undefined') {
+      return
+    }
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
   return (
     <>
       <header className="sticky top-0 z-40 border-b border-border bg-background/95 backdrop-blur-xl dark:border-white/10 dark:bg-[#0B0F19]/95">
@@ -58,12 +65,22 @@ export default function PublicNav({
             {actions ? <div className="hidden sm:flex items-center">{actions}</div> : null}
 
             {showMobileSignIn ? (
-              <Link
-                href={mobileSignInHref}
-                className="inline-flex h-9 items-center justify-center rounded-lg border border-border bg-secondary px-3 text-xs font-semibold text-secondary-foreground transition-colors hover:bg-secondary/80 sm:hidden"
-              >
-                Sign In
-              </Link>
+              <div className="flex items-center gap-2 sm:hidden">
+                <button
+                  type="button"
+                  onClick={scrollToTop}
+                  className="inline-flex h-9 items-center justify-center rounded-lg border border-border bg-card/70 px-3 text-xs font-semibold text-foreground transition-colors hover:bg-muted/80"
+                >
+                  Up
+                </button>
+
+                <Link
+                  href={mobileSignInHref}
+                  className="inline-flex h-9 items-center justify-center rounded-lg border border-border bg-secondary px-3 text-xs font-semibold text-secondary-foreground transition-colors hover:bg-secondary/80"
+                >
+                  Sign In
+                </Link>
+              </div>
             ) : null}
 
             <button
