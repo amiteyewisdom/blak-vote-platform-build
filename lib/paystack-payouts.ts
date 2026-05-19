@@ -92,7 +92,12 @@ function readString(record: Record<string, unknown>, keys: string[]) {
 
 function isInsufficientBalanceMessage(message: string) {
   const normalized = message.toLowerCase()
-  return normalized.includes('insufficient') && normalized.includes('balance')
+  return (
+    (normalized.includes('insufficient') && normalized.includes('balance')) ||
+    (normalized.includes('not enough') && normalized.includes('balance')) ||
+    normalized.includes('not enough to fulfil') ||
+    normalized.includes('not enough to fulfill')
+  )
 }
 
 async function updateOrganizerWithdrawal(
