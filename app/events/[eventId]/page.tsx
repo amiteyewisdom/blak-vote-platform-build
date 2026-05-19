@@ -412,12 +412,12 @@ export default function EventPage() {
 
         <div className="relative max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pt-16 pb-12">
           <div className="text-center mb-8">
-            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-[hsl(var(--gold))]/10 border border-[hsl(var(--gold))]/20 mb-6">
+            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-[hsl(var(--gold))]/18 border border-[hsl(var(--gold))]/35 mb-6">
               <Sparkles className="w-4 h-4 text-[hsl(var(--gold))]" />
               <span className="text-[hsl(var(--gold))] text-sm font-medium">{votingOpen ? 'Voting Open' : 'Published Event'}</span>
             </div>
 
-            <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold mb-4 bg-gradient-to-r from-white via-white to-[hsl(var(--gold))] bg-clip-text text-transparent">
+            <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold mb-4 bg-gradient-to-r from-foreground via-foreground to-[hsl(var(--gold))] dark:from-white dark:via-white bg-clip-text text-transparent">
               {event.title}
             </h1>
             <p className="text-lg sm:text-xl text-foreground/70 max-w-3xl mx-auto leading-relaxed">
@@ -522,7 +522,7 @@ export default function EventPage() {
                           className={`bg-[hsl(var(--legacy-bg-card))]/60 backdrop-blur-sm border rounded-xl p-4 sm:p-5 cursor-pointer transition-all duration-200 group/card ${
                             selectedCandidate === candidate.id
                               ? 'border-[hsl(var(--gold))]/70 bg-[hsl(var(--gold))]/8 shadow-lg shadow-[hsl(var(--gold))]/15 scale-[1.01]'
-                              : 'border-white/8 hover:border-[hsl(var(--gold))]/40 hover:bg-[hsl(var(--gold))]/5'
+                                : 'border-border/70 hover:border-[hsl(var(--gold))]/40 hover:bg-[hsl(var(--gold))]/5'
                           }`}
                           onClick={() => {
                             if (isMobile) {
@@ -614,7 +614,7 @@ export default function EventPage() {
                         max="1000"
                         value={customVoteQuantity}
                         onChange={(e) => setCustomVoteQuantity(e.target.value || '1')}
-                        className="w-full bg-[hsl(var(--legacy-bg-input))] border border-[hsl(var(--gold))]/40 rounded-xl px-4 py-3 text-foreground placeholder-white/40 focus:border-[hsl(var(--gold))] focus:outline-none transition text-lg font-semibold"
+                        className="w-full bg-[hsl(var(--legacy-bg-input))] border border-[hsl(var(--gold))]/40 rounded-xl px-4 py-3 text-foreground placeholder:text-muted-foreground/60 focus:border-[hsl(var(--gold))] focus:outline-none transition text-lg font-semibold"
                         placeholder="1"
                       />
                       {!isValidCustomVoteQuantity && customVoteQuantity.trim().length > 0 && (
@@ -879,7 +879,7 @@ export default function EventPage() {
                     setVoteModalError('')
                   }}
                   placeholder="your@email.com"
-                  className="w-full bg-[hsl(var(--legacy-bg-input))] border border-border rounded-xl px-4 py-3 text-foreground placeholder-white/40 focus:border-[hsl(var(--gold))] focus:outline-none transition"
+                  className="w-full bg-[hsl(var(--legacy-bg-input))] border border-border rounded-xl px-4 py-3 text-foreground placeholder:text-muted-foreground/60 focus:border-[hsl(var(--gold))] focus:outline-none transition"
                 />
               </div>
 
@@ -893,7 +893,7 @@ export default function EventPage() {
                     setVoteModalError('')
                   }}
                   placeholder="0501234567"
-                  className="w-full bg-[hsl(var(--legacy-bg-input))] border border-border rounded-xl px-4 py-3 text-foreground placeholder-white/40 focus:border-[hsl(var(--gold))] focus:outline-none transition"
+                  className="w-full bg-[hsl(var(--legacy-bg-input))] border border-border rounded-xl px-4 py-3 text-foreground placeholder:text-muted-foreground/60 focus:border-[hsl(var(--gold))] focus:outline-none transition"
                 />
                 <p className="text-xs text-muted-foreground mt-1">Used to prevent duplicate votes</p>
               </div>
@@ -909,7 +909,7 @@ export default function EventPage() {
                   setVotePhone('')
                 }}
                 disabled={voting}
-                className="flex-1 py-3 rounded-xl bg-[hsl(var(--legacy-bg-elevated))] border border-border hover:border-[hsl(var(--gold))]/40 hover:bg-[hsl(var(--legacy-bg-card))] text-foreground font-semibold active:scale-[0.97] transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex-1 py-3 rounded-xl bg-[hsl(var(--legacy-bg-elevated))] border border-border hover:border-[hsl(var(--gold))]/40 hover:bg-[hsl(var(--legacy-bg-card))] text-foreground font-semibold active:scale-[0.97] transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Cancel
               </button>
