@@ -148,6 +148,11 @@ function isInsufficientBalanceMessage(message: string) {
   )
 }
 
+function buildInsufficientFundsAdminMessage(paystackCode: string | null) {
+  const suffix = paystackCode ? ` (Paystack code: ${paystackCode})` : ''
+  return `Paystack says insufficient transferable balance${suffix}. Top up Paystack balance and retry payout.`
+}
+
 async function updateOrganizerWithdrawal(
   supabase: SupabaseLike,
   withdrawalId: number,
@@ -294,7 +299,7 @@ export async function attemptPaystackOrganizerWithdrawalPayout(params: {
   const minimumRequired = netAmount
 
   if (typeof availableBalance === 'number' && availableBalance < minimumRequired) {
-    const message = `Waiting for Paystack funds. Required ${payoutCurrency} ${minimumRequired.toFixed(2)}, available ${payoutCurrency} ${availableBalance.toFixed(2)} (Paystack ${keyMode} key).`
+    const message = buildInsufficientFundsAdminMessage(null)
 
     await updateOrganizerWithdrawal(supabase, withdrawal.id, {
       status: 'pending_funds',
@@ -356,16 +361,11 @@ export async function attemptPaystackOrganizerWithdrawalPayout(params: {
     if (isInsufficientBalanceMessage(message)) {
       const refreshedBalance = await getPaystackBalanceSnapshot(payoutCurrency)
       const refreshedAvailable = refreshedBalance.available
-      const detailedMessage =
-        typeof refreshedAvailable === 'number'
-          ? refreshedAvailable >= netAmount
-            ? `${message}${providerSuffix}. Paystack ${keyMode} API reports ${payoutCurrency} ${refreshedAvailable.toFixed(2)} available, but transfer creation still failed. This usually indicates transfer reserves/holds or transfer charge requirements above raw balance.`
-            : `${message}${providerSuffix}. Paystack ${keyMode} API reports ${payoutCurrency} ${refreshedAvailable.toFixed(2)} available while at least ${payoutCurrency} ${minimumRequired.toFixed(2)} is required.`
-          : `${message}${providerSuffix}. Could not read Paystack balance during failure handling.`
+      const conciseMessage = buildInsufficientFundsAdminMessage(paystackCode)
 
       await updateOrganizerWithdrawal(supabase, withdrawal.id, {
         status: 'pending_funds',
-        payout_failure_reason: detailedMessage,
+        payout_failure_reason: conciseMessage,
         payout_metadata: {
           trigger,
           key_mode: keyMode,
@@ -382,7 +382,7 @@ export async function attemptPaystackOrganizerWithdrawalPayout(params: {
 
       return {
         status: 'pending_funds',
-        message: detailedMessage,
+        message: conciseMessage,
       }
     }
 
