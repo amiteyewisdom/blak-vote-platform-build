@@ -98,15 +98,6 @@ function getPaystackKeyMode() {
   return 'unknown'
 }
 
-function getTransferReserveBuffer() {
-  const raw = Number(process.env.PAYSTACK_TRANSFER_RESERVE_BUFFER_GHS || '1')
-  if (!Number.isFinite(raw) || raw < 0) {
-    return 1
-  }
-
-  return Number(raw.toFixed(2))
-}
-
 function getAccountDetails(accountDetails: Record<string, unknown> | null | undefined) {
   return accountDetails && typeof accountDetails === 'object' ? accountDetails : {}
 }
@@ -244,7 +235,6 @@ export async function attemptPaystackOrganizerWithdrawalPayout(params: {
 }) : Promise<PayoutAttemptResult> {
   const { supabase, withdrawal, trigger } = params
   const keyMode = getPaystackKeyMode()
-  const transferReserveBuffer = getTransferReserveBuffer()
 
   if (withdrawal.processed_at || withdrawal.status === 'processed') {
     return {
@@ -273,10 +263,10 @@ export async function attemptPaystackOrganizerWithdrawalPayout(params: {
   const balanceSnapshot = await getPaystackBalanceSnapshot('GHS')
   const availableBalance = balanceSnapshot.available
 
-  const minimumRequired = Number((netAmount + transferReserveBuffer).toFixed(2))
+  const minimumRequired = netAmount
 
   if (typeof availableBalance === 'number' && availableBalance < minimumRequired) {
-    const message = `Waiting for Paystack funds. Required at least ${formatCurrencyAmount(minimumRequired)} (${formatCurrencyAmount(netAmount)} payout + ${formatCurrencyAmount(transferReserveBuffer)} reserve), available ${formatCurrencyAmount(availableBalance)} (Paystack ${keyMode} key).`
+    const message = `Waiting for Paystack funds. Required ${formatCurrencyAmount(minimumRequired)}, available ${formatCurrencyAmount(availableBalance)} (Paystack ${keyMode} key).`
 
     await updateOrganizerWithdrawal(supabase, withdrawal.id, {
       status: 'pending_funds',
@@ -284,7 +274,6 @@ export async function attemptPaystackOrganizerWithdrawalPayout(params: {
       payout_metadata: {
         trigger,
         key_mode: keyMode,
-        reserve_buffer_ghs: transferReserveBuffer,
         minimum_required_balance: minimumRequired,
         last_available_balance: availableBalance,
         paystack_balance_rows: balanceSnapshot.rows,
@@ -345,7 +334,6 @@ export async function attemptPaystackOrganizerWithdrawalPayout(params: {
         payout_metadata: {
           trigger,
           key_mode: keyMode,
-          reserve_buffer_ghs: transferReserveBuffer,
           minimum_required_balance: minimumRequired,
           last_available_balance: refreshedAvailable,
           paystack_balance_rows: refreshedBalance.rows,
