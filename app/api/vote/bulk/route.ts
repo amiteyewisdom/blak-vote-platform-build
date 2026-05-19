@@ -39,6 +39,54 @@ const bulkVoteSchema = z.object({
     .max(100),
 });
 
+async function reconcileNominationVoteCounts(
+  supabase: ReturnType<typeof getAdminClient>,
+  submittedVotes: Array<{ event_id: string; nominee_id: string }>
+) {
+  const eventCandidateMap = new Map<string, Set<string>>();
+
+  for (const vote of submittedVotes) {
+    const current = eventCandidateMap.get(vote.event_id) ?? new Set<string>();
+    current.add(vote.nominee_id);
+    eventCandidateMap.set(vote.event_id, current);
+  }
+
+  for (const [eventId, candidateSet] of eventCandidateMap.entries()) {
+    const candidateIds = [...candidateSet];
+    if (candidateIds.length === 0) continue;
+
+    const { data: voteRows, error: voteRowsError } = await supabase
+      .from('votes')
+      .select('candidate_id, quantity')
+      .eq('event_id', eventId)
+      .in('candidate_id', candidateIds);
+
+    if (voteRowsError) {
+      throw new Error(voteRowsError.message);
+    }
+
+    const totalsByCandidate = new Map<string, number>();
+    for (const row of voteRows ?? []) {
+      const candidateId = String((row as any).candidate_id || '');
+      if (!candidateId) continue;
+      const quantity = Math.max(1, Number((row as any).quantity || 1));
+      totalsByCandidate.set(candidateId, (totalsByCandidate.get(candidateId) ?? 0) + quantity);
+    }
+
+    for (const candidateId of candidateIds) {
+      const { error: updateError } = await supabase
+        .from('nominations')
+        .update({ vote_count: totalsByCandidate.get(candidateId) ?? 0 })
+        .eq('id', candidateId)
+        .eq('event_id', eventId);
+
+      if (updateError) {
+        throw new Error(updateError.message);
+      }
+    }
+  }
+}
+
 export async function POST(req: Request) {
   try {
     const sessionClient = await createServerClient();
@@ -255,81 +303,43 @@ export async function POST(req: Request) {
     }
 
     if (failures.length > 0 && successCount === 0) {
-      // Fallback path: if RPC fails for all rows (schema drift or function mismatch),
-      // apply the vote counts directly to nominations so organizer workflow is not blocked.
-      let fallbackApplied = 0;
-      const fallbackErrors: Array<{ index: number; nominee_id: string; error: string }> = [];
-
-      for (let i = 0; i < normalizedVotes.length; i++) {
-        const vote = normalizedVotes[i];
-        const { data: nominee, error: nomineeLookupError } = await supabase
-          .from('nominations')
-          .select('id, vote_count, event_id')
-          .eq('id', vote.nominee_id)
-          .eq('event_id', vote.event_id)
-          .maybeSingle();
-
-        if (nomineeLookupError || !nominee) {
-          fallbackErrors.push({
-            index: i,
-            nominee_id: vote.nominee_id,
-            error: nomineeLookupError?.message || 'Nominee not found for fallback update',
-          });
-          continue;
-        }
-
-        const nextVoteCount = Number(nominee.vote_count || 0) + Number(vote.count || 0);
-        const { error: updateError } = await supabase
-          .from('nominations')
-          .update({ vote_count: nextVoteCount })
-          .eq('id', nominee.id)
-          .eq('event_id', vote.event_id);
-
-        if (updateError) {
-          fallbackErrors.push({
-            index: i,
-            nominee_id: vote.nominee_id,
-            error: updateError.message,
-          });
-          continue;
-        }
-
-        fallbackApplied++;
-      }
-
-      if (fallbackApplied > 0) {
-        return NextResponse.json(
-          {
-            message: 'Manual votes recorded via fallback update',
-            successCount: fallbackApplied,
-            failures,
-            fallbackErrors,
-            warning: 'process_vote RPC failed; candidate totals were updated directly',
-          },
-          { status: 207 },
-        );
-      }
-
-      const firstFailure = failures[0]?.error || fallbackErrors[0]?.error || null;
+      const firstFailure = failures[0]?.error || null;
       return NextResponse.json(
         {
           error: 'All votes failed to record',
           details: firstFailure,
           failures,
-          fallbackErrors,
         },
         { status: 400 },
       );
     }
 
+    let reconciliationWarning: string | null = null;
+    if (successCount > 0) {
+      try {
+        await reconcileNominationVoteCounts(supabase, normalizedVotes);
+      } catch (error) {
+        reconciliationWarning = error instanceof Error ? error.message : 'Failed to reconcile nomination totals.';
+      }
+    }
+
     if (failures.length > 0) {
       return NextResponse.json(
-        { message: 'Some votes recorded with errors', successCount, failures },
+        {
+          message: 'Some votes recorded with errors',
+          successCount,
+          failures,
+          ...(reconciliationWarning ? { warning: reconciliationWarning } : {}),
+        },
         { status: 207 },
       );
     }
 
-    return NextResponse.json({ message: 'Votes recorded successfully', successCount });
+    return NextResponse.json({
+      message: 'Votes recorded successfully',
+      successCount,
+      ...(reconciliationWarning ? { warning: reconciliationWarning } : {}),
+    });
   } catch (error) {
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
