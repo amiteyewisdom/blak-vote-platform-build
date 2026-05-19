@@ -272,9 +272,13 @@ export default function OrganizerWalletPage() {
         throw new Error(payload.error || 'Failed to request withdrawal')
       }
 
+      const withdrawalData = payload.withdrawal
+      const amountDisplay = `GHS ${parsedAmount.toFixed(2)}`
+      const netAmountDisplay = withdrawalData?.net_amount ? `GHS ${Number(withdrawalData.net_amount).toFixed(2)}` : amountDisplay
+      
       toast({
-        title: 'Withdrawal Requested',
-        description: 'Your withdrawal request has been submitted for approval.',
+        title: '✓ Withdrawal Request Submitted',
+        description: `You've requested ${amountDisplay}. Your request is now pending admin review. Once approved, the system will automatically process the payout to your account (${netAmountDisplay} after fees). You'll receive updates on the status.`,
       })
 
       setWithdrawAmount('')

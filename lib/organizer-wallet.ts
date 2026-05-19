@@ -523,3 +523,268 @@ export async function createOrganizerWithdrawalRequest(
 
   return data as OrganizerWithdrawalRow | null
 }
+
+export async function sendWithdrawalConfirmationEmail(
+  email: string,
+  organizerName: string | undefined,
+  withdrawalData: {
+    amount_requested: number
+    net_amount: number
+    platform_fee_percent: number
+    platform_fee_amount: number
+    method: string
+    account_details?: Record<string, unknown> | null
+  }
+) {
+  const apiKey = process.env.RESEND_API_KEY
+  if (!apiKey) {
+    console.warn('RESEND_API_KEY not configured, skipping withdrawal confirmation email')
+    return
+  }
+
+  const from = process.env.OTP_FROM_EMAIL || 'BlakVote <noreply@mail.blakvote.com>'
+  const greeting = organizerName ? `Hi ${organizerName.split(' ')[0]},` : 'Hello,'
+  const methodDisplay = withdrawalData.method === 'mobile_money' ? 'Mobile Money' : 'Bank Transfer'
+  const accountNumber = withdrawalData.account_details
+    ? (withdrawalData.account_details.account_number || withdrawalData.account_details.phone_number || 'Your account')
+    : 'Your account'
+
+  const html = `
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>Withdrawal Request Confirmation</title>
+      <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; line-height: 1.6; color: #333; }
+        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+        .header { text-align: center; margin-bottom: 30px; }
+        .card { border: 1px solid #e5e7eb; border-radius: 8px; padding: 20px; margin-bottom: 20px; }
+        .status-box { background: #dbeafe; border-left: 4px solid #3b82f6; padding: 15px; margin-bottom: 20px; border-radius: 4px; }
+        .detail-row { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #f0f0f0; }
+        .detail-row:last-child { border-bottom: none; }
+        .detail-label { color: #666; font-size: 14px; }
+        .detail-value { font-weight: 600; color: #000; }
+        .amount { font-size: 18px; font-weight: bold; color: #10b981; }
+        .timeline { margin-top: 20px; }
+        .timeline-step { padding: 10px 0; padding-left: 30px; position: relative; }
+        .timeline-step:before { content: '✓'; position: absolute; left: 0; color: #10b981; font-weight: bold; }
+        .timeline-step.pending:before { content: '→'; color: #f59e0b; }
+        .footer { font-size: 12px; color: #999; text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #e5e7eb; }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <div class="header">
+          <h1 style="color: #1f2937; margin: 0;">BlakVote</h1>
+          <p style="color: #6b7280; margin: 5px 0 0 0;">Withdrawal Confirmation</p>
+        </div>
+
+        <p>${greeting}</p>
+        <p>Your withdrawal request has been successfully submitted for admin review.</p>
+
+        <div class="status-box">
+          <strong>Status:</strong> <em>Pending Admin Approval</em><br>
+          <small>Your request is now in the queue for administrator validation. Once approved, the system will automatically process your payout.</small>
+        </div>
+
+        <div class="card">
+          <h3 style="margin-top: 0; color: #1f2937;">Withdrawal Details</h3>
+          <div class="detail-row">
+            <span class="detail-label">Requested Amount</span>
+            <span class="detail-value amount">GHS ${withdrawalData.amount_requested.toFixed(2)}</span>
+          </div>
+          <div class="detail-row">
+            <span class="detail-label">Platform Fee</span>
+            <span class="detail-value">GHS ${withdrawalData.platform_fee_amount.toFixed(2)} (${withdrawalData.platform_fee_percent}%)</span>
+          </div>
+          <div class="detail-row">
+            <span class="detail-label">You Will Receive</span>
+            <span class="detail-value amount">GHS ${withdrawalData.net_amount.toFixed(2)}</span>
+          </div>
+          <div class="detail-row">
+            <span class="detail-label">Method</span>
+            <span class="detail-value">${methodDisplay}</span>
+          </div>
+          <div class="detail-row">
+            <span class="detail-label">Destination</span>
+            <span class="detail-value">${accountNumber}</span>
+          </div>
+        </div>
+
+        <div class="timeline">
+          <h3 style="color: #1f2937; margin-bottom: 15px;">What Happens Next</h3>
+          <div class="timeline-step">✓ Your withdrawal request has been submitted</div>
+          <div class="timeline-step pending">→ An administrator will review and approve your request</div>
+          <div class="timeline-step pending">→ Upon approval, the system will process your payout automatically</div>
+          <div class="timeline-step pending">→ You will receive funds in your account within 1-2 business days</div>
+        </div>
+
+        <p style="margin-top: 20px; padding: 15px; background: #f9fafb; border-radius: 6px; font-size: 14px;">
+          <strong>💡 Tip:</strong> You can track your withdrawal status in the BlakVote dashboard under "Wallet" → "Withdrawal History". We'll notify you if any additional information is needed.
+        </p>
+
+        <div class="footer">
+          <p>Questions? Contact us at support@blakvote.com or reach out through WhatsApp.</p>
+          <p>&copy; 2026 BlakVote. All rights reserved.</p>
+        </div>
+      </div>
+    </body>
+    </html>
+  `
+
+  try {
+    const response = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        from,
+        to: [email],
+        subject: `Withdrawal Request Confirmation - GHS ${withdrawalData.net_amount.toFixed(2)} Pending Approval`,
+        html,
+      }),
+    })
+
+    if (!response.ok) {
+      console.error(`Failed to send withdrawal confirmation email: ${response.status}`)
+    }
+  } catch (error) {
+    console.error('Error sending withdrawal confirmation email:', error)
+  }
+}
+
+export async function sendWithdrawalApprovalEmail(
+  email: string,
+  organizerName: string | undefined,
+  withdrawalData: {
+    amount_requested: number
+    net_amount: number
+    platform_fee_percent: number
+    platform_fee_amount: number
+    method: string
+    account_details?: Record<string, unknown> | null
+  }
+) {
+  const apiKey = process.env.RESEND_API_KEY
+  if (!apiKey) {
+    console.warn('RESEND_API_KEY not configured, skipping withdrawal approval email')
+    return
+  }
+
+  const from = process.env.OTP_FROM_EMAIL || 'BlakVote <noreply@mail.blakvote.com>'
+  const greeting = organizerName ? `Hi ${organizerName.split(' ')[0]},` : 'Hello,'
+  const methodDisplay = withdrawalData.method === 'mobile_money' ? 'Mobile Money' : 'Bank Transfer'
+  const accountNumber = withdrawalData.account_details
+    ? (withdrawalData.account_details.account_number || withdrawalData.account_details.phone_number || 'Your account')
+    : 'Your account'
+
+  const html = `
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>Withdrawal Request Approved</title>
+      <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; line-height: 1.6; color: #333; }
+        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+        .header { text-align: center; margin-bottom: 30px; }
+        .card { border: 1px solid #e5e7eb; border-radius: 8px; padding: 20px; margin-bottom: 20px; }
+        .status-box { background: #dcfce7; border-left: 4px solid #10b981; padding: 15px; margin-bottom: 20px; border-radius: 4px; }
+        .detail-row { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #f0f0f0; }
+        .detail-row:last-child { border-bottom: none; }
+        .detail-label { color: #666; font-size: 14px; }
+        .detail-value { font-weight: 600; color: #000; }
+        .amount { font-size: 18px; font-weight: bold; color: #10b981; }
+        .timeline { margin-top: 20px; }
+        .timeline-step { padding: 10px 0; padding-left: 30px; position: relative; }
+        .timeline-step:before { content: '✓'; position: absolute; left: 0; color: #10b981; font-weight: bold; }
+        .footer { font-size: 12px; color: #999; text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #e5e7eb; }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <div class="header">
+          <h1 style="color: #1f2937; margin: 0;">BlakVote</h1>
+          <p style="color: #6b7280; margin: 5px 0 0 0;">Withdrawal Approved ✓</p>
+        </div>
+
+        <p>${greeting}</p>
+        <p>Great news! Your withdrawal request has been reviewed and approved by our administrators.</p>
+
+        <div class="status-box">
+          <strong style="color: #166534;">✓ Approved</strong><br>
+          <small>Your withdrawal is now being processed. The system will automatically send your funds to your account. This typically takes 1-2 business days.</small>
+        </div>
+
+        <div class="card">
+          <h3 style="margin-top: 0; color: #1f2937;">Withdrawal Details</h3>
+          <div class="detail-row">
+            <span class="detail-label">Requested Amount</span>
+            <span class="detail-value amount">GHS ${withdrawalData.amount_requested.toFixed(2)}</span>
+          </div>
+          <div class="detail-row">
+            <span class="detail-label">Platform Fee</span>
+            <span class="detail-value">GHS ${withdrawalData.platform_fee_amount.toFixed(2)} (${withdrawalData.platform_fee_percent}%)</span>
+          </div>
+          <div class="detail-row">
+            <span class="detail-label">You Will Receive</span>
+            <span class="detail-value amount">GHS ${withdrawalData.net_amount.toFixed(2)}</span>
+          </div>
+          <div class="detail-row">
+            <span class="detail-label">Method</span>
+            <span class="detail-value">${methodDisplay}</span>
+          </div>
+          <div class="detail-row">
+            <span class="detail-label">Destination</span>
+            <span class="detail-value">${accountNumber}</span>
+          </div>
+        </div>
+
+        <div class="timeline">
+          <h3 style="color: #1f2937; margin-bottom: 15px;">Processing Timeline</h3>
+          <div class="timeline-step">✓ Your withdrawal request has been submitted</div>
+          <div class="timeline-step">✓ Your request has been approved</div>
+          <div class="timeline-step">✓ The system is processing your payout</div>
+          <div class="timeline-step">✓ Funds will arrive in 1-2 business days</div>
+        </div>
+
+        <p style="margin-top: 20px; padding: 15px; background: #f9fafb; border-radius: 6px; font-size: 14px;">
+          <strong>📊 Track Your Withdrawal:</strong> Check the status anytime in your BlakVote dashboard under "Wallet" → "Withdrawal History".
+        </p>
+
+        <div class="footer">
+          <p>Questions? Contact us at support@blakvote.com or reach out through WhatsApp.</p>
+          <p>&copy; 2026 BlakVote. All rights reserved.</p>
+        </div>
+      </div>
+    </body>
+    </html>
+  `
+
+  try {
+    const response = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        from,
+        to: [email],
+        subject: `✓ Withdrawal Approved - GHS ${withdrawalData.net_amount.toFixed(2)} Being Processed`,
+        html,
+      }),
+    })
+
+    if (!response.ok) {
+      console.error(`Failed to send withdrawal approval email: ${response.status}`)
+    }
+  } catch (error) {
+    console.error('Error sending withdrawal approval email:', error)
+  }
+}

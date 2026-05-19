@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { requireRole } from "@/lib/api-auth"
+import { getSupabaseAdminClient } from "@/lib/server-security"
 import { attemptPaystackOrganizerWithdrawalPayout } from '@/lib/paystack-payouts'
+import { sendWithdrawalApprovalEmail } from '@/lib/organizer-wallet'
 
 export async function POST(req: Request) {
   const supabase = await createClient()
@@ -56,6 +58,26 @@ export async function POST(req: Request) {
       },
       trigger: 'approval',
     })
+
+    // Send approval email to organizer
+    const adminSupabase = getSupabaseAdminClient()
+    const { data: user } = await adminSupabase
+      .from('users')
+      .select('email, raw_user_meta_data')
+      .eq('id', withdrawal.organizer_id)
+      .maybeSingle()
+
+    if (user) {
+      const organizerName = user.raw_user_meta_data?.full_name || user.raw_user_meta_data?.name || 'Organizer'
+      void sendWithdrawalApprovalEmail(user.email, organizerName, {
+        amount_requested: withdrawal.amount_requested,
+        net_amount: withdrawal.net_amount,
+        platform_fee_percent: withdrawal.platform_fee_percent,
+        platform_fee_amount: withdrawal.platform_fee_amount,
+        method: withdrawal.method,
+        account_details: withdrawal.account_details,
+      })
+    }
 
     return NextResponse.json({ success: true, payoutStatus: payout.status, message: payout.message })
   } catch (error) {

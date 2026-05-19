@@ -5,6 +5,7 @@ import { getSupabaseAdminClient } from '@/lib/server-security'
 import {
   createOrganizerWithdrawalRequest,
   getOrganizerWithdrawalHistoryData,
+  sendWithdrawalConfirmationEmail,
 } from '@/lib/organizer-wallet'
 
 function readTrimmedString(record: Record<string, unknown>, key: string) {
@@ -137,6 +138,27 @@ export async function POST(request: NextRequest) {
         { error: error instanceof Error ? error.message : 'Failed to create withdrawal request' },
         { status: 400 }
       )
+    }
+
+    // Send confirmation email to organizer
+    if (withdrawal) {
+      const { data: user } = await adminSupabase
+        .from('users')
+        .select('email, raw_user_meta_data')
+        .eq('id', auth.userId)
+        .maybeSingle()
+
+      if (user) {
+        const organizerName = user.raw_user_meta_data?.full_name || user.raw_user_meta_data?.name || 'Organizer'
+        void sendWithdrawalConfirmationEmail(user.email, organizerName, {
+          amount_requested: withdrawal.amount_requested,
+          net_amount: withdrawal.net_amount,
+          platform_fee_percent: withdrawal.platform_fee_percent,
+          platform_fee_amount: withdrawal.platform_fee_amount,
+          method: withdrawal.method,
+          account_details: withdrawal.account_details,
+        })
+      }
     }
 
     return NextResponse.json(
