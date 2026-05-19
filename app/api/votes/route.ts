@@ -19,7 +19,7 @@ const voteSchema = z.object({
   quantity: z.number().int().min(1).max(1000),
   phone: z
     .string()
-    .regex(/^\+?[1-9]\d{6,14}$/, 'Invalid phone number format')
+    .regex(/^[+]?[0-9]{9,15}$/, 'Invalid phone number format')
     .optional(),
 })
 

@@ -24,9 +24,9 @@ const paystackInitSchema = z
     ticketId: z.string().uuid().optional(),
     buyerName: z.string().trim().min(2).max(120).optional(),
     buyerEmail: z.string().email().optional(),
-    buyerPhone: z.string().regex(/^\+?[1-9]\d{6,14}$/).optional(),
+    buyerPhone: z.string().regex(/^[+]?[0-9]{9,15}$/).optional(),
     email: z.string().email().optional(),
-    phone: z.string().regex(/^\+?[1-9]\d{6,14}$/).optional(),
+    phone: z.string().regex(/^[+]?[0-9]{9,15}$/).optional(),
   })
   .superRefine((value, ctx) => {
     const paymentFor = value.paymentFor ?? (value.ticketId ? 'ticket' : 'vote')
