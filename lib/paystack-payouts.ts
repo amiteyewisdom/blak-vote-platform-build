@@ -98,6 +98,15 @@ function getPaystackKeyMode() {
   return 'unknown'
 }
 
+function getTransferReserveBuffer() {
+  const raw = Number(process.env.PAYSTACK_TRANSFER_RESERVE_BUFFER_GHS || '1')
+  if (!Number.isFinite(raw) || raw < 0) {
+    return 1
+  }
+
+  return Number(raw.toFixed(2))
+}
+
 function getAccountDetails(accountDetails: Record<string, unknown> | null | undefined) {
   return accountDetails && typeof accountDetails === 'object' ? accountDetails : {}
 }
@@ -235,6 +244,7 @@ export async function attemptPaystackOrganizerWithdrawalPayout(params: {
 }) : Promise<PayoutAttemptResult> {
   const { supabase, withdrawal, trigger } = params
   const keyMode = getPaystackKeyMode()
+  const transferReserveBuffer = getTransferReserveBuffer()
 
   if (withdrawal.processed_at || withdrawal.status === 'processed') {
     return {
@@ -263,8 +273,10 @@ export async function attemptPaystackOrganizerWithdrawalPayout(params: {
   const balanceSnapshot = await getPaystackBalanceSnapshot('GHS')
   const availableBalance = balanceSnapshot.available
 
-  if (typeof availableBalance === 'number' && availableBalance < netAmount) {
-    const message = `Waiting for Paystack funds. Required ${formatCurrencyAmount(netAmount)}, available ${formatCurrencyAmount(availableBalance)} (Paystack ${keyMode} key).`
+  const minimumRequired = Number((netAmount + transferReserveBuffer).toFixed(2))
+
+  if (typeof availableBalance === 'number' && availableBalance < minimumRequired) {
+    const message = `Waiting for Paystack funds. Required at least ${formatCurrencyAmount(minimumRequired)} (${formatCurrencyAmount(netAmount)} payout + ${formatCurrencyAmount(transferReserveBuffer)} reserve), available ${formatCurrencyAmount(availableBalance)} (Paystack ${keyMode} key).`
 
     await updateOrganizerWithdrawal(supabase, withdrawal.id, {
       status: 'pending_funds',
@@ -272,6 +284,8 @@ export async function attemptPaystackOrganizerWithdrawalPayout(params: {
       payout_metadata: {
         trigger,
         key_mode: keyMode,
+        reserve_buffer_ghs: transferReserveBuffer,
+        minimum_required_balance: minimumRequired,
         last_available_balance: availableBalance,
         paystack_balance_rows: balanceSnapshot.rows,
         balance_lookup_error: balanceSnapshot.error || null,
@@ -321,8 +335,8 @@ export async function attemptPaystackOrganizerWithdrawalPayout(params: {
       const detailedMessage =
         typeof refreshedAvailable === 'number'
           ? refreshedAvailable >= netAmount
-            ? `${message}. Paystack ${keyMode} API reports ${formatCurrencyAmount(refreshedAvailable)} available, so this can indicate transfer reserves/holds, provider transfer charges, or API key/account mismatch.`
-            : `${message}. Paystack ${keyMode} API reports ${formatCurrencyAmount(refreshedAvailable)} available while ${formatCurrencyAmount(netAmount)} is required.`
+            ? `${message}. Paystack ${keyMode} API reports ${formatCurrencyAmount(refreshedAvailable)} available, but transfer creation still failed. This usually indicates transfer reserves/holds or transfer charge requirements above raw balance.`
+            : `${message}. Paystack ${keyMode} API reports ${formatCurrencyAmount(refreshedAvailable)} available while at least ${formatCurrencyAmount(minimumRequired)} is required.`
           : `${message}. Could not read Paystack balance during failure handling.`
 
       await updateOrganizerWithdrawal(supabase, withdrawal.id, {
@@ -331,6 +345,8 @@ export async function attemptPaystackOrganizerWithdrawalPayout(params: {
         payout_metadata: {
           trigger,
           key_mode: keyMode,
+          reserve_buffer_ghs: transferReserveBuffer,
+          minimum_required_balance: minimumRequired,
           last_available_balance: refreshedAvailable,
           paystack_balance_rows: refreshedBalance.rows,
           balance_lookup_error: refreshedBalance.error || null,
