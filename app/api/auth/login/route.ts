@@ -30,6 +30,29 @@ function jsonNoStore(body: Record<string, unknown>, init?: ResponseInit) {
   return applyNoStoreHeaders(NextResponse.json(body, init))
 }
 
+function normalizeAccountStatus(status: string | null | undefined) {
+  return String(status || '').trim().toLowerCase()
+}
+
+function canSignInWithStatus(status: string | null | undefined) {
+  const normalized = normalizeAccountStatus(status)
+  return !normalized || normalized === 'active' || normalized === 'approved'
+}
+
+function getUnavailableAccountMessage(status: string | null | undefined) {
+  const normalized = normalizeAccountStatus(status)
+
+  if (normalized === 'suspended') {
+    return 'This account is suspended. Contact support for help.'
+  }
+
+  if (normalized === 'deleted') {
+    return 'This account has been removed. Contact support for help.'
+  }
+
+  return 'This account is currently unavailable.'
+}
+
 export async function POST(request: NextRequest) {
   const ipAddress = extractClientIp(request)
 
@@ -70,7 +93,7 @@ export async function POST(request: NextRequest) {
       return jsonNoStore({ error: 'Email or password is incorrect.' }, { status: 401 })
     }
 
-    if (userRecord.status && userRecord.status !== 'active') {
+    if (!canSignInWithStatus(userRecord.status)) {
       await logAuthEvent({
         action: 'AUTH_LOGIN_FAILED',
         severity: 'warning',
@@ -78,7 +101,7 @@ export async function POST(request: NextRequest) {
         ipAddress,
         details: { reason: 'inactive_user', email, status: userRecord.status },
       })
-      return jsonNoStore({ error: 'This account is currently unavailable.' }, { status: 403 })
+      return jsonNoStore({ error: getUnavailableAccountMessage(userRecord.status) }, { status: 403 })
     }
 
     if (!userRecord.password_hash) {

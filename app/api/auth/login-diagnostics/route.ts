@@ -85,6 +85,29 @@ function getSupportMessage() {
   return `Contact ${SUPPORT_EMAIL} or ${SUPPORT_WHATSAPP_LABEL} for help.`
 }
 
+function normalizeAccountStatus(status: string | null | undefined) {
+  return String(status || '').trim().toLowerCase()
+}
+
+function canSignInWithStatus(status: string | null | undefined) {
+  const normalized = normalizeAccountStatus(status)
+  return !normalized || normalized === 'active' || normalized === 'approved'
+}
+
+function getUnavailableAccountMessage(status: string | null | undefined) {
+  const normalized = normalizeAccountStatus(status)
+
+  if (normalized === 'suspended') {
+    return `This account is suspended. ${getSupportMessage()}`
+  }
+
+  if (normalized === 'deleted') {
+    return `This account has been removed. ${getSupportMessage()}`
+  }
+
+  return `This account is currently unavailable. ${getSupportMessage()}`
+}
+
 export async function POST(req: NextRequest): Promise<NextResponse> {
   try {
     if (!hasTrustedOrigin(req)) {
@@ -137,9 +160,9 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
     const authUser = await findAuthUserByEmail(normalizedEmail, profile?.id)
 
-    if (profile?.status && profile.status !== 'active') {
+    if (!canSignInWithStatus(profile?.status)) {
       return jsonNoStore({
-        message: `This account is currently unavailable. ${getSupportMessage()}`,
+        message: getUnavailableAccountMessage(profile?.status),
       })
     }
 

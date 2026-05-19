@@ -214,7 +214,7 @@ export async function POST(req: Request) {
           .from('vote_manual_audit_context')
           .insert({
             transaction_id: transactionId,
-            added_by_user_id: user.id,
+            added_by_user_id: auth.userId,
             manual_entry_mode: v.method,
           });
 
@@ -231,7 +231,7 @@ export async function POST(req: Request) {
         p_event_id:       v.event_id,
         p_candidate_id:   v.nominee_id,
         p_quantity:       v.count,
-        p_voter_id:       v.voter_id ?? user.id,
+        p_voter_id:       v.voter_id ?? auth.userId,
         p_voter_phone:    null,
         // Keep vote source locked to the explicit manual type in request.
         p_vote_source:    v.type,

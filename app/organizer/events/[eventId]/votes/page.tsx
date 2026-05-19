@@ -240,19 +240,24 @@ export default function VotesPage() {
     setValidationError(detailParts.join(' | ') || 'Failed to record manual vote.')
   }
 
-  const totalRevenue = votes.reduce(
-    (sum, v) => (String(v.vote_type || '').toLowerCase() === 'paid' ? sum + Number(v.amount_paid) : sum),
+  const getVoteQuantity = (vote: any) => {
+    const rawQuantity = vote?.quantity ?? vote?.votes_count ?? vote?.count ?? 1
+    const normalized = Number(rawQuantity)
+    return Number.isFinite(normalized) && normalized > 0 ? normalized : 1
+  }
+
+  const paidVotes = votes.filter((vote) => String(vote.vote_type || '').toLowerCase() === 'paid')
+
+  const totalRevenue = paidVotes.reduce(
+    (sum, v) => sum + Number(v.amount_paid || 0),
     0
   )
 
-  const paidTransactions = votes.filter(
-    (v) => String(v.vote_type || '').toLowerCase() === 'paid'
-  ).length
+  const paidTransactions = paidVotes.length
 
-  const totalVotes = votes.reduce(
-    (sum, v) => sum + Number(v.quantity ?? 1),
-    0
-  )
+  const totalVotesFromRows = votes.reduce((sum, vote) => sum + getVoteQuantity(vote), 0)
+  const totalVotesFromAudit = auditLogs.reduce((sum, log) => sum + Number(log.quantity ?? 1), 0)
+  const totalVotes = Math.max(totalVotesFromRows, totalVotesFromAudit)
 
   if (loading)
     return (
@@ -332,7 +337,7 @@ export default function VotesPage() {
           </thead>
 
           <tbody>
-            {votes.map((vote) => (
+            {paidVotes.map((vote) => (
               <tr
                 key={vote.id}
                 className="border-b border-border/70 hover:bg-surface/70"
@@ -341,13 +346,13 @@ export default function VotesPage() {
                   {vote.nominations?.nominee_name}
                 </td>
                 <td className="p-4">
-                  {vote.votes_count}
+                  {getVoteQuantity(vote)}
                 </td>
                 <td className="p-4">
-                  GHS {vote.amount_paid}
+                  GHS {Number(vote.amount_paid || 0).toFixed(2)}
                 </td>
                 <td className="p-4">
-                  {vote.payment_status}
+                  {vote.payment_status || vote.vote_type || 'paid'}
                 </td>
                 <td className="p-4 text-muted-foreground">
                   {new Date(vote.created_at).toLocaleDateString()}
