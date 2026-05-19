@@ -144,12 +144,12 @@ export async function POST(request: NextRequest) {
     if (withdrawal) {
       const { data: user } = await adminSupabase
         .from('users')
-        .select('email, raw_user_meta_data')
+        .select('email, first_name, last_name')
         .eq('id', auth.userId)
         .maybeSingle()
 
       if (user) {
-        const organizerName = user.raw_user_meta_data?.full_name || user.raw_user_meta_data?.name || 'Organizer'
+        const organizerName = [user.first_name, user.last_name].filter(Boolean).join(' ') || 'Organizer'
         void sendWithdrawalConfirmationEmail(user.email, organizerName, {
           amount_requested: withdrawal.amount_requested,
           net_amount: withdrawal.net_amount,
