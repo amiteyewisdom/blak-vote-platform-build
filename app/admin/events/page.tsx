@@ -1,11 +1,25 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { supabase } from "@/lib/supabaseClient"
 import { isLiveEventStatus } from "@/lib/event-status"
 
+type OrganizerProfile = {
+  first_name?: string | null
+  last_name?: string | null
+  email?: string | null
+}
+
+type AdminEvent = {
+  id: string
+  title?: string | null
+  status?: string | null
+  total_revenue?: number | null
+  organizer_id?: string | null
+  profiles?: OrganizerProfile | null
+}
+
 export default function AdminEventsPage() {
-  const [events, setEvents] = useState<any[]>([])
+  const [events, setEvents] = useState<AdminEvent[]>([])
   const [loading, setLoading] = useState(true)
   const [processingId, setProcessingId] = useState<string | null>(null)
 
@@ -14,21 +28,21 @@ export default function AdminEventsPage() {
   }, [])
 
   const fetchEvents = async () => {
-   const { data } = await supabase
-  .from("events")
-  .select(`
-    *,
-    profiles:organizer_id (
-      first_name,
-      last_name,
-      email
-    )
-  `)
-  .neq("status", "deleted")
-  .order("created_at", { ascending: false })
+    try {
+      const response = await fetch("/api/admin/events", { cache: "no-store" })
+      const payload = await response.json().catch(() => null)
 
-    if (data) setEvents(data)
-    setLoading(false)
+      if (!response.ok) {
+        console.error("[AdminEvents] Failed to fetch events", payload?.error || response.statusText)
+        setEvents([])
+        return
+      }
+
+      const fetchedEvents = Array.isArray(payload?.events) ? payload.events : []
+      setEvents(fetchedEvents as AdminEvent[])
+    } finally {
+      setLoading(false)
+    }
   }
 
   const suspendEvent = async (id: string) => {
