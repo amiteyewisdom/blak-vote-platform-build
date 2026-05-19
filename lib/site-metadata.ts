@@ -100,7 +100,6 @@ export function getSiteConfig(hostname: string | null | undefined): SiteConfig {
 export function buildMetadata(hostname: string | null | undefined): Metadata {
   const site = getSiteConfig(hostname)
   const imageUrl = `${site.origin}/site-logo.png`
-  const faviconUrl = `${site.origin}/favicon.ico`
 
   return {
     metadataBase: new URL(site.origin),
@@ -124,11 +123,11 @@ export function buildMetadata(hostname: string | null | undefined): Metadata {
     manifest: "/manifest.webmanifest",
     icons: {
       icon: [
-        { url: "/favicon.ico", type: "image/x-icon" },
+        { url: "/favicon.svg", type: "image/svg+xml" },
         { url: "/favicon.png", sizes: "512x512", type: "image/png" },
         { url: "/icon", sizes: "512x512", type: "image/png" },
       ],
-      shortcut: [faviconUrl],
+      shortcut: [{ url: "/favicon.png", type: "image/png" }],
       apple: [
         { url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" },
         { url: "/apple-icon", sizes: "180x180", type: "image/png" },
