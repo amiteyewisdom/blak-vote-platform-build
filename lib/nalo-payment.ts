@@ -6,6 +6,15 @@ import { getSupabaseAdminClient } from '@/lib/server-security'
 
 type UssdTransactionStatus = 'pending' | 'paid' | 'failed'
 
+type ProcessSuccessResultBody = {
+  resource?: 'vote' | 'ticket'
+  eventId?: string
+  paymentId?: string
+  ticketCode?: string | null
+  ticketCodes?: string[]
+  [key: string]: unknown
+}
+
 type UssdTicketPlan = {
   id: string
   name: string | null
@@ -305,6 +314,93 @@ export async function updateUssdPendingTransaction(reference: string, updates: {
 
   if (error) {
     throw new Error(error.message)
+  }
+}
+
+async function getPaymentPhoneByReference(reference: string) {
+  const supabase = getSupabaseAdminClient()
+  const { data, error } = await supabase
+    .from('payments')
+    .select('voter_phone')
+    .eq('reference', reference)
+    .maybeSingle()
+
+  if (error) {
+    throw new Error(error.message)
+  }
+
+  const raw = String(data?.voter_phone || '').trim()
+  if (!raw) {
+    return null
+  }
+
+  return normalizeMsisdn(raw)
+}
+
+function getTicketCodesFromResultBody(body: ProcessSuccessResultBody | null | undefined) {
+  const codes = Array.isArray(body?.ticketCodes)
+    ? body!.ticketCodes.filter((code): code is string => typeof code === 'string' && code.trim().length > 0)
+    : []
+
+  if (codes.length > 0) {
+    return codes
+  }
+
+  if (typeof body?.ticketCode === 'string' && body.ticketCode.trim().length > 0) {
+    return [body.ticketCode.trim()]
+  }
+
+  return []
+}
+
+function buildUssdTicketSmsMessage(params: { ticketCodes: string[]; reference: string }) {
+  const { ticketCodes, reference } = params
+  const suffix = ticketCodes.length > 1 ? 'codes' : 'code'
+  return `BlakVote ticket ${suffix}: ${ticketCodes.join(', ')}. Ref: ${reference}. Keep this message for entry.`
+}
+
+async function sendUssdTicketSmsNotification(params: {
+  phoneNumber: string
+  reference: string
+  ticketCodes: string[]
+  eventId?: string
+}) {
+  const webhookUrl = process.env.USSD_TICKET_SMS_WEBHOOK_URL?.trim()
+  if (!webhookUrl) {
+    return
+  }
+
+  const token = process.env.USSD_TICKET_SMS_WEBHOOK_TOKEN?.trim()
+  const message = buildUssdTicketSmsMessage({
+    ticketCodes: params.ticketCodes,
+    reference: params.reference,
+  })
+
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+  }
+
+  if (token) {
+    headers.Authorization = token.startsWith('Bearer ') ? token : `Bearer ${token}`
+  }
+
+  const response = await fetch(webhookUrl, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({
+      channel: 'sms',
+      phoneNumber: params.phoneNumber,
+      message,
+      reference: params.reference,
+      eventId: params.eventId || null,
+      ticketCodes: params.ticketCodes,
+      source: 'ussd-nalo-webhook',
+    }),
+  })
+
+  if (!response.ok) {
+    const responseText = await response.text().catch(() => '')
+    throw new Error(`SMS webhook failed (${response.status}): ${responseText || 'no response body'}`)
   }
 }
 
@@ -786,6 +882,38 @@ export async function handleNaloWebhookRequest(request: Request) {
 
     if (NALO_CONFIRMED_STATUSES.includes(normalizedStatus)) {
       const result = await paymentService.handleSuccess(verification)
+
+      try {
+        const body = (result?.body || {}) as ProcessSuccessResultBody
+        if (body.resource === 'ticket') {
+          const ticketCodes = getTicketCodesFromResultBody(body)
+          if (ticketCodes.length > 0) {
+            const phoneNumber = await getPaymentPhoneByReference(verification.reference)
+            if (phoneNumber) {
+              await sendUssdTicketSmsNotification({
+                phoneNumber,
+                reference: verification.reference,
+                eventId: typeof body.eventId === 'string' ? body.eventId : undefined,
+                ticketCodes,
+              })
+              console.info('[NALO_WEBHOOK_TICKET_SMS_SENT]', {
+                reference: verification.reference,
+                codesCount: ticketCodes.length,
+              })
+            } else {
+              console.warn('[NALO_WEBHOOK_TICKET_SMS_SKIPPED_NO_PHONE]', {
+                reference: verification.reference,
+              })
+            }
+          }
+        }
+      } catch (notifyError: any) {
+        console.warn('[NALO_WEBHOOK_TICKET_SMS_FAIL]', {
+          reference: verification.reference,
+          error: notifyError?.message || String(notifyError),
+        })
+      }
+
       console.info('[NALO_WEBHOOK_CONFIRMED_RESULT]', {
         reference: verification.reference,
         status: normalizedStatus,

@@ -502,7 +502,35 @@ async function ensureAdminRevenueCapturedForVote(params: {
   amountPaid: number
   processedAtIso: string
 }) {
-  const { supabase, payment, verificationReference, voteId, amountPaid, processedAtIso } = params
+  await ensureAdminRevenueCapturedForPayment({
+    supabase: params.supabase,
+    payment: params.payment,
+    verificationReference: params.verificationReference,
+    paymentContext: 'vote',
+    voteId: params.voteId,
+    amountPaid: params.amountPaid,
+    processedAtIso: params.processedAtIso,
+  })
+}
+
+async function ensureAdminRevenueCapturedForPayment(params: {
+  supabase: ReturnType<typeof getSupabaseAdminClient>
+  payment: any
+  verificationReference: string
+  paymentContext: 'vote' | 'ticket'
+  voteId?: string | null
+  amountPaid: number
+  processedAtIso: string
+}) {
+  const {
+    supabase,
+    payment,
+    verificationReference,
+    paymentContext,
+    voteId,
+    amountPaid,
+    processedAtIso,
+  } = params
 
   const paymentId = String(payment?.id || '').trim()
   const eventId = String(payment?.event_id || '').trim()
@@ -559,9 +587,9 @@ async function ensureAdminRevenueCapturedForVote(params: {
       event_id: eventId,
       event_title: eventRow?.title || null,
       organizer_id: eventRow?.organizer_id || null,
-      vote_id: voteId,
+      vote_id: paymentContext === 'vote' ? voteId || null : null,
       vote_type: 'paid',
-      payment_context: 'vote',
+      payment_context: paymentContext,
       gross_amount: Number(amountPaid.toFixed(2)),
       platform_fee_percent: Number(feePercent.toFixed(2)),
       platform_fee_amount: platformFeeAmount,
@@ -574,7 +602,7 @@ async function ensureAdminRevenueCapturedForVote(params: {
       event_id: eventId,
       event_title: eventRow?.title || null,
       organizer_id: eventRow?.organizer_id || null,
-      vote_id: voteId,
+      vote_id: paymentContext === 'vote' ? voteId || null : null,
       vote_type: 'paid',
       gross_amount: Number(amountPaid.toFixed(2)),
       platform_fee_percent: Number(feePercent.toFixed(2)),
@@ -1624,6 +1652,16 @@ export async function processConfirmedPayment(verification: PaymentVerificationP
         processed_at: new Date().toISOString(),
       })
       .eq('reference', verification.reference)
+
+    await ensureAdminRevenueCapturedForPayment({
+      supabase,
+      payment,
+      verificationReference: verification.reference,
+      paymentContext: 'ticket',
+      voteId: null,
+      amountPaid: Number(payment.amount || verification.amount || 0),
+      processedAtIso: new Date().toISOString(),
+    })
 
     return {
       ok: true as const,

@@ -187,6 +187,27 @@ After confirming the MoMo prompt on your phone for a paid flow, expect the Nalo 
 - Paid ticketing on USSD is enabled through Nalo MoMo collection plus webhook confirmation.
 - Duplicate callback retries are handled via deterministic transaction IDs per session/action.
 
+## 8.1) Optional SMS Delivery for Paid USSD Tickets
+
+After paid USSD ticket payment is confirmed on `POST /api/nalo/webhook`, the backend can send issued ticket code(s) by SMS using an outbound webhook.
+
+Configure:
+
+- `USSD_TICKET_SMS_WEBHOOK_URL=https://YOUR_SMS_GATEWAY_ENDPOINT`
+- `USSD_TICKET_SMS_WEBHOOK_TOKEN=your_optional_bearer_token`
+
+Payload sent to your SMS gateway:
+
+- `channel`: `sms`
+- `phoneNumber`: normalized buyer MSISDN
+- `message`: ready-to-send ticket text
+- `reference`: payment reference
+- `eventId`: event ID if available
+- `ticketCodes`: array of issued ticket codes
+- `source`: `ussd-nalo-webhook`
+
+If these vars are not set, ticket issuance still works and SMS send is skipped.
+
 ## 9) Where Money Goes
 
 The USSD endpoint only handles menu navigation and backend actions after a confirmed payment event. It does not decide where collected money settles.

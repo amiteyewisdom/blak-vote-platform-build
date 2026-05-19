@@ -1,6 +1,6 @@
-export const PUBLIC_EVENT_STATUSES = ['active', 'pending', 'published'] as const
+export const PUBLIC_EVENT_STATUSES = ['active', 'pending', 'published', 'live', 'open'] as const
 export const LIVE_EVENT_STATUSES = PUBLIC_EVENT_STATUSES
-export const VOTING_OPEN_EVENT_STATUSES = ['active'] as const
+export const VOTING_OPEN_EVENT_STATUSES = ['active', 'live', 'open', 'published'] as const
 
 export function isPublicEventStatus(status: string | null | undefined) {
   if (!status) {
