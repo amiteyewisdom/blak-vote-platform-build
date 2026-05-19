@@ -19,6 +19,7 @@ interface Withdrawal {
   payout_provider?: string | null
   payout_reference?: string | null
   payout_failure_reason?: string | null
+  payout_metadata?: Record<string, unknown> | null
 }
 
 interface PlatformWithdrawal {
@@ -234,6 +235,19 @@ export default function AdminWithdrawalsPage() {
     }
 
     return null
+  }
+
+  const readPayoutMetadataValue = (metadata: Record<string, unknown> | null | undefined, key: string) => {
+    if (!metadata || typeof metadata !== 'object') {
+      return null
+    }
+
+    const value = metadata[key]
+    if (value === undefined || value === null) {
+      return null
+    }
+
+    return String(value)
   }
 
   const maskValue = (value: string | null) => {
@@ -457,6 +471,12 @@ export default function AdminWithdrawalsPage() {
                 )}
                 {w.payout_reference && (
                   <p className="text-xs text-muted-foreground break-all">Reference: {w.payout_reference}</p>
+                )}
+                {readPayoutMetadataValue(w.payout_metadata, 'paystack_error_code') && !w.processed_at && (
+                  <p className="text-xs text-amber-300">Paystack Code: {readPayoutMetadataValue(w.payout_metadata, 'paystack_error_code')}</p>
+                )}
+                {readPayoutMetadataValue(w.payout_metadata, 'paystack_error_status') && !w.processed_at && (
+                  <p className="text-xs text-amber-300">Paystack HTTP Status: {readPayoutMetadataValue(w.payout_metadata, 'paystack_error_status')}</p>
                 )}
                 {w.payout_failure_reason && !w.processed_at && (
                   <p className="text-xs text-amber-300 max-w-xl">{w.payout_failure_reason}</p>
