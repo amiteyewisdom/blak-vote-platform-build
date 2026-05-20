@@ -6,6 +6,7 @@ import { useToast } from '@/hooks/use-toast'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { resolveEventVotePrice } from '@/lib/event-pricing'
+import { getPublicUssdShortcode } from '@/lib/ussd-shortcode'
 import PublicNav from '@/components/PublicNav'
 
 interface EventData {
@@ -58,6 +59,7 @@ export default function PublicVotePage() {
   const [submittingCandidateId, setSubmittingCandidateId] = useState<string | null>(null)
   const { toast } = useToast()
   const votePrice = resolveEventVotePrice(event)
+  const ussdShortcode = getPublicUssdShortcode()
 
   useEffect(() => {
     const fetchEvent = async () => {
@@ -269,6 +271,13 @@ export default function PublicVotePage() {
                 style={{ borderColor: 'rgba(255,255,255,0.12)', backgroundColor: 'rgba(255,255,255,0.02)', color: UI.textPrimary }}
               />
             </div>
+          </div>
+
+          <div className='mt-4 rounded-xl border px-4 py-3' style={{ borderColor: 'rgba(250, 204, 21, 0.35)', backgroundColor: 'rgba(250, 204, 21, 0.09)' }}>
+            <p className='text-xs font-semibold uppercase tracking-[0.16em]' style={{ color: UI.primary }}>Offline voting</p>
+            <p className='mt-1 text-sm' style={{ color: UI.textPrimary }}>
+              Dial <span className='font-semibold'>{ussdShortcode}</span> to vote by USSD if you do not have internet.
+            </p>
           </div>
         </div>
 

@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
 import { resolveEventVotePrice } from '@/lib/event-pricing'
 import { isVotingOpenStatus } from '@/lib/event-status'
+import { getPublicUssdShortcode } from '@/lib/ussd-shortcode'
 import { Vote, Users, Trophy, Heart, Calendar, Clock, Sparkles, ArrowLeft, ChevronDown, ChevronRight } from 'lucide-react'
 import Link from 'next/link'
 import { useToast } from '@/hooks/use-toast'
@@ -49,6 +50,7 @@ export default function EventPage() {
   const [selectedVoteAmount, setSelectedVoteAmount] = useState<number | null>(null)
   const [customVoteQuantity, setCustomVoteQuantity] = useState<string>('1')
   const { toast } = useToast()
+  const ussdShortcode = getPublicUssdShortcode()
 
   const votePrice = resolveEventVotePrice(event)
   const votingOpen = isVotingOpenStatus(event?.status)
@@ -454,6 +456,13 @@ export default function EventPage() {
               </div>
               <div className="text-xs text-muted-foreground">Ends</div>
             </div>
+          </div>
+
+          <div className="mt-5 max-w-2xl mx-auto rounded-2xl border border-[hsl(var(--gold))]/35 bg-[hsl(var(--gold))]/10 px-4 py-3 text-center">
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[hsl(var(--gold))]">Offline Voting</p>
+            <p className="mt-1 text-sm text-foreground/85">
+              Dial <span className="font-semibold">{ussdShortcode}</span> to vote via USSD when you are offline.
+            </p>
           </div>
         </div>
       </div>

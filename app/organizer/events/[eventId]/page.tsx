@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
 import { useToast } from '@/hooks/use-toast'
+import { getPublicUssdShortcode } from '@/lib/ussd-shortcode'
 import {
   Trophy,
   FolderPlus,
@@ -29,6 +30,7 @@ export default function EventDashboardPage() {
   const [savingStatus, setSavingStatus] = useState(false)
   const [origin, setOrigin] = useState('')
   const { toast } = useToast()
+  const ussdShortcode = getPublicUssdShortcode()
 
   useEffect(() => {
     if (!id) return
@@ -209,17 +211,31 @@ export default function EventDashboardPage() {
       </div>
 
       {publicCode && origin && (
-        <div className="rounded-2xl border border-border bg-[hsl(var(--legacy-bg-card))] p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+        <div className="rounded-2xl border border-border bg-[hsl(var(--legacy-bg-card))] p-4 flex flex-col gap-4">
           <div>
             <p className="text-sm text-muted-foreground">Public Event Link</p>
             <p className="text-foreground font-medium break-all">{`${origin}/events/${publicCode}`}</p>
           </div>
-          <button
-            onClick={() => navigator.clipboard.writeText(`${origin}/events/${publicCode}`)}
-            className="px-4 py-2 rounded-xl bg-[hsl(var(--gold))] text-black font-semibold"
-          >
-            Copy Link
-          </button>
+          <div className="rounded-xl border border-[hsl(var(--gold))]/30 bg-[hsl(var(--gold))]/10 p-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-[hsl(var(--gold))]">Offline Voting (USSD)</p>
+            <p className="mt-1 text-sm text-foreground/85">
+              Ask voters to dial <span className="font-semibold">{ussdShortcode}</span> and enter this event code: <span className="font-semibold">{publicCode}</span>.
+            </p>
+          </div>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <button
+              onClick={() => navigator.clipboard.writeText(`${origin}/events/${publicCode}`)}
+              className="px-4 py-2 rounded-xl bg-[hsl(var(--gold))] text-black font-semibold"
+            >
+              Copy Link
+            </button>
+            <button
+              onClick={() => navigator.clipboard.writeText(ussdShortcode)}
+              className="px-4 py-2 rounded-xl border border-border bg-background text-foreground font-semibold"
+            >
+              Copy USSD Code
+            </button>
+          </div>
         </div>
       )}
 
