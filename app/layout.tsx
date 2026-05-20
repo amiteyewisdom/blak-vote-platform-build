@@ -3,6 +3,7 @@ import { headers } from "next/headers"
 import { ToastProvider, ToastViewport } from "@/components/ui/toast"
 import { ThemeProvider } from "@/components/theme-provider"
 import { ThemeToggle } from "@/components/theme-toggle"
+import PwaInstallPrompt from "@/components/PwaInstallPrompt"
 import { buildMetadata, buildStructuredData, normalizeHost } from "@/lib/site-metadata"
 import "./globals.css"
 
@@ -58,6 +59,7 @@ export default async function RootLayout({
               {children}
             </div>
 
+            <PwaInstallPrompt />
             <ThemeToggle className="fixed bottom-[calc(1rem+env(safe-area-inset-bottom))] right-4 z-50 inline-flex px-2.5 py-2 text-xs sm:px-3 sm:py-2 sm:text-sm" />
             <ToastViewport />
           </ToastProvider>
