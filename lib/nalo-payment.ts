@@ -317,6 +317,57 @@ export async function updateUssdPendingTransaction(reference: string, updates: {
   }
 }
 
+async function getEventTitleById(eventId: string): Promise<string | null> {
+  if (!eventId) return null
+  const supabase = getSupabaseAdminClient()
+  const { data } = await supabase
+    .from('events')
+    .select('title')
+    .eq('id', eventId)
+    .maybeSingle()
+  return typeof data?.title === 'string' ? data.title : null
+}
+
+async function getVoteInfoForSms(
+  voteId: string,
+  eventId: string
+): Promise<{ candidateName: string; eventTitle: string; quantity: number } | null> {
+  if (!voteId) return null
+  const supabase = getSupabaseAdminClient()
+  const { data: voteRow } = await supabase
+    .from('votes')
+    .select('quantity, candidate_id, event_id')
+    .eq('id', voteId)
+    .maybeSingle()
+  if (!voteRow) return null
+
+  const effectiveEventId = eventId || String(voteRow.event_id || '')
+  const [{ data: nomination }, { data: eventRow }] = await Promise.all([
+    supabase
+      .from('nominations')
+      .select('nominee_name')
+      .eq('id', voteRow.candidate_id)
+      .maybeSingle(),
+    supabase
+      .from('events')
+      .select('title')
+      .eq('id', effectiveEventId)
+      .maybeSingle(),
+  ])
+
+  return {
+    candidateName:
+      typeof nomination?.nominee_name === 'string' && nomination.nominee_name.trim()
+        ? nomination.nominee_name.trim()
+        : 'your candidate',
+    eventTitle:
+      typeof eventRow?.title === 'string' && eventRow.title.trim()
+        ? eventRow.title.trim()
+        : 'the event',
+    quantity: Number(voteRow.quantity || 1),
+  }
+}
+
 async function getPaymentPhoneByReference(reference: string) {
   const supabase = getSupabaseAdminClient()
   const { data, error } = await supabase
@@ -353,55 +404,85 @@ function getTicketCodesFromResultBody(body: ProcessSuccessResultBody | null | un
   return []
 }
 
-function buildUssdTicketSmsMessage(params: { ticketCodes: string[]; reference: string }) {
-  const { ticketCodes, reference } = params
-  const suffix = ticketCodes.length > 1 ? 'codes' : 'code'
-  return `BlakVote ticket ${suffix}: ${ticketCodes.join(', ')}. Ref: ${reference}. Keep this message for entry.`
+// ---------------------------------------------------------------------------
+// Nalo SMS sending
+// ---------------------------------------------------------------------------
+
+export async function sendNaloSms(phoneNumber: string, message: string): Promise<void> {
+  const usernamePrefix = process.env.NALO_SMS_USERNAME_PREFIX?.trim() || 'Resl_Nalo'
+  const authKey = process.env.NALO_SMS_AUTH_KEY?.trim()
+  const username = process.env.NALO_SMS_USERNAME?.trim()
+  const password = process.env.NALO_SMS_PASSWORD?.trim()
+
+  if (!authKey && !(username && password)) {
+    return
+  }
+
+  const endpoint =
+    process.env.NALO_SMS_API_URL?.trim() ||
+    `https://sms.nalosolutions.com/smsbackend/clientapi/${encodeURIComponent(usernamePrefix)}/send-message/`
+
+  const source = process.env.NALO_SMS_SOURCE?.trim() || 'BLAKVOTE'
+  const dlr = process.env.NALO_SMS_DLR?.trim() || '1'
+  const type = process.env.NALO_SMS_TYPE?.trim() || '0'
+  const callbackUrl = process.env.NALO_SMS_CALLBACK_URL?.trim()
+
+  const query = new URLSearchParams()
+  query.set('type', type)
+  query.set('destination', phoneNumber)
+  query.set('dlr', dlr)
+  query.set('source', source)
+  query.set('message', message)
+
+  if (callbackUrl) {
+    query.set('callback_url', callbackUrl)
+  }
+
+  if (authKey) {
+    query.set('key', authKey)
+  } else {
+    query.set('username', username!)
+    query.set('password', password!)
+  }
+
+  const response = await fetch(`${endpoint}?${query.toString()}`, {
+    method: 'GET',
+  })
+
+  const responseText = await response.text().catch(() => '')
+  if (!response.ok) {
+    throw new Error(`Nalo SMS send failed (${response.status}): ${responseText || 'no response body'}`)
+  }
 }
 
 async function sendUssdTicketSmsNotification(params: {
   phoneNumber: string
   reference: string
   ticketCodes: string[]
-  eventId?: string
+  eventTitle?: string
 }) {
-  const webhookUrl = process.env.USSD_TICKET_SMS_WEBHOOK_URL?.trim()
-  if (!webhookUrl) {
-    return
-  }
+  const { ticketCodes, reference, eventTitle, phoneNumber } = params
+  const suffix = ticketCodes.length === 1 ? 'Code' : 'Codes'
+  const eventPart = eventTitle ? ` | Event: ${eventTitle}` : ''
+  const message =
+    `BlakVote Ticket ${suffix}: ${ticketCodes.join(', ')}${eventPart}. ` +
+    `Ref: ${reference}. Show this code at the gate.`
+  await sendNaloSms(phoneNumber, message)
+}
 
-  const token = process.env.USSD_TICKET_SMS_WEBHOOK_TOKEN?.trim()
-  const message = buildUssdTicketSmsMessage({
-    ticketCodes: params.ticketCodes,
-    reference: params.reference,
-  })
-
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-  }
-
-  if (token) {
-    headers.Authorization = token.startsWith('Bearer ') ? token : `Bearer ${token}`
-  }
-
-  const response = await fetch(webhookUrl, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({
-      channel: 'sms',
-      phoneNumber: params.phoneNumber,
-      message,
-      reference: params.reference,
-      eventId: params.eventId || null,
-      ticketCodes: params.ticketCodes,
-      source: 'ussd-nalo-webhook',
-    }),
-  })
-
-  if (!response.ok) {
-    const responseText = await response.text().catch(() => '')
-    throw new Error(`SMS webhook failed (${response.status}): ${responseText || 'no response body'}`)
-  }
+async function sendUssdVoteSmsNotification(params: {
+  phoneNumber: string
+  reference: string
+  candidateName: string
+  eventTitle: string
+  quantity: number
+  amountPaid: number
+}) {
+  const { phoneNumber, reference, candidateName, eventTitle, quantity, amountPaid } = params
+  const message =
+    `BlakVote: Vote confirmed! You cast ${quantity} vote${quantity === 1 ? '' : 's'} for ${candidateName}` +
+    ` in ${eventTitle}. Amount: GHS ${Number(amountPaid).toFixed(2)}. Ref: ${reference}. Thank you!`
+  await sendNaloSms(phoneNumber, message)
 }
 
 type InitiateMoMoPaymentInput = {
@@ -885,30 +966,52 @@ export async function handleNaloWebhookRequest(request: Request) {
 
       try {
         const body = (result?.body || {}) as ProcessSuccessResultBody
-        if (body.resource === 'ticket') {
-          const ticketCodes = getTicketCodesFromResultBody(body)
-          if (ticketCodes.length > 0) {
-            const phoneNumber = await getPaymentPhoneByReference(verification.reference)
-            if (phoneNumber) {
+        const phoneNumber = await getPaymentPhoneByReference(verification.reference)
+
+        if (phoneNumber) {
+          if (body.resource === 'ticket') {
+            const ticketCodes = getTicketCodesFromResultBody(body)
+            if (ticketCodes.length > 0) {
+              const eventTitle = await getEventTitleById(
+                typeof body.eventId === 'string' ? body.eventId : ''
+              )
               await sendUssdTicketSmsNotification({
                 phoneNumber,
                 reference: verification.reference,
-                eventId: typeof body.eventId === 'string' ? body.eventId : undefined,
                 ticketCodes,
+                eventTitle: eventTitle || undefined,
               })
               console.info('[NALO_WEBHOOK_TICKET_SMS_SENT]', {
                 reference: verification.reference,
                 codesCount: ticketCodes.length,
               })
-            } else {
-              console.warn('[NALO_WEBHOOK_TICKET_SMS_SKIPPED_NO_PHONE]', {
+            }
+          } else if (body.resource === 'vote' || body.voteId) {
+            const voteInfo = await getVoteInfoForSms(
+              typeof body.voteId === 'string' ? body.voteId : '',
+              typeof body.eventId === 'string' ? body.eventId : ''
+            )
+            if (voteInfo) {
+              await sendUssdVoteSmsNotification({
+                phoneNumber,
+                reference: verification.reference,
+                candidateName: voteInfo.candidateName,
+                eventTitle: voteInfo.eventTitle,
+                quantity: voteInfo.quantity,
+                amountPaid: verification.amount,
+              })
+              console.info('[NALO_WEBHOOK_VOTE_SMS_SENT]', {
                 reference: verification.reference,
               })
             }
           }
+        } else {
+          console.warn('[NALO_WEBHOOK_SMS_SKIPPED_NO_PHONE]', {
+            reference: verification.reference,
+          })
         }
       } catch (notifyError: any) {
-        console.warn('[NALO_WEBHOOK_TICKET_SMS_FAIL]', {
+        console.warn('[NALO_WEBHOOK_SMS_FAIL]', {
           reference: verification.reference,
           error: notifyError?.message || String(notifyError),
         })

@@ -2,6 +2,7 @@ import crypto from 'crypto'
 import { resolveEventVotePrice } from '@/lib/event-pricing'
 import { isVotingOpenStatus } from '@/lib/event-status'
 import { extractClientIp, getAllowedIps, getSupabaseAdminClient, isRequestFromAllowedIps } from '@/lib/server-security'
+import { sendNaloSms } from '@/lib/nalo-payment'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -50,7 +51,6 @@ type CandidateRecord = {
 }
 
 const MAX_VOTE_QUANTITY = 1000
-const MAX_USSD_TICKET_QUANTITY = 3
 const NALO_DEFAULT_USSD_ALLOWED_IPS = ['136.243.56.160']
 const DEFAULT_USSD_SHORTCODE = '*920*377#'
 
@@ -583,6 +583,16 @@ async function handleVoteFlow(params: {
       return end('Unable to record vote right now. Please try again.')
     }
 
+    try {
+      const smsMsgFree =
+        `BlakVote: Vote confirmed! You cast ${quantity} vote${quantity === 1 ? '' : 's'} for ` +
+        `${candidate.nominee_name || candidateCode} in ${event.title || eventCode}. ` +
+        `Amount: GHS 0.00. Thank you!`
+      await sendNaloSms(trimToPhoneIdentifier(phoneNumber), smsMsgFree)
+    } catch (smsErr: any) {
+      console.warn('[USSD_FREE_VOTE_SMS_FAIL]', smsErr?.message || smsErr)
+    }
+
     return end('Vote recorded successfully. Thank you for voting!')
   }
 
@@ -689,14 +699,13 @@ async function handleTicketFlow(params: {
   const plan = plans[planIndex] as TicketPlanRecord & { price: number; remainingQuantity: number }
 
   if (steps.length === 3) {
-    return con(`Ticket: ${plan.name || 'Ticket'}\nEnter quantity (1-${Math.min(plan.remainingQuantity, MAX_USSD_TICKET_QUANTITY)})`)
+    return con(`Ticket: ${plan.name || 'Ticket'}\nEnter quantity (1-${plan.remainingQuantity})`)
   }
 
   const quantity = Number(steps[3])
-  const maxAllowedQuantity = Math.min(plan.remainingQuantity, MAX_USSD_TICKET_QUANTITY)
 
-  if (!Number.isInteger(quantity) || quantity < 1 || quantity > maxAllowedQuantity) {
-    return end(`Invalid quantity. Use a number between 1 and ${maxAllowedQuantity}.`)
+  if (!Number.isInteger(quantity) || quantity < 1 || quantity > plan.remainingQuantity) {
+    return end(`Invalid quantity. Use a number between 1 and ${plan.remainingQuantity}.`)
   }
 
   const totalAmount = Number((Number(plan.price || 0) * quantity).toFixed(2))
@@ -750,6 +759,16 @@ async function handleTicketFlow(params: {
     if (!issued.ok) {
       console.error('[USSD_TICKET_ISSUE_FAIL]', issued.error)
       return end('Unable to issue ticket right now. Please try again.')
+    }
+
+    try {
+      const codeLabel = issued.ticketCodes.length === 1 ? 'Code' : 'Codes'
+      const smsMsgTicket =
+        `BlakVote Ticket ${codeLabel}: ${issued.ticketCodes.join(', ')}` +
+        ` | Event: ${event.title || eventCode}. Show this code at the gate.`
+      await sendNaloSms(trimToPhoneIdentifier(phoneNumber), smsMsgTicket)
+    } catch (smsErr: any) {
+      console.warn('[USSD_FREE_TICKET_SMS_FAIL]', smsErr?.message || smsErr)
     }
 
     return end(`Ticket issued. Code${issued.ticketCodes.length === 1 ? '' : 's'}: ${issued.ticketCodes.join(', ')}`)

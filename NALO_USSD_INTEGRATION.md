@@ -189,24 +189,34 @@ After confirming the MoMo prompt on your phone for a paid flow, expect the Nalo 
 
 ## 8.1) Optional SMS Delivery for Paid USSD Tickets
 
-After paid USSD ticket payment is confirmed on `POST /api/nalo/webhook`, the backend can send issued ticket code(s) by SMS using an outbound webhook.
+After paid USSD ticket payment is confirmed on `POST /api/nalo/webhook`, the backend can send issued ticket code(s) by SMS via Nalo SMS API.
 
-Configure:
+Configure authentication with either:
 
-- `USSD_TICKET_SMS_WEBHOOK_URL=https://YOUR_SMS_GATEWAY_ENDPOINT`
-- `USSD_TICKET_SMS_WEBHOOK_TOKEN=your_optional_bearer_token`
+- `NALO_SMS_AUTH_KEY=your_auth_key`
 
-Payload sent to your SMS gateway:
+or:
 
-- `channel`: `sms`
-- `phoneNumber`: normalized buyer MSISDN
-- `message`: ready-to-send ticket text
-- `reference`: payment reference
-- `eventId`: event ID if available
-- `ticketCodes`: array of issued ticket codes
-- `source`: `ussd-nalo-webhook`
+- `NALO_SMS_USERNAME=your_username`
+- `NALO_SMS_PASSWORD=your_password`
 
-If these vars are not set, ticket issuance still works and SMS send is skipped.
+Configure routing/sender:
+
+- `NALO_SMS_USERNAME_PREFIX=Resl_Nalo` (default)
+- `NALO_SMS_API_URL=https://sms.nalosolutions.com/smsbackend/clientapi/Resl_Nalo/send-message/` (optional override)
+- `NALO_SMS_SOURCE=BLAKVOTE` (sender ID)
+- `NALO_SMS_DLR=1` (default)
+- `NALO_SMS_TYPE=0` (default text SMS)
+- `NALO_SMS_CALLBACK_URL=https://YOUR_DOMAIN/api/sms/dlr` (optional)
+
+Implementation sends a GET request using Nalo parameters:
+
+- `destination` (buyer phone)
+- `message` (ticket code text)
+- `source`, `type`, `dlr`
+- auth via `key` or `username/password`
+
+If auth variables are not set, ticket issuance still works and SMS send is skipped.
 
 ## 9) Where Money Goes
 
