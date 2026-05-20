@@ -32,10 +32,18 @@ export default function PwaInstallPrompt() {
       return
     }
 
-    if ('serviceWorker' in navigator) {
+    if ('serviceWorker' in navigator && isWebAppRoute) {
       navigator.serviceWorker.register('/service-worker.js').catch((error) => {
         console.warn('Service worker registration failed', error)
       })
+    }
+
+    if ('serviceWorker' in navigator && !isWebAppRoute) {
+      navigator.serviceWorker.getRegistrations().then((registrations) => {
+        registrations.forEach((registration) => {
+          registration.unregister().catch(() => undefined)
+        })
+      }).catch(() => undefined)
     }
 
     const handleBeforeInstallPrompt = (event: Event) => {
@@ -63,7 +71,7 @@ export default function PwaInstallPrompt() {
       window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt)
       window.removeEventListener('appinstalled', handleInstalled)
     }
-  }, [])
+  }, [isWebAppRoute])
 
   useEffect(() => {
     if (!isWebAppRoute) {
