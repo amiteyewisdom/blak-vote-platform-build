@@ -47,6 +47,7 @@ export default function VotesPage() {
 
   const [votes, setVotes] = useState<any[]>([])
   const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>([])
+  const [eventRevenue, setEventRevenue] = useState(0)
   const [nominees, setNominees] = useState<NomineeItem[]>([])
   const [loading, setLoading] = useState(true)
   const [tab, setTab] = useState<'transactions' | 'record'>('transactions')
@@ -167,6 +168,14 @@ export default function VotesPage() {
       setAuditLogs(payload.logs || [])
     }
 
+    const eventRes = await fetch(`/api/organizer/event/${encodeURIComponent(eventId)}`)
+    if (eventRes.ok) {
+      const payload = await eventRes.json().catch(() => ({}))
+      setEventRevenue(Number(payload?.event?.total_revenue || 0))
+    } else {
+      setEventRevenue(0)
+    }
+
     setLoading(false)
   }
 
@@ -247,13 +256,15 @@ export default function VotesPage() {
   }
 
   const paidVotes = votes.filter((vote) => String(vote.vote_type || '').toLowerCase() === 'paid')
+  const paidAuditEntries = auditLogs.filter((log) => String(log.vote_type || '').toLowerCase() === 'paid')
 
-  const totalRevenue = paidVotes.reduce(
+  const totalRevenueFromVotes = paidVotes.reduce(
     (sum, v) => sum + Number(v.amount_paid || 0),
     0
   )
+  const totalRevenue = Math.max(totalRevenueFromVotes, Number(eventRevenue || 0))
 
-  const paidTransactions = paidVotes.length
+  const paidTransactions = Math.max(paidVotes.length, paidAuditEntries.length)
 
   const totalVotesFromRows = votes.reduce((sum, vote) => sum + getVoteQuantity(vote), 0)
   const totalVotesFromAudit = auditLogs.reduce((sum, log) => sum + Number(log.quantity ?? 1), 0)

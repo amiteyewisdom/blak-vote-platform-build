@@ -7,7 +7,8 @@ export function isPublicEventStatus(status: string | null | undefined) {
     return false
   }
 
-  return PUBLIC_EVENT_STATUSES.includes(status as (typeof PUBLIC_EVENT_STATUSES)[number])
+  const normalized = String(status).trim().toLowerCase()
+  return PUBLIC_EVENT_STATUSES.includes(normalized as (typeof PUBLIC_EVENT_STATUSES)[number])
 }
 
 export function isLiveEventStatus(status: string | null | undefined) {
@@ -19,5 +20,6 @@ export function isVotingOpenStatus(status: string | null | undefined) {
     return false
   }
 
-  return VOTING_OPEN_EVENT_STATUSES.includes(status as (typeof VOTING_OPEN_EVENT_STATUSES)[number])
+  const normalized = String(status).trim().toLowerCase()
+  return VOTING_OPEN_EVENT_STATUSES.includes(normalized as (typeof VOTING_OPEN_EVENT_STATUSES)[number])
 }

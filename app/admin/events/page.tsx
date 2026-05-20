@@ -117,6 +117,10 @@ export default function AdminEventsPage() {
                 <div className="mt-3">
                   <StatusBadge status={event.status} />
                 </div>
+
+                <p className="mt-2 text-xs text-muted-foreground">
+                  Active Event: {isLiveEventStatus(event.status) ? 'Yes' : 'No'}
+                </p>
               </div>
 
               <div className="text-left md:text-right space-y-3 md:min-w-[220px]">

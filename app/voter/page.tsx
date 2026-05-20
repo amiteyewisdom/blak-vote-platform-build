@@ -2,10 +2,11 @@
 
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import OrganizerApplicationForm from '@/components/OrganizerApplicationForm'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
+import { useToast } from '@/hooks/use-toast'
 import { BadgeCheck, ClipboardList, Vote, WalletCards } from 'lucide-react'
 
 type ApplicationStatus = {
@@ -61,6 +62,8 @@ function StatusPanel({ application }: { application: ApplicationStatus | null })
 
 export default function VoterDashboardPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const { toast } = useToast()
   const [loading, setLoading] = useState(true)
   const [profile, setProfile] = useState<Profile | null>(null)
   const [application, setApplication] = useState<ApplicationStatus | null>(null)
@@ -95,6 +98,18 @@ export default function VoterDashboardPage() {
 
     void loadDashboard()
   }, [router])
+
+  useEffect(() => {
+    if (searchParams.get('application') !== 'submitted') {
+      return
+    }
+
+    toast({
+      title: 'Application submitted',
+      description: 'Your organizer application has been sent for admin review.',
+    })
+    router.replace('/voter')
+  }, [searchParams, toast, router])
 
   if (loading) {
     return (

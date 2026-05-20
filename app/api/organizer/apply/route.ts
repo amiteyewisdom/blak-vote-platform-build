@@ -55,7 +55,7 @@ export async function POST(req: Request) {
     const formData = await req.formData();
     const parseResult = organizerApplicationSchema.safeParse({
       organization_name: formData.get('organizationName'),
-      organization_id: formData.get('organizationId'),
+      organization_id: formData.get('organizationId') ?? '',
       address: formData.get('address'),
       phone_number: formData.get('phoneNumber'),
       description: formData.get('description'),
