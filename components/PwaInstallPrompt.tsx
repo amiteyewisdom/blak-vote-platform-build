@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { usePathname } from 'next/navigation'
 
 type BeforeInstallPromptEvent = Event & {
   prompt: () => Promise<void>
@@ -8,6 +9,8 @@ type BeforeInstallPromptEvent = Event & {
 }
 
 const DISMISS_KEY = 'blakvote-pwa-install-dismissed'
+
+const WEB_APP_ROUTE_PREFIXES = ['/admin', '/organizer', '/voter']
 
 function isAndroid() {
   if (typeof navigator === 'undefined') {
@@ -18,8 +21,11 @@ function isAndroid() {
 }
 
 export default function PwaInstallPrompt() {
+  const pathname = usePathname()
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null)
   const [visible, setVisible] = useState(false)
+
+  const isWebAppRoute = WEB_APP_ROUTE_PREFIXES.some((prefix) => pathname?.startsWith(prefix))
 
   useEffect(() => {
     if (typeof window === 'undefined') {
@@ -59,7 +65,13 @@ export default function PwaInstallPrompt() {
     }
   }, [])
 
-  if (!visible || !deferredPrompt) {
+  useEffect(() => {
+    if (!isWebAppRoute) {
+      setVisible(false)
+    }
+  }, [isWebAppRoute])
+
+  if (!isWebAppRoute || !visible || !deferredPrompt) {
     return null
   }
 
