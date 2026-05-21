@@ -481,13 +481,34 @@ export async function sendNaloSms(phoneNumber: string, message: string): Promise
   }
 
   const requestUrl = `${endpoint}?${query.toString()}`
-  const response = await fetch(requestUrl, {
+  let response = await fetch(requestUrl, {
     method: 'GET',
     headers,
   })
 
-  const responseText = await response.text().catch(() => '')
-  const normalizedResponse = String(responseText || '').trim().toLowerCase()
+  let responseText = await response.text().catch(() => '')
+  let normalizedResponse = String(responseText || '').trim().toLowerCase()
+
+  if (!response.ok && response.status >= 500) {
+    console.warn('[NALO_SMS_GET_FAILED_FALLBACK_POST]', {
+      destination: normalizedPhone,
+      status: response.status,
+      responseText,
+    })
+
+    const fallbackBody = new URLSearchParams(query)
+    response = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        ...Object.fromEntries(headers.entries()),
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: fallbackBody.toString(),
+    })
+
+    responseText = await response.text().catch(() => '')
+    normalizedResponse = String(responseText || '').trim().toLowerCase()
+  }
 
   if (!response.ok) {
     throw new Error(`Nalo SMS send failed (${response.status}): ${responseText || 'no response body'}`)
