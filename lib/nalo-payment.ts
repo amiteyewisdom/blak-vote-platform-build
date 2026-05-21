@@ -466,15 +466,21 @@ export async function sendNaloSms(phoneNumber: string, message: string): Promise
 
   const headers = new Headers()
   let useQueryAuth = false
+  let authMethod = 'unknown'
 
   if (authKey) {
     if (authKey.trim().toLowerCase().startsWith('basic ')) {
       headers.set('Authorization', authKey.trim())
+      authMethod = 'basic-header'
     } else {
       query.set('key', authKey)
       useQueryAuth = true
+      authMethod = 'key-query'
     }
   } else {
+    authMethod = 'username-password-header'
+    const encoded = Buffer.from(`${username!}:${password!}`).toString('base64')
+    headers.set('Authorization', `Basic ${encoded}`)
     query.set('username', username!)
     query.set('password', password!)
     useQueryAuth = true
@@ -489,11 +495,12 @@ export async function sendNaloSms(phoneNumber: string, message: string): Promise
   let responseText = await response.text().catch(() => '')
   let normalizedResponse = String(responseText || '').trim().toLowerCase()
 
-  if (!response.ok && response.status >= 500) {
+  if (!response.ok && (response.status === 401 || response.status >= 500)) {
     console.warn('[NALO_SMS_GET_FAILED_FALLBACK_POST]', {
       destination: normalizedPhone,
       status: response.status,
       responseText,
+      authMethod,
     })
 
     const fallbackBody = new URLSearchParams(query)
