@@ -447,6 +447,9 @@ export async function sendNaloSms(phoneNumber: string, message: string): Promise
   const endpoint =
     process.env.NALO_SMS_API_URL?.trim() ||
     `https://sms.nalosolutions.com/smsbackend/clientapi/${encodeURIComponent(usernamePrefix)}/send-message/`
+  const alternateEndpoint = endpoint.includes('/clientapi/')
+    ? endpoint.replace('/clientapi/', '/')
+    : null
 
   const source = process.env.NALO_SMS_SOURCE?.trim() || 'BLAKVOTE'
   const dlr = process.env.NALO_SMS_DLR?.trim() || '1'
@@ -487,6 +490,7 @@ export async function sendNaloSms(phoneNumber: string, message: string): Promise
   }
 
   const requestUrl = `${endpoint}?${query.toString()}`
+  const alternateRequestUrl = alternateEndpoint ? `${alternateEndpoint}?${query.toString()}` : null
 
   // Attempt 1: GET with query params (legacy)
   let response = await fetch(requestUrl, {
@@ -662,6 +666,54 @@ export async function sendNaloSms(phoneNumber: string, message: string): Promise
       console.warn('[NALO_SMS_ATTEMPT]', { attempt: 6, destination: normalizedPhone, status: response.status, responseText, authMethod: 'nalo-field-names' })
     } catch (err) {
       console.warn('[NALO_SMS_ATTEMPT_ERROR]', { attempt: 6, err: String(err) })
+    }
+  }
+
+  // Attempt 7: alternate endpoint fallback for the new SMS API path
+  if (!response.ok && alternateEndpoint && alternateRequestUrl) {
+    try {
+      response = await fetch(alternateRequestUrl, {
+        method: 'GET',
+        headers,
+      })
+      responseText = await response.text().catch(() => '')
+      normalizedResponse = String(responseText || '').trim().toLowerCase()
+      console.warn('[NALO_SMS_ATTEMPT]', { attempt: 7, destination: normalizedPhone, status: response.status, responseText, authMethod: 'alternate-get' })
+    } catch (err) {
+      console.warn('[NALO_SMS_ATTEMPT_ERROR]', { attempt: 7, err: String(err) })
+    }
+  }
+
+  if (!response.ok && alternateEndpoint) {
+    try {
+      const bodyJson: Record<string, unknown> = {
+        msisdn: normalizedPhone,
+        sender_id: source,
+        message,
+      }
+      if (callbackUrl) bodyJson.callback_url = callbackUrl
+      if (authKey && !authKey.toLowerCase().startsWith('basic ')) {
+        bodyJson.key = authKey
+      }
+      if (bodyUsername) bodyJson.username = bodyUsername
+      if (bodyPassword) bodyJson.password = bodyPassword
+
+      const headersNoAuth = Object.fromEntries(headers.entries())
+      delete headersNoAuth['authorization']
+
+      response = await fetch(alternateEndpoint, {
+        method: 'POST',
+        headers: {
+          ...headersNoAuth,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(bodyJson),
+      })
+      responseText = await response.text().catch(() => '')
+      normalizedResponse = String(responseText || '').trim().toLowerCase()
+      console.warn('[NALO_SMS_ATTEMPT]', { attempt: 8, destination: normalizedPhone, status: response.status, responseText, authMethod: 'alternate-json' })
+    } catch (err) {
+      console.warn('[NALO_SMS_ATTEMPT_ERROR]', { attempt: 8, err: String(err) })
     }
   }
 

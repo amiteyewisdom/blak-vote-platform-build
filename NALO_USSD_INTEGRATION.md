@@ -200,12 +200,14 @@ or:
 - `NALO_SMS_USERNAME=your_username`
 - `NALO_SMS_PASSWORD=your_password`
 
-> Note: `NALO_SMS_AUTH_KEY` may be either a plain SMS API key or a `Basic ...` auth string. The backend now supports both forms. If Nalo shows `Basic ...` in the SMS dashboard, you may paste that full string into `NALO_SMS_AUTH_KEY`.
+> Note: For the newer Nalo SMS endpoint, use the portal-generated key and set `NALO_SMS_AUTH_KEY` to that plain key value. This key is sent in the request body as `key` for POST JSON or query string for GET.
+>
+> If your dashboard only shows a `Basic ...` auth string, the backend still supports that form for older GET/form endpoints, but the recommended setup for the sample POST request is the plain portal key.
 
 Configure routing/sender:
 
 - `NALO_SMS_USERNAME_PREFIX=Resl_Nalo` (default)
-- `NALO_SMS_API_URL=https://sms.nalosolutions.com/smsbackend/clientapi/Resl_Nalo/send-message/` (optional override)
+- `NALO_SMS_API_URL=https://sms.nalosolutions.com/smsbackend/Resl_Nalo/send-message/` (recommended when using the sample POST JSON request)
 - `NALO_SMS_SOURCE=BLAKVOTE` (sender ID)
 - `NALO_SMS_DLR=1` (default)
 - `NALO_SMS_TYPE=0` (default text SMS)
