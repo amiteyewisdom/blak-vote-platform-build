@@ -579,6 +579,41 @@ export async function sendNaloSms(phoneNumber: string, message: string): Promise
     }
   }
 
+  // Attempt 5: POST form with Nalo-specific field names (msisdn, sender_id, username, password)
+  if (!response.ok) {
+    try {
+      const bodyForm = new URLSearchParams()
+      bodyForm.set('msisdn', normalizedPhone)
+      bodyForm.set('sender_id', source)
+      bodyForm.set('message', message)
+      // include credentials if available
+      if (authKey && !authKey.toLowerCase().startsWith('basic ')) {
+        bodyForm.set('key', authKey)
+      }
+      if (username) bodyForm.set('username', username)
+      if (password) bodyForm.set('password', password)
+
+      // send without Authorization header (some Nalo setups expect creds in body)
+      const headersNoAuth = Object.fromEntries(headers.entries())
+      delete headersNoAuth['authorization']
+
+      response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          ...headersNoAuth,
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: bodyForm.toString(),
+      })
+
+      responseText = await response.text().catch(() => '')
+      normalizedResponse = String(responseText || '').trim().toLowerCase()
+      console.warn('[NALO_SMS_ATTEMPT]', { attempt: 5, destination: normalizedPhone, status: response.status, responseText, authMethod: 'nalo-field-names' })
+    } catch (err) {
+      console.warn('[NALO_SMS_ATTEMPT_ERROR]', { attempt: 5, err: String(err) })
+    }
+  }
+
   // Final check
   if (!response.ok) {
     console.warn('[NALO_SMS_ALL_ATTEMPTS_FAILED]', { destination: normalizedPhone, finalStatus: response.status, responseText, authMethod })
