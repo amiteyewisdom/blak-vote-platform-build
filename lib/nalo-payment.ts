@@ -408,7 +408,27 @@ function getTicketCodesFromResultBody(body: ProcessSuccessResultBody | null | un
 // Nalo SMS sending
 // ---------------------------------------------------------------------------
 
+function normalizeGhanaPhone(phone: string): string {
+  let p = String(phone || '').trim()
+  // Remove spaces, dashes, parentheses
+  p = p.replace(/[\s\-()]/g, '')
+  // If it starts with +, remove it
+  if (p.startsWith('+')) {
+    p = p.slice(1)
+  }
+  // If it starts with 0, replace with 233
+  if (p.startsWith('0')) {
+    p = '233' + p.slice(1)
+  }
+  // If it doesn't have country code and is 9 digits, assume it's 233
+  if (!p.startsWith('233') && !p.startsWith('0') && p.length === 9) {
+    p = '233' + p
+  }
+  return p
+}
+
 export async function sendNaloSms(phoneNumber: string, message: string): Promise<void> {
+  const normalizedPhone = normalizeGhanaPhone(phoneNumber)
   const usernamePrefix = process.env.NALO_SMS_USERNAME_PREFIX?.trim() || 'Resl_Nalo'
   const authKey = process.env.NALO_SMS_AUTH_KEY?.trim()
   const username = process.env.NALO_SMS_USERNAME?.trim()
@@ -429,7 +449,7 @@ export async function sendNaloSms(phoneNumber: string, message: string): Promise
 
   const query = new URLSearchParams()
   query.set('type', type)
-  query.set('destination', phoneNumber)
+  query.set('destination', normalizedPhone)
   query.set('dlr', dlr)
   query.set('source', source)
   query.set('message', message)

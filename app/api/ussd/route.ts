@@ -64,6 +64,25 @@ function trimToPhoneIdentifier(phone: string) {
   return String(phone || '').trim().slice(0, 20)
 }
 
+function formatPhoneForSms(phone: string): string {
+  let p = String(phone || '').trim()
+  // Remove spaces, dashes, parentheses
+  p = p.replace(/[\s\-()]/g, '')
+  // If it starts with +, remove it
+  if (p.startsWith('+')) {
+    p = p.slice(1)
+  }
+  // If it starts with 0, replace with 233
+  if (p.startsWith('0')) {
+    p = '233' + p.slice(1)
+  }
+  // If it doesn't have country code, assume it's 233
+  if (!p.startsWith('233') && !p.startsWith('0') && p.length === 9) {
+    p = '233' + p
+  }
+  return p
+}
+
 function toUpperCode(value: string) {
   return String(value || '').trim().toUpperCase()
 }
@@ -588,7 +607,7 @@ async function handleVoteFlow(params: {
         `BlakVote: Vote confirmed! You cast ${quantity} vote${quantity === 1 ? '' : 's'} for ` +
         `${candidate.nominee_name || candidateCode} in ${event.title || eventCode}. ` +
         `Amount: GHS 0.00. Thank you!`
-      await sendNaloSms(trimToPhoneIdentifier(phoneNumber), smsMsgFree)
+      await sendNaloSms(formatPhoneForSms(phoneNumber), smsMsgFree)
     } catch (smsErr: any) {
       console.warn('[USSD_FREE_VOTE_SMS_FAIL]', smsErr?.message || smsErr)
     }
@@ -766,7 +785,7 @@ async function handleTicketFlow(params: {
       const smsMsgTicket =
         `BlakVote Ticket ${codeLabel}: ${issued.ticketCodes.join(', ')}` +
         ` | Event: ${event.title || eventCode}. Show this code at the gate.`
-      await sendNaloSms(trimToPhoneIdentifier(phoneNumber), smsMsgTicket)
+      await sendNaloSms(formatPhoneForSms(phoneNumber), smsMsgTicket)
     } catch (smsErr: any) {
       console.warn('[USSD_FREE_TICKET_SMS_FAIL]', smsErr?.message || smsErr)
     }
