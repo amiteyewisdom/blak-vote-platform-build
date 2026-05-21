@@ -470,10 +470,16 @@ export async function sendNaloSms(phoneNumber: string, message: string): Promise
   const headers = new Headers()
   let useQueryAuth = false
   let authMethod = 'unknown'
+  const rawAuthKey = authKey?.trim().toLowerCase().startsWith('basic ')
+    ? authKey.trim().slice(6).trim()
+    : authKey
 
   if (authKey) {
     if (authKey.trim().toLowerCase().startsWith('basic ')) {
       headers.set('Authorization', authKey.trim())
+      if (rawAuthKey) {
+        query.set('key', rawAuthKey)
+      }
       authMethod = 'basic-header'
     } else {
       query.set('key', authKey)
@@ -609,7 +615,7 @@ export async function sendNaloSms(phoneNumber: string, message: string): Promise
         message,
       }
       if (callbackUrl) bodyJson.callback_url = callbackUrl
-      if (authKey && !authKey.trim().toLowerCase().startsWith('basic ')) bodyJson.key = authKey
+      if (rawAuthKey) bodyJson.key = rawAuthKey
       if (bodyUsername) bodyJson.username = bodyUsername
       if (bodyPassword) bodyJson.password = bodyPassword
 
@@ -640,8 +646,8 @@ export async function sendNaloSms(phoneNumber: string, message: string): Promise
       bodyForm.set('sender_id', source)
       bodyForm.set('message', message)
       // include credentials if available
-      if (authKey && !authKey.trim().toLowerCase().startsWith('basic ')) {
-        bodyForm.set('key', authKey)
+      if (rawAuthKey) {
+        bodyForm.set('key', rawAuthKey)
       }
       if (bodyUsername) bodyForm.set('username', bodyUsername)
       if (bodyPassword) bodyForm.set('password', bodyPassword)
@@ -690,7 +696,7 @@ export async function sendNaloSms(phoneNumber: string, message: string): Promise
         message,
       }
       if (callbackUrl) bodyJson.callback_url = callbackUrl
-      if (authKey && !authKey.trim().toLowerCase().startsWith('basic ')) bodyJson.key = authKey
+      if (rawAuthKey) bodyJson.key = rawAuthKey
       if (bodyUsername) bodyJson.username = bodyUsername
       if (bodyPassword) bodyJson.password = bodyPassword
 
