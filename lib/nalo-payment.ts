@@ -580,6 +580,23 @@ export async function sendNaloSms(phoneNumber: string, message: string): Promise
   }
 
   // Attempt 5: POST form with Nalo-specific field names (msisdn, sender_id, username, password)
+  // Derive body username/password from Basic auth token if present
+  let bodyUsername = username
+  let bodyPassword = password
+  if (authKey && authKey.trim().toLowerCase().startsWith('basic ')) {
+    try {
+      const b64 = authKey.trim().slice(6).trim()
+      const decoded = Buffer.from(b64, 'base64').toString('utf8')
+      const idx = decoded.indexOf(':')
+      if (idx !== -1) {
+        bodyUsername = decoded.slice(0, idx)
+        bodyPassword = decoded.slice(idx + 1)
+      }
+    } catch (err) {
+      /* ignore decode errors */
+    }
+  }
+
   if (!response.ok) {
     try {
       const bodyForm = new URLSearchParams()
@@ -590,8 +607,8 @@ export async function sendNaloSms(phoneNumber: string, message: string): Promise
       if (authKey && !authKey.toLowerCase().startsWith('basic ')) {
         bodyForm.set('key', authKey)
       }
-      if (username) bodyForm.set('username', username)
-      if (password) bodyForm.set('password', password)
+      if (bodyUsername) bodyForm.set('username', bodyUsername)
+      if (bodyPassword) bodyForm.set('password', bodyPassword)
 
       // send without Authorization header (some Nalo setups expect creds in body)
       const headersNoAuth = Object.fromEntries(headers.entries())
