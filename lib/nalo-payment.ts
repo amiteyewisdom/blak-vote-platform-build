@@ -609,7 +609,7 @@ export async function sendNaloSms(phoneNumber: string, message: string): Promise
         message,
       }
       if (callbackUrl) bodyJson.callback_url = callbackUrl
-      if (authKey) bodyJson.key = authKey
+      if (authKey && !authKey.trim().toLowerCase().startsWith('basic ')) bodyJson.key = authKey
       if (bodyUsername) bodyJson.username = bodyUsername
       if (bodyPassword) bodyJson.password = bodyPassword
 
@@ -640,7 +640,7 @@ export async function sendNaloSms(phoneNumber: string, message: string): Promise
       bodyForm.set('sender_id', source)
       bodyForm.set('message', message)
       // include credentials if available
-      if (authKey) {
+      if (authKey && !authKey.trim().toLowerCase().startsWith('basic ')) {
         bodyForm.set('key', authKey)
       }
       if (bodyUsername) bodyForm.set('username', bodyUsername)
@@ -690,7 +690,7 @@ export async function sendNaloSms(phoneNumber: string, message: string): Promise
         message,
       }
       if (callbackUrl) bodyJson.callback_url = callbackUrl
-      if (authKey) bodyJson.key = authKey
+      if (authKey && !authKey.trim().toLowerCase().startsWith('basic ')) bodyJson.key = authKey
       if (bodyUsername) bodyJson.username = bodyUsername
       if (bodyPassword) bodyJson.password = bodyPassword
 
