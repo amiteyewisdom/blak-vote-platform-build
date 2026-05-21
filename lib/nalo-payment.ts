@@ -476,9 +476,21 @@ export async function sendNaloSms(phoneNumber: string, message: string): Promise
   })
 
   const responseText = await response.text().catch(() => '')
+  const normalizedResponse = String(responseText || '').trim().toLowerCase()
+
   if (!response.ok) {
     throw new Error(`Nalo SMS send failed (${response.status}): ${responseText || 'no response body'}`)
   }
+
+  if (normalizedResponse && /(error|failed|invalid|unauthorized|denied|rejected)/.test(normalizedResponse)) {
+    throw new Error(`Nalo SMS send returned error body: ${responseText}`)
+  }
+
+  console.info('[NALO_SMS_SEND_SUCCESS]', {
+    destination: normalizedPhone,
+    responseStatus: response.status,
+    responseText,
+  })
 }
 
 async function sendUssdTicketSmsNotification(params: {
