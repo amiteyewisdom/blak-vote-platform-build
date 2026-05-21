@@ -470,17 +470,18 @@ export async function sendNaloSms(phoneNumber: string, message: string): Promise
   const headers = new Headers()
   let useQueryAuth = false
   let authMethod = 'unknown'
-  const rawAuthKey = authKey?.trim().toLowerCase().startsWith('basic ')
-    ? authKey.trim().slice(6).trim()
+  const isBasicAuthKey = authKey?.trim().toLowerCase().startsWith('basic ') ?? false
+  const rawAuthKey = isBasicAuthKey
+    ? authKey!.trim().slice(6).trim()
     : authKey
 
   if (authKey) {
-    if (authKey.trim().toLowerCase().startsWith('basic ')) {
+    if (isBasicAuthKey) {
       headers.set('Authorization', authKey.trim())
+      authMethod = 'basic-header'
       if (rawAuthKey) {
         query.set('key', rawAuthKey)
       }
-      authMethod = 'basic-header'
     } else {
       query.set('key', authKey)
       useQueryAuth = true
@@ -615,7 +616,7 @@ export async function sendNaloSms(phoneNumber: string, message: string): Promise
         message,
       }
       if (callbackUrl) bodyJson.callback_url = callbackUrl
-      if (rawAuthKey) bodyJson.key = rawAuthKey
+      if (rawAuthKey && !isBasicAuthKey) bodyJson.key = rawAuthKey
       if (bodyUsername) bodyJson.username = bodyUsername
       if (bodyPassword) bodyJson.password = bodyPassword
 
@@ -646,7 +647,7 @@ export async function sendNaloSms(phoneNumber: string, message: string): Promise
       bodyForm.set('sender_id', source)
       bodyForm.set('message', message)
       // include credentials if available
-      if (rawAuthKey) {
+      if (rawAuthKey && !isBasicAuthKey) {
         bodyForm.set('key', rawAuthKey)
       }
       if (bodyUsername) bodyForm.set('username', bodyUsername)
@@ -696,7 +697,7 @@ export async function sendNaloSms(phoneNumber: string, message: string): Promise
         message,
       }
       if (callbackUrl) bodyJson.callback_url = callbackUrl
-      if (rawAuthKey) bodyJson.key = rawAuthKey
+      if (rawAuthKey && !isBasicAuthKey) bodyJson.key = rawAuthKey
       if (bodyUsername) bodyJson.username = bodyUsername
       if (bodyPassword) bodyJson.password = bodyPassword
 
