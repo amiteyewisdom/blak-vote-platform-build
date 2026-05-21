@@ -435,6 +435,12 @@ export async function sendNaloSms(phoneNumber: string, message: string): Promise
   const password = process.env.NALO_SMS_PASSWORD?.trim()
 
   if (!authKey && !(username && password)) {
+    console.warn('[NALO_SMS_SKIPPED_NO_AUTH]', { phoneNumber: normalizedPhone })
+    return
+  }
+
+  if (!/^[0-9]{9,15}$/.test(normalizedPhone)) {
+    console.warn('[NALO_SMS_SKIPPED_INVALID_PHONE]', { phoneNumber, normalizedPhone })
     return
   }
 

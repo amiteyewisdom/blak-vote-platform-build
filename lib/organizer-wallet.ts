@@ -446,7 +446,6 @@ export async function getOrganizerWalletSummaryData(adminSupabase: SupabaseLike,
   summary.gross_revenue = summary.total_revenue
   summary.pending_withdrawals = pendingWithdrawals
   summary.total_cashed_out = Number(processedWithdrawals.toFixed(2))
-  summary.total_revenue = summary.net_balance
   summary.available_balance = Math.max(summary.net_balance - pendingWithdrawals, 0)
   if (summary.last_updated === new Date(0).toISOString()) {
     summary.last_updated = new Date().toISOString()

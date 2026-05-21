@@ -718,13 +718,13 @@ async function handleTicketFlow(params: {
   const plan = plans[planIndex] as TicketPlanRecord & { price: number; remainingQuantity: number }
 
   if (steps.length === 3) {
-    return con(`Ticket: ${plan.name || 'Ticket'}\nEnter quantity (1-${plan.remainingQuantity})`)
+    return con(`Ticket: ${plan.name || 'Ticket'}\nEnter quantity`) 
   }
 
   const quantity = Number(steps[3])
 
   if (!Number.isInteger(quantity) || quantity < 1 || quantity > plan.remainingQuantity) {
-    return end(`Invalid quantity. Use a number between 1 and ${plan.remainingQuantity}.`)
+    return end(`Invalid quantity. Enter a number greater than zero and no more than available stock.`)
   }
 
   const totalAmount = Number((Number(plan.price || 0) * quantity).toFixed(2))

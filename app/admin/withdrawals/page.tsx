@@ -36,6 +36,7 @@ interface PlatformWithdrawal {
 
 interface PlatformWithdrawalSummary {
   totalPlatformRevenue: number
+  totalGrossRevenue: number
   availableBalance: number
   pendingAmount: number
   processedAmount: number
@@ -47,6 +48,7 @@ export default function AdminWithdrawalsPage() {
   const [platformWithdrawals, setPlatformWithdrawals] = useState<PlatformWithdrawal[]>([])
   const [platformSummary, setPlatformSummary] = useState<PlatformWithdrawalSummary>({
     totalPlatformRevenue: 0,
+    totalGrossRevenue: 0,
     availableBalance: 0,
     pendingAmount: 0,
     processedAmount: 0,
@@ -99,6 +101,7 @@ export default function AdminWithdrawalsPage() {
         )
         setPlatformSummary({
           totalPlatformRevenue: Number(platformPayload?.summary?.total_platform_revenue || 0),
+          totalGrossRevenue: Number(platformPayload?.summary?.total_gross_revenue || 0),
           availableBalance: Number(platformPayload?.availableBalance || 0),
           pendingAmount: Number(platformPayload?.pendingAmount || 0),
           processedAmount: Number(platformPayload?.processedAmount || 0),
@@ -438,6 +441,12 @@ export default function AdminWithdrawalsPage() {
         <div className="rounded-xl border border-border bg-card p-5">
           <p className="text-sm text-muted-foreground">Processed Requests</p>
           <p className="text-2xl font-semibold mt-1">{processedCount}</p>
+        </div>
+        <div className="rounded-xl border border-slate-300 bg-card p-5">
+          <p className="text-sm text-muted-foreground">Total Platform Gross Revenue</p>
+          <p className="text-2xl font-semibold mt-1">
+            GHS {platformSummary.totalGrossRevenue.toFixed(2)}
+          </p>
         </div>
         <div className="rounded-xl border border-gold/30 bg-card p-5">
           <p className="text-sm text-muted-foreground">Platform Income (Fees)</p>
