@@ -200,7 +200,7 @@ or:
 - `NALO_SMS_USERNAME=your_username`
 - `NALO_SMS_PASSWORD=your_password`
 
-> Note: `NALO_SMS_AUTH_KEY` should be the SMS API key for Nalo, not the payment webhook auth header. If Nalo gives you a `Basic ...` auth string, do not paste the whole string into `NALO_SMS_AUTH_KEY` unless Nalo specifically tells you that key is the SMS API key.
+> Note: `NALO_SMS_AUTH_KEY` may be either a plain SMS API key or a `Basic ...` auth string. The backend now supports both forms. If Nalo shows `Basic ...` in the SMS dashboard, you may paste that full string into `NALO_SMS_AUTH_KEY`.
 
 Configure routing/sender:
 

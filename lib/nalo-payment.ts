@@ -464,15 +464,26 @@ export async function sendNaloSms(phoneNumber: string, message: string): Promise
     query.set('callback_url', callbackUrl)
   }
 
+  const headers = new Headers()
+  let useQueryAuth = false
+
   if (authKey) {
-    query.set('key', authKey)
+    if (authKey.trim().toLowerCase().startsWith('basic ')) {
+      headers.set('Authorization', authKey.trim())
+    } else {
+      query.set('key', authKey)
+      useQueryAuth = true
+    }
   } else {
     query.set('username', username!)
     query.set('password', password!)
+    useQueryAuth = true
   }
 
-  const response = await fetch(`${endpoint}?${query.toString()}`, {
+  const requestUrl = `${endpoint}?${query.toString()}`
+  const response = await fetch(requestUrl, {
     method: 'GET',
+    headers,
   })
 
   const responseText = await response.text().catch(() => '')
