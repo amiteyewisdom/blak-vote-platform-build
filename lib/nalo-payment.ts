@@ -579,7 +579,7 @@ export async function sendNaloSms(phoneNumber: string, message: string): Promise
     }
   }
 
-  // Attempt 5: POST form with Nalo-specific field names (msisdn, sender_id, username, password)
+  // Attempt 5: POST JSON with Nalo-specific body fields if the endpoint requires JSON payload
   // Derive body username/password from Basic auth token if present
   let bodyUsername = username
   let bodyPassword = password
@@ -594,6 +594,40 @@ export async function sendNaloSms(phoneNumber: string, message: string): Promise
       }
     } catch (err) {
       /* ignore decode errors */
+    }
+  }
+
+  if (!response.ok) {
+    try {
+      const bodyJson: Record<string, unknown> = {
+        msisdn: normalizedPhone,
+        sender_id: source,
+        message,
+      }
+      if (callbackUrl) bodyJson.callback_url = callbackUrl
+      if (authKey && !authKey.toLowerCase().startsWith('basic ')) {
+        bodyJson.key = authKey
+      }
+      if (bodyUsername) bodyJson.username = bodyUsername
+      if (bodyPassword) bodyJson.password = bodyPassword
+
+      const headersNoAuth = Object.fromEntries(headers.entries())
+      delete headersNoAuth['authorization']
+
+      response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          ...headersNoAuth,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(bodyJson),
+      })
+
+      responseText = await response.text().catch(() => '')
+      normalizedResponse = String(responseText || '').trim().toLowerCase()
+      console.warn('[NALO_SMS_ATTEMPT]', { attempt: 5, destination: normalizedPhone, status: response.status, responseText, authMethod: 'json-nalo-fields' })
+    } catch (err) {
+      console.warn('[NALO_SMS_ATTEMPT_ERROR]', { attempt: 5, err: String(err) })
     }
   }
 
@@ -625,9 +659,9 @@ export async function sendNaloSms(phoneNumber: string, message: string): Promise
 
       responseText = await response.text().catch(() => '')
       normalizedResponse = String(responseText || '').trim().toLowerCase()
-      console.warn('[NALO_SMS_ATTEMPT]', { attempt: 5, destination: normalizedPhone, status: response.status, responseText, authMethod: 'nalo-field-names' })
+      console.warn('[NALO_SMS_ATTEMPT]', { attempt: 6, destination: normalizedPhone, status: response.status, responseText, authMethod: 'nalo-field-names' })
     } catch (err) {
-      console.warn('[NALO_SMS_ATTEMPT_ERROR]', { attempt: 5, err: String(err) })
+      console.warn('[NALO_SMS_ATTEMPT_ERROR]', { attempt: 6, err: String(err) })
     }
   }
 

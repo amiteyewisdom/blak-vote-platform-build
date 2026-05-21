@@ -147,7 +147,7 @@ Signature format supported:
 - plain hex digest
 - `sha256=<hex digest>`
 
-If NALO_WEBHOOK_SECRET is not set, Nalo payment webhook signature checks are skipped.
+If `NALO_WEBHOOK_SECRET` is not set, Nalo payment webhook signature checks are skipped.
 
 ## 7) Quick Test Before Going Live
 
@@ -211,12 +211,12 @@ Configure routing/sender:
 - `NALO_SMS_TYPE=0` (default text SMS)
 - `NALO_SMS_CALLBACK_URL=https://YOUR_DOMAIN/api/sms/dlr` (optional)
 
-Implementation sends a GET request using Nalo parameters:
+Implementation first tries a GET request with Nalo query parameters, then falls back to POST if required by the endpoint.
 
-- `destination` (buyer phone)
-- `message` (ticket code text)
-- `source`, `type`, `dlr`
-- auth via `key` or `username/password`
+- GET uses `destination`, `message`, `source`, `type`, `dlr`, and optional `callback_url`
+- auth is sent as `key` query parameter or `Authorization: Basic ...`
+- If Nalo requires POST JSON, the backend can send `msisdn`, `sender_id`, `message`, `callback_url`, and `key`
+- If Nalo requires POST form, the backend can also send `msisdn`, `sender_id`, `message`, and credentials in the body
 
 If auth variables are not set, ticket issuance still works and SMS send is skipped.
 
