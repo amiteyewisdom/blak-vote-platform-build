@@ -11,6 +11,12 @@ interface DashboardStats {
   totalPlatformRevenue: number
   totalGrossRevenue: number
   totalRevenueTransactions: number
+  providerBreakdown: Array<{
+    provider: string
+    total_platform_revenue: number
+    total_gross_revenue: number
+    total_transactions: number
+  }>
   perEventRevenue: Array<{
     event_id: string
     event_title: string
@@ -57,6 +63,9 @@ export default function AnalyticsPage() {
         totalPlatformRevenue: Number(revenueSummary.total_platform_revenue || 0),
         totalGrossRevenue: Number(revenueSummary.total_gross_revenue || 0),
         totalRevenueTransactions: Number(revenueSummary.total_transactions || 0),
+        providerBreakdown: Array.isArray(revenueData.providerBreakdown)
+          ? revenueData.providerBreakdown
+          : [],
         perEventRevenue,
       })
     } catch (err) {
@@ -94,7 +103,7 @@ export default function AnalyticsPage() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
+      <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
 
         {/* Users */}
         <DSCard className="p-6">
@@ -129,21 +138,45 @@ export default function AnalyticsPage() {
           </div>
         </DSCard>
 
-        {/* Platform Revenue */}
-        <DSCard className="p-6 border border-emerald-500/30">
-          <div className="mb-3 flex items-center justify-between text-sm text-muted-foreground">
-            <span>Platform Revenue</span>
-            <DollarSign className="w-4 h-4 text-emerald-400" />
-          </div>
-          <div className="text-3xl font-bold text-emerald-300">
-            GHS {stats.totalPlatformRevenue.toFixed(2)}
-          </div>
-          <div className="mt-2 text-xs text-muted-foreground">
-            {stats.totalRevenueTransactions} transactions
-          </div>
-        </DSCard>
-
       </div>
+
+      <div>
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="text-lg font-semibold">Revenue by Payment Source</h2>
+          <p className="text-sm text-muted-foreground">Breakdown of fees collected from online and USSD payments.</p>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {['paystack', 'nalo'].map((provider) => {
+            const providerRow = stats.providerBreakdown.find((row) => row.provider === provider)
+            const label = provider === 'paystack' ? 'Online (Paystack)' : 'USSD (Nalo)'
+
+            return (
+              <DSCard key={provider} className="p-5 border border-border/70">
+                <div className="text-sm text-muted-foreground">{label}</div>
+                <div className="mt-3 text-2xl font-bold">
+                  GHS {Number(providerRow?.total_platform_revenue || 0).toFixed(2)}
+                </div>
+                <div className="mt-2 text-xs text-muted-foreground">
+                  {Number(providerRow?.total_transactions || 0)} transactions
+                </div>
+              </DSCard>
+            )
+          })}
+        </div>
+      </div>
+
+      <DSCard className="p-6 border border-emerald-500/30">
+        <div className="mb-3 flex items-center justify-between text-sm text-muted-foreground">
+          <span>Combined Platform Revenue</span>
+          <DollarSign className="w-4 h-4 text-emerald-400" />
+        </div>
+        <div className="text-3xl font-bold text-emerald-300">
+          GHS {stats.totalPlatformRevenue.toFixed(2)}
+        </div>
+        <div className="mt-2 text-xs text-muted-foreground">
+          {stats.totalRevenueTransactions} transactions
+        </div>
+      </DSCard>
 
       <DSCard className="p-6">
         <div className="flex items-center justify-between gap-4 mb-6">

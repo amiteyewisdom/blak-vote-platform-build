@@ -30,6 +30,13 @@ export async function GET() {
       return NextResponse.json({ error: eventError.message }, { status: 500 })
     }
 
+    const { data: providerRows, error: providerError } = await adminSupabase
+      .rpc('get_admin_revenue_source_summary')
+
+    if (providerError) {
+      return NextResponse.json({ error: providerError.message }, { status: 500 })
+    }
+
     const summary = Array.isArray(summaryRows) && summaryRows.length > 0
       ? summaryRows[0]
       : {
@@ -43,6 +50,7 @@ export async function GET() {
       {
         summary,
         perEventRevenue: eventRows || [],
+        providerBreakdown: providerRows || [],
       },
       { status: 200 }
     )

@@ -45,8 +45,13 @@ async function resolveAdminRevenueFeePercent(adminSupabase: SupabaseLike, paymen
         .eq('id', ticketId)
         .maybeSingle()
 
-      if (ticketRow && Number.isFinite(Number(ticketRow.price)) && Number(ticketRow.price) > 0) {
-        const feePercent = (Number(ticketRow.admin_fee || 0) * 100) / Number(ticketRow.price)
+      if (
+        ticketRow &&
+        Number.isFinite(Number(ticketRow.price)) &&
+        Number(ticketRow.price) > 0 &&
+        Number.isFinite(Number(ticketRow.admin_fee))
+      ) {
+        const feePercent = (Number(ticketRow.admin_fee) * 100) / Number(ticketRow.price)
         if (Number.isFinite(feePercent)) {
           return Number(feePercent.toFixed(2))
         }
@@ -89,7 +94,7 @@ async function resolveAdminRevenueFeePercent(adminSupabase: SupabaseLike, paymen
 export async function syncMissingAdminRevenueTransactions(adminSupabase: SupabaseLike) {
   const { data: paidPayments, error: paymentsError } = await adminSupabase
     .from('payments')
-    .select('id,reference,event_id,vote_id,ticket_id,payment_context,amount,status,processed_at,verified_at,updated_at,created_at')
+    .select('id,reference,event_id,vote_id,ticket_id,payment_context,provider,amount,status,processed_at,verified_at,updated_at,created_at')
     .in('status', PAID_PAYMENT_STATUSES)
     .in('payment_context', REVENUE_PAYMENT_CONTEXTS)
 

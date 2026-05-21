@@ -529,8 +529,13 @@ async function resolveAdminRevenueFeePercent(params: {
         .eq('id', ticketId)
         .maybeSingle()
 
-      if (ticketRow && Number.isFinite(Number(ticketRow.price)) && Number(ticketRow.price) > 0) {
-        const feePercent = (Number(ticketRow.admin_fee || 0) * 100) / Number(ticketRow.price)
+      if (
+        ticketRow &&
+        Number.isFinite(Number(ticketRow.price)) &&
+        Number(ticketRow.price) > 0 &&
+        Number.isFinite(Number(ticketRow.admin_fee))
+      ) {
+        const feePercent = (Number(ticketRow.admin_fee) * 100) / Number(ticketRow.price)
         if (Number.isFinite(feePercent)) {
           return Number(feePercent.toFixed(2))
         }
