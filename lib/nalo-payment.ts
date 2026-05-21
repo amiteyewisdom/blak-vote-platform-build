@@ -487,6 +487,8 @@ export async function sendNaloSms(phoneNumber: string, message: string): Promise
   }
 
   const requestUrl = `${endpoint}?${query.toString()}`
+
+  // Attempt 1: GET with query params (legacy)
   let response = await fetch(requestUrl, {
     method: 'GET',
     headers,
@@ -495,29 +497,91 @@ export async function sendNaloSms(phoneNumber: string, message: string): Promise
   let responseText = await response.text().catch(() => '')
   let normalizedResponse = String(responseText || '').trim().toLowerCase()
 
-  if (!response.ok && (response.status === 401 || response.status >= 500)) {
-    console.warn('[NALO_SMS_GET_FAILED_FALLBACK_POST]', {
+  // If GET fails with auth/server errors, try a series of fallbacks and log each attempt
+  if (!response.ok) {
+    console.warn('[NALO_SMS_ATTEMPT]', {
+      attempt: 1,
       destination: normalizedPhone,
       status: response.status,
       responseText,
       authMethod,
     })
 
-    const fallbackBody = new URLSearchParams(query)
-    response = await fetch(endpoint, {
-      method: 'POST',
-      headers: {
-        ...Object.fromEntries(headers.entries()),
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      body: fallbackBody.toString(),
-    })
-
-    responseText = await response.text().catch(() => '')
-    normalizedResponse = String(responseText || '').trim().toLowerCase()
+    // Attempt 2: POST form with same headers
+    try {
+      const bodyForm = new URLSearchParams(query)
+      response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          ...Object.fromEntries(headers.entries()),
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: bodyForm.toString(),
+      })
+      responseText = await response.text().catch(() => '')
+      normalizedResponse = String(responseText || '').trim().toLowerCase()
+      console.warn('[NALO_SMS_ATTEMPT]', { attempt: 2, destination: normalizedPhone, status: response.status, responseText, authMethod })
+    } catch (err) {
+      console.warn('[NALO_SMS_ATTEMPT_ERROR]', { attempt: 2, err: String(err) })
+    }
   }
 
+  // If still not OK, try POST without Authorization header but with credentials in body
   if (!response.ok) {
+    try {
+      const bodyForm = new URLSearchParams(query)
+      const headersNoAuth = Object.fromEntries(headers.entries())
+      delete headersNoAuth['authorization']
+
+      response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          ...headersNoAuth,
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: bodyForm.toString(),
+      })
+      responseText = await response.text().catch(() => '')
+      normalizedResponse = String(responseText || '').trim().toLowerCase()
+      console.warn('[NALO_SMS_ATTEMPT]', { attempt: 3, destination: normalizedPhone, status: response.status, responseText, authMethod: 'no-auth-header' })
+    } catch (err) {
+      console.warn('[NALO_SMS_ATTEMPT_ERROR]', { attempt: 3, err: String(err) })
+    }
+  }
+
+  // If still not OK, try POST with JSON body (some Nalo endpoints accept JSON)
+  if (!response.ok) {
+    try {
+      const payloadJson = {
+        type,
+        destination: normalizedPhone,
+        dlr,
+        source,
+        message,
+        callback_url: callbackUrl || undefined,
+      }
+      const headersNoAuth = Object.fromEntries(headers.entries())
+      delete headersNoAuth['authorization']
+
+      response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          ...headersNoAuth,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payloadJson),
+      })
+      responseText = await response.text().catch(() => '')
+      normalizedResponse = String(responseText || '').trim().toLowerCase()
+      console.warn('[NALO_SMS_ATTEMPT]', { attempt: 4, destination: normalizedPhone, status: response.status, responseText, authMethod: 'json-no-auth' })
+    } catch (err) {
+      console.warn('[NALO_SMS_ATTEMPT_ERROR]', { attempt: 4, err: String(err) })
+    }
+  }
+
+  // Final check
+  if (!response.ok) {
+    console.warn('[NALO_SMS_ALL_ATTEMPTS_FAILED]', { destination: normalizedPhone, finalStatus: response.status, responseText, authMethod })
     throw new Error(`Nalo SMS send failed (${response.status}): ${responseText || 'no response body'}`)
   }
 
