@@ -20,6 +20,72 @@ function toStringOrNull(value: unknown) {
   return trimmed.length > 0 ? trimmed : null
 }
 
+function normalizeStoredPaymentProvider(paymentReference: unknown, provider: unknown) {
+  const normalizedProvider = String(provider || '').trim().toLowerCase()
+  const reference = String(paymentReference || '').trim().toUpperCase()
+
+  if (normalizedProvider === 'nalo' || reference.startsWith('USSD-')) {
+    return 'nalo'
+  }
+
+  if (normalizedProvider === 'paypal') {
+    return 'paypal'
+  }
+
+  return 'paystack'
+}
+
+async function resolveAdminRevenueFeePercent(adminSupabase: SupabaseLike, payment: Record<string, unknown>, paymentContext: string, organizerRef: string | null) {
+  if (paymentContext === 'ticket') {
+    const ticketId = String(payment.ticket_id || '').trim()
+    if (ticketId) {
+      const { data: ticketRow } = await adminSupabase
+        .from('tickets')
+        .select('price, admin_fee')
+        .eq('id', ticketId)
+        .maybeSingle()
+
+      if (ticketRow && Number.isFinite(Number(ticketRow.price)) && Number(ticketRow.price) > 0) {
+        const feePercent = (Number(ticketRow.admin_fee || 0) * 100) / Number(ticketRow.price)
+        if (Number.isFinite(feePercent)) {
+          return Number(feePercent.toFixed(2))
+        }
+      }
+    }
+
+    const { data: settings } = await adminSupabase
+      .from('platform_settings')
+      .select('ticketing_commission_percent, platform_fee_percent')
+      .limit(1)
+      .maybeSingle()
+
+    const ticketFeePercent = Number(settings?.ticketing_commission_percent)
+    if (Number.isFinite(ticketFeePercent)) {
+      return ticketFeePercent
+    }
+
+    const platformFeePercent = Number(settings?.platform_fee_percent)
+    return Number.isFinite(platformFeePercent) ? platformFeePercent : 10
+  }
+
+  const { data: rpcFee } = await adminSupabase.rpc('get_effective_platform_fee_percent', {
+    p_organizer_ref: organizerRef,
+  })
+
+  if (Number.isFinite(Number(rpcFee))) {
+    return Number(rpcFee)
+  }
+
+  const { data: platformSettings } = await adminSupabase
+    .from('platform_settings')
+    .select('platform_fee_percent')
+    .limit(1)
+    .maybeSingle()
+
+  const feePercent = Number(platformSettings?.platform_fee_percent)
+  return Number.isFinite(feePercent) ? feePercent : 10
+}
+
 export async function syncMissingAdminRevenueTransactions(adminSupabase: SupabaseLike) {
   const { data: paidPayments, error: paymentsError } = await adminSupabase
     .from('payments')
@@ -97,15 +163,21 @@ export async function syncMissingAdminRevenueTransactions(adminSupabase: Supabas
 
     const eventRow = eventById.get(eventId)
     const organizerRef = toStringOrNull(eventRow?.organizer_id)
-    const feeCacheKey = organizerRef || '__default__'
+    const paymentContext = String(payment.payment_context || 'vote').toLowerCase() === 'ticket' ? 'ticket' : 'vote'
 
-    let feePercent = feePercentCache.get(feeCacheKey)
-    if (feePercent == null) {
-      const { data: rpcFee } = await adminSupabase.rpc('get_effective_platform_fee_percent', {
-        p_organizer_ref: organizerRef,
-      })
-      feePercent = Number.isFinite(Number(rpcFee)) ? Number(rpcFee) : 10
-      feePercentCache.set(feeCacheKey, feePercent)
+    let feePercent = 10
+    if (paymentContext === 'ticket') {
+      feePercent = await resolveAdminRevenueFeePercent(adminSupabase, payment, paymentContext, organizerRef)
+    } else {
+      const feeCacheKey = organizerRef || '__default__'
+      feePercent = feePercentCache.get(feeCacheKey)
+      if (feePercent == null) {
+        const { data: rpcFee } = await adminSupabase.rpc('get_effective_platform_fee_percent', {
+          p_organizer_ref: organizerRef,
+        })
+        feePercent = Number.isFinite(Number(rpcFee)) ? Number(rpcFee) : 10
+        feePercentCache.set(feeCacheKey, feePercent)
+      }
     }
 
     const grossAmount = Number(toNumber(payment.amount).toFixed(2))
@@ -115,7 +187,7 @@ export async function syncMissingAdminRevenueTransactions(adminSupabase: Supabas
 
     const platformFeeAmount = Number(((grossAmount * feePercent) / 100).toFixed(2))
     const organizerNetAmount = Number((grossAmount - platformFeeAmount).toFixed(2))
-    const paymentContext = String(payment.payment_context || 'vote').toLowerCase() === 'ticket' ? 'ticket' : 'vote'
+    const paymentProvider = normalizeStoredPaymentProvider(payment.reference, payment.provider)
 
     rowsToInsert.push({
       payment_id: paymentId,
@@ -126,6 +198,7 @@ export async function syncMissingAdminRevenueTransactions(adminSupabase: Supabas
       vote_id: paymentContext === 'vote' ? toStringOrNull(payment.vote_id) : null,
       vote_type: 'paid',
       payment_context: paymentContext,
+      payment_provider: paymentProvider,
       gross_amount: grossAmount,
       platform_fee_percent: Number(feePercent.toFixed(2)),
       platform_fee_amount: platformFeeAmount,

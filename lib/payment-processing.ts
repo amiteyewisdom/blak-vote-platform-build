@@ -513,6 +513,70 @@ async function ensureAdminRevenueCapturedForVote(params: {
   })
 }
 
+async function resolveAdminRevenueFeePercent(params: {
+  supabase: ReturnType<typeof getSupabaseAdminClient>
+  paymentContext: 'vote' | 'ticket'
+  organizerId: string | null
+  ticketId?: string | null
+}) {
+  const { supabase, paymentContext, organizerId, ticketId } = params
+
+  if (paymentContext === 'ticket') {
+    if (ticketId) {
+      const { data: ticketRow } = await supabase
+        .from('tickets')
+        .select('price, admin_fee')
+        .eq('id', ticketId)
+        .maybeSingle()
+
+      if (ticketRow && Number.isFinite(Number(ticketRow.price)) && Number(ticketRow.price) > 0) {
+        const feePercent = (Number(ticketRow.admin_fee || 0) * 100) / Number(ticketRow.price)
+        if (Number.isFinite(feePercent)) {
+          return Number(feePercent.toFixed(2))
+        }
+      }
+    }
+
+    const { data: settings } = await supabase
+      .from('platform_settings')
+      .select('ticketing_commission_percent, platform_fee_percent')
+      .limit(1)
+      .maybeSingle()
+
+    const ticketFeePercent = Number(settings?.ticketing_commission_percent)
+    if (Number.isFinite(ticketFeePercent)) {
+      return ticketFeePercent
+    }
+
+    const platformFeePercent = Number(settings?.platform_fee_percent)
+    return Number.isFinite(platformFeePercent) ? platformFeePercent : 10
+  }
+
+  let feePercent = 10
+  try {
+    const { data: rpcFee } = await supabase.rpc('get_effective_platform_fee_percent', {
+      p_organizer_ref: organizerId,
+    })
+
+    if (Number.isFinite(Number(rpcFee))) {
+      feePercent = Number(rpcFee)
+    } else {
+      const { data: platformSettings } = await supabase
+        .from('platform_settings')
+        .select('platform_fee_percent')
+        .limit(1)
+        .maybeSingle()
+      if (Number.isFinite(Number(platformSettings?.platform_fee_percent))) {
+        feePercent = Number(platformSettings.platform_fee_percent)
+      }
+    }
+  } catch {
+    // Keep default fallback when fee RPC/settings are unavailable.
+  }
+
+  return feePercent
+}
+
 async function ensureAdminRevenueCapturedForPayment(params: {
   supabase: ReturnType<typeof getSupabaseAdminClient>
   payment: any
@@ -555,27 +619,16 @@ async function ensureAdminRevenueCapturedForPayment(params: {
     .eq('id', eventId)
     .maybeSingle()
 
-  let feePercent = 10
-  try {
-    const { data: rpcFee } = await supabase.rpc('get_effective_platform_fee_percent', {
-      p_organizer_ref: eventRow?.organizer_id || null,
-    })
+  const feePercent = await resolveAdminRevenueFeePercent({
+    supabase,
+    paymentContext,
+    organizerId: eventRow?.organizer_id || null,
+    ticketId: payment.ticket_id ? String(payment.ticket_id) : null,
+  })
 
-    if (Number.isFinite(Number(rpcFee))) {
-      feePercent = Number(rpcFee)
-    } else {
-      const { data: platformSettings } = await supabase
-        .from('platform_settings')
-        .select('platform_fee_percent')
-        .limit(1)
-        .maybeSingle()
-      if (Number.isFinite(Number(platformSettings?.platform_fee_percent))) {
-        feePercent = Number(platformSettings.platform_fee_percent)
-      }
-    }
-  } catch {
-    // Keep default fallback when fee RPC/settings are unavailable.
-  }
+  const provider = payment.provider
+    ? String(payment.provider).trim().toLowerCase()
+    : normalizeStoredPaymentProvider(String(payment.reference || ''), payment.provider)
 
   const platformFeeAmount = Number(((amountPaid * feePercent) / 100).toFixed(2))
   const organizerNetAmount = Number((amountPaid - platformFeeAmount).toFixed(2))
@@ -590,6 +643,7 @@ async function ensureAdminRevenueCapturedForPayment(params: {
       vote_id: paymentContext === 'vote' ? voteId || null : null,
       vote_type: 'paid',
       payment_context: paymentContext,
+      payment_provider: provider,
       gross_amount: Number(amountPaid.toFixed(2)),
       platform_fee_percent: Number(feePercent.toFixed(2)),
       platform_fee_amount: platformFeeAmount,
@@ -604,6 +658,8 @@ async function ensureAdminRevenueCapturedForPayment(params: {
       organizer_id: eventRow?.organizer_id || null,
       vote_id: paymentContext === 'vote' ? voteId || null : null,
       vote_type: 'paid',
+      payment_context: paymentContext,
+      payment_provider: provider,
       gross_amount: Number(amountPaid.toFixed(2)),
       platform_fee_percent: Number(feePercent.toFixed(2)),
       platform_fee_amount: platformFeeAmount,
