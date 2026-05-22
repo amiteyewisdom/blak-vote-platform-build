@@ -134,6 +134,34 @@ export type PaymentVerificationPayload = {
   currency?: string
 }
 
+function paymentAmountsMatch(storedAmount: unknown, verifiedAmount: unknown) {
+  const stored = Number(storedAmount)
+  const verified = Number(verifiedAmount)
+
+  if (!Number.isFinite(stored) || stored <= 0) {
+    return true
+  }
+
+  if (!Number.isFinite(verified) || verified <= 0) {
+    return true
+  }
+
+  return Math.abs(stored - verified) <= 0.02
+}
+
+function isSellableTicketPlan(ticket: {
+  ticket_kind?: string | null
+  parent_ticket_id?: string | null
+}) {
+  const ticketKind = String(ticket.ticket_kind || '').trim().toLowerCase()
+
+  if (ticketKind === 'plan') {
+    return true
+  }
+
+  return !ticket.parent_ticket_id && ticketKind !== 'issued'
+}
+
 function isConfirmedPaymentStatus(status: string | null | undefined) {
   if (!status) {
     return false
@@ -1309,9 +1337,19 @@ export async function processConfirmedPayment(verification: PaymentVerificationP
     0
   )
 
-  if (!metadata && !rawStoredMeta.candidateId && !payment.candidate_id) {
+  const hasTicketMetadata =
+    paymentContext === 'ticket' ||
+    String(payment.payment_context || '').toLowerCase() === 'ticket' ||
+    Boolean(rawStoredMeta.ticketId || metadata?.ticketId)
+
+  const hasVoteMetadata = Boolean(
+    payment.candidate_id || rawStoredMeta.candidateId || metadata?.candidateId
+  )
+
+  if (!metadata && !hasVoteMetadata && !hasTicketMetadata) {
     console.error('[PAYMENT_VERIFY_FAIL] Invalid metadata schema:', {
       reference: verification.reference,
+      paymentContext,
       verificationMetadataValid: parsedVerificationMetadata.success,
       storedMetadataValid: parsedStoredPaymentMetadata.success,
     })
@@ -1350,7 +1388,13 @@ export async function processConfirmedPayment(verification: PaymentVerificationP
     return {
       ok: true as const,
       status: 200,
-      body: { success: true, voteId: payment.vote_id, alreadyProcessed: true },
+      body: {
+        success: true,
+        resource: 'vote',
+        voteId: payment.vote_id,
+        eventId: effectiveEventId,
+        alreadyProcessed: true,
+      },
     }
   }
 
@@ -1411,7 +1455,7 @@ export async function processConfirmedPayment(verification: PaymentVerificationP
     }
   }
 
-  if (Number(payment.amount) !== Number(verification.amount)) {
+  if (!paymentAmountsMatch(payment.amount, verification.amount)) {
     console.error('[PAYMENT_VERIFY_FAIL] Amount mismatch:', { reference: verification.reference, expected: payment.amount, received: verification.amount })
     await logPaymentVerificationFailure(verification.reference, `Amount mismatch: expected ${payment.amount}, received ${verification.amount}`)
     await supabase
@@ -1422,7 +1466,7 @@ export async function processConfirmedPayment(verification: PaymentVerificationP
     return {
       ok: false as const,
       status: 409,
-      body: { error: 'Payment amount does not match the expected vote cost' },
+      body: { error: 'Payment amount does not match the expected payment total' },
     }
   }
 
@@ -1559,7 +1603,7 @@ export async function processConfirmedPayment(verification: PaymentVerificationP
   if (paymentContext === 'ticket') {
     const { data: ticket, error: ticketError } = await supabase
       .from('tickets')
-      .select('id, event_id, name, price, admin_fee, quantity, sold_count, ticket_kind, ticket_type')
+      .select('id, event_id, name, price, admin_fee, quantity, sold_count, ticket_kind, ticket_type, parent_ticket_id')
       .eq('id', (metadata?.ticketId ?? rawStoredMeta.ticketId) as string)
       .maybeSingle()
 
@@ -1580,7 +1624,7 @@ export async function processConfirmedPayment(verification: PaymentVerificationP
       }
     }
 
-    if (ticket.ticket_kind !== 'plan') {
+    if (!isSellableTicketPlan(ticket)) {
       await supabase
         .from('payments')
         .update({

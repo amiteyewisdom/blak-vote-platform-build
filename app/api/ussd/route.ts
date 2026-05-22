@@ -2,7 +2,7 @@ import crypto from 'crypto'
 import { resolveEventVotePrice } from '@/lib/event-pricing'
 import { isVotingOpenStatus } from '@/lib/event-status'
 import { extractClientIp, getAllowedIps, getSupabaseAdminClient, isRequestFromAllowedIps } from '@/lib/server-security'
-import { sendNaloSms } from '@/lib/nalo-payment'
+import { sendNaloSms } from '@/lib/ussd-sms'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
