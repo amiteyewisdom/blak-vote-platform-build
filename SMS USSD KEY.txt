@@ -1,7 +1,17 @@
-# Nalo Payment (MoMo / USSD)
+# Nalo Payment (MoMo / USSD) — used for collecting money
 NALO_BASIC_AUTH_HEADER=Basic 0b9cf869337d1b049f53d14845e79d0d0dc7f09868ed58daa0a9ccefcb4f06fa79fd1c78fa2e06f070ee660611937088f6825738737f8dc387d40028d9321b77
 NALO_TRANS_HASH_SECRET=df4f9352a5b14b671533ca117583d79efce5f9a076421fdacef2c2965cada19c
 
-# Nalo SMS
-NALO_SMS_AUTH_KEY=df4f9352a5b14b671533ca117583d79efce5f9a076421fdacef2c2965cada19c
+# Nalo SMS — used ONLY for sending vote/ticket confirmation texts (separate credentials)
+# DO NOT reuse NALO_TRANS_HASH_SECRET here — that causes error 1713 "Invalid auth key"
+#
+# Option A (recommended): SMS API key from Nalo SMS / bulk SMS portal
+# NALO_SMS_AUTH_KEY=<paste SMS portal API key here>
+#
+# Option B: SMS username + password from Nalo SMS portal
+# NALO_SMS_USERNAME=
+# NALO_SMS_PASSWORD=
+#
+NALO_SMS_API_URL=https://sms.nalosolutions.com/smsbackend/Resl_Nalo/send-message/
 NALO_SMS_SOURCE=BLAKVOTE
+NALO_SMS_USERNAME_PREFIX=Resl_Nalo

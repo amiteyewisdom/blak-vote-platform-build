@@ -114,18 +114,18 @@ async function authorizeEventAccess(eventId: string, req?: NextRequest) {
   }
 }
 
-async function getTicketCommissionPercent(supabase: ReturnType<typeof getSupabaseAdminClient>) {
-  const { data: settings, error } = await supabase
-    .from('platform_settings')
-    .select('ticketing_commission_percent')
-    .limit(1)
+async function getTicketCommissionPercentForEvent(
+  supabase: ReturnType<typeof getSupabaseAdminClient>,
+  eventId: string
+) {
+  const { data: eventRow } = await supabase
+    .from('events')
+    .select('organizer_id')
+    .eq('id', eventId)
     .maybeSingle()
 
-  if (error) {
-    return 0
-  }
-
-  return Number(settings?.ticketing_commission_percent ?? 0)
+  const { getEffectiveTicketingFeePercent } = await import('@/lib/organizer-fees')
+  return getEffectiveTicketingFeePercent(supabase, eventRow?.organizer_id ? String(eventRow.organizer_id) : null)
 }
 
 function isMissingColumnError(error: unknown, columnName: string) {
@@ -341,7 +341,7 @@ export async function POST(req: NextRequest) {
     }
 
     const { supabase } = access
-    const ticketPercent = await getTicketCommissionPercent(supabase)
+    const ticketPercent = await getTicketCommissionPercentForEvent(supabase, parsed.data.event_id)
     const adminFee = Number(((parsed.data.price * ticketPercent) / 100).toFixed(2))
     const ticketType = parsed.data.price > 0 ? 'paid' : 'free'
     const timestamp = new Date().toISOString()
@@ -458,7 +458,7 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ error: 'Quantity cannot be lower than tickets already sold' }, { status: 409 })
     }
 
-    const ticketPercent = await getTicketCommissionPercent(supabase)
+    const ticketPercent = await getTicketCommissionPercentForEvent(supabase, existingPlan.event_id)
     const updates: Record<string, unknown> = {
       updated_at: new Date().toISOString(),
     }

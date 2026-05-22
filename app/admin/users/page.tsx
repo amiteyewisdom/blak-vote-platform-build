@@ -20,7 +20,10 @@ export default function AdminUsersPage() {
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
   const [processingId, setProcessingId] = useState<string | null>(null)
-  const [feeInputs, setFeeInputs] = useState<Record<string, string>>({})
+  const [voteFeeInputs, setVoteFeeInputs] = useState<Record<string, string>>({})
+  const [ticketingFeeInputs, setTicketingFeeInputs] = useState<Record<string, string>>({})
+  const [defaultVoteFeePercent, setDefaultVoteFeePercent] = useState('10')
+  const [defaultTicketingFeePercent, setDefaultTicketingFeePercent] = useState('10')
   const [savingFeeId, setSavingFeeId] = useState<string | null>(null)
 
   useEffect(() => {
@@ -47,16 +50,30 @@ export default function AdminUsersPage() {
 
     const payload = await res.json().catch(() => ({}))
     const overrides = Array.isArray(payload?.overrides) ? payload.overrides : []
-    const nextInputs: Record<string, string> = {}
+    const nextVoteInputs: Record<string, string> = {}
+    const nextTicketingInputs: Record<string, string> = {}
+
+    if (payload?.defaultPlatformFeePercent != null) {
+      setDefaultVoteFeePercent(String(payload.defaultPlatformFeePercent))
+    }
+    if (payload?.defaultTicketingFeePercent != null) {
+      setDefaultTicketingFeePercent(String(payload.defaultTicketingFeePercent))
+    }
 
     for (const row of overrides) {
       const organizerUserId = row?.organizer_user_id
       if (organizerUserId) {
-        nextInputs[organizerUserId] = String(row.platform_fee_percent ?? '')
+        if (row.platform_fee_percent != null) {
+          nextVoteInputs[organizerUserId] = String(row.platform_fee_percent)
+        }
+        if (row.ticketing_fee_percent != null) {
+          nextTicketingInputs[organizerUserId] = String(row.ticketing_fee_percent)
+        }
       }
     }
 
-    setFeeInputs(nextInputs)
+    setVoteFeeInputs(nextVoteInputs)
+    setTicketingFeeInputs(nextTicketingInputs)
   }
 
   const handleSearch = (term: string) => {
@@ -136,28 +153,42 @@ export default function AdminUsersPage() {
     setProcessingId(null)
   }
 
-  const setFeeInput = (organizerId: string, value: string) => {
-    setFeeInputs((prev) => ({
-      ...prev,
-      [organizerId]: value,
-    }))
+  const setVoteFeeInput = (organizerId: string, value: string) => {
+    setVoteFeeInputs((prev) => ({ ...prev, [organizerId]: value }))
   }
 
-  const saveOrganizerFee = async (organizerId: string) => {
-    const raw = feeInputs[organizerId]
-    const parsed = Number(raw)
+  const setTicketingFeeInput = (organizerId: string, value: string) => {
+    setTicketingFeeInputs((prev) => ({ ...prev, [organizerId]: value }))
+  }
 
+  const parseOptionalFee = (raw: string | undefined) => {
+    if (raw == null || raw.trim() === '') {
+      return null
+    }
+
+    const parsed = Number(raw)
     if (!Number.isFinite(parsed) || parsed < 0 || parsed > 100) {
-      alert('Platform fee must be a number between 0 and 100')
+      return undefined
+    }
+
+    return parsed
+  }
+
+  const saveOrganizerFees = async (organizerId: string) => {
+    const votePercent = parseOptionalFee(voteFeeInputs[organizerId])
+    const ticketingPercent = parseOptionalFee(ticketingFeeInputs[organizerId])
+
+    if (votePercent === undefined || ticketingPercent === undefined) {
+      alert('Each fee must be empty (use platform default) or a number between 0 and 100')
       return
     }
 
     setSavingFeeId(organizerId)
 
-    // Find the user by ID (should always be a user.id, not organizer.id)
     const user = users.find((u) => u.id === organizerId)
     if (!user) {
       alert('User not found for this organizer')
+      setSavingFeeId(null)
       return
     }
 
@@ -165,26 +196,29 @@ export default function AdminUsersPage() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        organizerUserId: user.id, // always user.id
-        platformFeePercent: parsed,
+        organizerUserId: user.id,
+        platformFeePercent: votePercent,
+        ticketingFeePercent: ticketingPercent,
       }),
     })
 
     if (!res.ok) {
       const payload = await res.json().catch(() => ({}))
-      alert(payload?.error || 'Failed to save organizer fee')
+      alert(payload?.error || 'Failed to save organizer fees')
+    } else {
+      await fetchOrganizerFees()
     }
 
     setSavingFeeId(null)
   }
 
-  const resetOrganizerFee = async (organizerId: string) => {
+  const resetOrganizerFees = async (organizerId: string) => {
     setSavingFeeId(organizerId)
 
-    // Find the user by ID (should always be a user.id, not organizer.id)
     const user = users.find((u) => u.id === organizerId)
     if (!user) {
       alert('User not found for this organizer')
+      setSavingFeeId(null)
       return
     }
 
@@ -192,16 +226,19 @@ export default function AdminUsersPage() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        organizerUserId: user.id, // always user.id
+        organizerUserId: user.id,
         platformFeePercent: null,
+        ticketingFeePercent: null,
       }),
     })
 
     if (!res.ok) {
       const payload = await res.json().catch(() => ({}))
-      alert(payload?.error || 'Failed to reset organizer fee')
+      alert(payload?.error || 'Failed to reset organizer fees')
     } else {
-      setFeeInput(organizerId, '')
+      setVoteFeeInput(organizerId, '')
+      setTicketingFeeInput(organizerId, '')
+      await fetchOrganizerFees()
     }
 
     setSavingFeeId(null)
@@ -324,30 +361,43 @@ export default function AdminUsersPage() {
 
                 {user.role === 'organizer' && (
                   <div className="grid grid-cols-1 gap-2 rounded-xl border border-border bg-surface p-2">
+                    <p className="text-xs text-muted-foreground">
+                      Platform fees (defaults: vote {defaultVoteFeePercent}%, ticketing {defaultTicketingFeePercent}%)
+                    </p>
                     <DSInput
                       type="number"
                       min="0"
                       max="100"
                       step="0.01"
-                      value={feeInputs[user.id] ?? ''}
-                      onChange={(e) => setFeeInput(user.id, e.target.value)}
-                      placeholder="Platform fee %"
+                      value={voteFeeInputs[user.id] ?? ''}
+                      onChange={(e) => setVoteFeeInput(user.id, e.target.value)}
+                      placeholder={`Vote fee % (default ${defaultVoteFeePercent})`}
+                      className="min-h-10 rounded-lg text-sm"
+                    />
+                    <DSInput
+                      type="number"
+                      min="0"
+                      max="100"
+                      step="0.01"
+                      value={ticketingFeeInputs[user.id] ?? ''}
+                      onChange={(e) => setTicketingFeeInput(user.id, e.target.value)}
+                      placeholder={`Ticketing fee % (default ${defaultTicketingFeePercent})`}
                       className="min-h-10 rounded-lg text-sm"
                     />
                     <div className="grid grid-cols-2 gap-2">
                       <DSPrimaryButton
-                        onClick={() => saveOrganizerFee(user.id)}
+                        onClick={() => saveOrganizerFees(user.id)}
                         disabled={savingFeeId === user.id}
                         className="min-h-10 rounded-lg text-xs"
                       >
-                        {savingFeeId === user.id ? 'Saving...' : 'Save Fee'}
+                        {savingFeeId === user.id ? 'Saving...' : 'Save Fees'}
                       </DSPrimaryButton>
                       <DSSecondaryButton
-                        onClick={() => resetOrganizerFee(user.id)}
+                        onClick={() => resetOrganizerFees(user.id)}
                         disabled={savingFeeId === user.id}
                         className="min-h-10 rounded-lg text-xs"
                       >
-                        Use Default
+                        Use Defaults
                       </DSSecondaryButton>
                     </div>
                   </div>
@@ -472,26 +522,36 @@ export default function AdminUsersPage() {
                       )}
 
                       {user.role === 'organizer' && (
-                        <div className="flex items-center gap-2 rounded-xl border border-border bg-surface px-2 py-2">
+                        <div className="flex flex-wrap items-center gap-2 rounded-xl border border-border bg-surface px-2 py-2">
                           <DSInput
                             type="number"
                             min="0"
                             max="100"
                             step="0.01"
-                            value={feeInputs[user.id] ?? ''}
-                            onChange={(e) => setFeeInput(user.id, e.target.value)}
-                            placeholder="Fee %"
-                            className="h-10 w-24 rounded-lg px-2 text-xs"
+                            value={voteFeeInputs[user.id] ?? ''}
+                            onChange={(e) => setVoteFeeInput(user.id, e.target.value)}
+                            placeholder={`Vote % (${defaultVoteFeePercent})`}
+                            className="h-10 w-28 rounded-lg px-2 text-xs"
+                          />
+                          <DSInput
+                            type="number"
+                            min="0"
+                            max="100"
+                            step="0.01"
+                            value={ticketingFeeInputs[user.id] ?? ''}
+                            onChange={(e) => setTicketingFeeInput(user.id, e.target.value)}
+                            placeholder={`Ticket % (${defaultTicketingFeePercent})`}
+                            className="h-10 w-28 rounded-lg px-2 text-xs"
                           />
                           <DSPrimaryButton
-                            onClick={() => saveOrganizerFee(user.id)}
+                            onClick={() => saveOrganizerFees(user.id)}
                             disabled={savingFeeId === user.id}
                             className="h-10 px-3 rounded-lg text-xs"
                           >
-                            {savingFeeId === user.id ? '...' : 'Save Fee'}
+                            {savingFeeId === user.id ? '...' : 'Save'}
                           </DSPrimaryButton>
                           <DSSecondaryButton
-                            onClick={() => resetOrganizerFee(user.id)}
+                            onClick={() => resetOrganizerFees(user.id)}
                             disabled={savingFeeId === user.id}
                             className="h-10 px-3 rounded-lg text-xs"
                           >

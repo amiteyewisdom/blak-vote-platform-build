@@ -24,6 +24,8 @@ export default function AdminSettingsPage() {
   const [settings, setSettings] = useState({
     platformName: '',
     maxEventsPerOrganizer: '10',
+    platformFeePercent: '10',
+    ticketingCommissionPercent: '10',
     enableFraudDetection: true,
     requireEmailVerification: true,
     maintenanceMode: false,
@@ -46,6 +48,8 @@ export default function AdminSettingsPage() {
         ...prev,
         platformName: payload.platformName ?? '',
         maxEventsPerOrganizer: String(payload.maxEventsPerOrganizer ?? 10),
+        platformFeePercent: String(payload.platformFeePercent ?? 10),
+        ticketingCommissionPercent: String(payload.ticketingCommissionPercent ?? 10),
         enableFraudDetection: payload.enableFraudDetection ?? true,
         requireEmailVerification: payload.requireEmailVerification ?? true,
         maintenanceMode: payload.maintenanceMode ?? false,
@@ -63,6 +67,8 @@ export default function AdminSettingsPage() {
 
   const handleSave = async () => {
     const parsedMaxEvents = Number.parseInt(settings.maxEventsPerOrganizer, 10)
+    const parsedVoteFee = Number(settings.platformFeePercent)
+    const parsedTicketingFee = Number(settings.ticketingCommissionPercent)
 
     if (!Number.isInteger(parsedMaxEvents) || parsedMaxEvents <= 0) {
       toast({
@@ -82,6 +88,22 @@ export default function AdminSettingsPage() {
       return
     }
 
+    if (
+      !Number.isFinite(parsedVoteFee) ||
+      parsedVoteFee < 0 ||
+      parsedVoteFee > 100 ||
+      !Number.isFinite(parsedTicketingFee) ||
+      parsedTicketingFee < 0 ||
+      parsedTicketingFee > 100
+    ) {
+      toast({
+        title: 'Invalid fee percentages',
+        description: 'Vote and ticketing defaults must be between 0 and 100.',
+        variant: 'destructive',
+      })
+      return
+    }
+
     setSaving(true)
 
     try {
@@ -91,6 +113,8 @@ export default function AdminSettingsPage() {
         body: JSON.stringify({
           platformName: settings.platformName,
           maxEventsPerOrganizer: parsedMaxEvents,
+          platformFeePercent: parsedVoteFee,
+          ticketingCommissionPercent: parsedTicketingFee,
           enableFraudDetection: settings.enableFraudDetection,
           requireEmailVerification: settings.requireEmailVerification,
           maintenanceMode: settings.maintenanceMode,
@@ -185,6 +209,53 @@ export default function AdminSettingsPage() {
               onCheckedChange={(checked) =>
                 setSettings({ ...settings, maintenanceMode: checked })
               }
+            />
+          </div>
+        </DSCardContent>
+      </DSCard>
+
+      <DSCard className="p-0">
+        <DSCardHeader>
+          <DSCardTitle>Platform Fees (Defaults)</DSCardTitle>
+          <DSCardDescription>
+            Default commission for all organizers without a custom override
+          </DSCardDescription>
+        </DSCardHeader>
+
+        <DSCardContent className="space-y-6">
+          <div>
+            <Label>Default vote platform fee (%)</Label>
+            <p className="text-sm text-muted-foreground mb-2">
+              Applied to paid votes unless an organizer has a custom vote fee.
+            </p>
+            <DSInput
+              type="number"
+              min="0"
+              max="100"
+              step="0.01"
+              value={settings.platformFeePercent}
+              onChange={(e) =>
+                setSettings({ ...settings, platformFeePercent: e.target.value })
+              }
+              className="mt-2"
+            />
+          </div>
+
+          <div>
+            <Label>Default ticketing commission (%)</Label>
+            <p className="text-sm text-muted-foreground mb-2">
+              Applied to ticket sales unless an organizer has a custom ticketing fee.
+            </p>
+            <DSInput
+              type="number"
+              min="0"
+              max="100"
+              step="0.01"
+              value={settings.ticketingCommissionPercent}
+              onChange={(e) =>
+                setSettings({ ...settings, ticketingCommissionPercent: e.target.value })
+              }
+              className="mt-2"
             />
           </div>
         </DSCardContent>

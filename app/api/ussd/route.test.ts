@@ -26,6 +26,10 @@ vi.mock('@/lib/nalo-payment', () => ({
   updateUssdPendingTransaction: mockUpdateUssdPendingTransaction,
 }))
 
+vi.mock('@/lib/ussd-sms', () => ({
+  sendNaloSms: vi.fn(async () => undefined),
+}))
+
 vi.mock('@/lib/server-security', () => ({
   getSupabaseAdminClient: () => mockGetSupabaseAdminClient(),
   getAllowedIps: (envName: string, fallbackIps?: string[]) => mockGetAllowedIps(envName, fallbackIps),

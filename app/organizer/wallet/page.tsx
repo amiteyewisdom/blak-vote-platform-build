@@ -21,6 +21,9 @@ interface WalletSummary {
   total_cashed_out: number
   last_updated: string
   effective_platform_fee_percent?: number
+  effective_ticketing_fee_percent?: number
+  vote_fee_source?: string
+  ticketing_fee_source?: string
   fee_source?: 'custom' | 'default'
 }
 
@@ -405,8 +408,12 @@ export default function OrganizerWalletPage() {
           <MetricCard title="Available to Request" value={formatCurrency(wallet.available_balance)} />
           <MetricCard title="Paid Votes" value={wallet.total_paid_votes.toLocaleString()} />
           <MetricCard
-            title="Your Platform Fee"
+            title="Vote Platform Fee"
             value={`${Number(wallet.effective_platform_fee_percent || 0).toFixed(2)}%`}
+          />
+          <MetricCard
+            title="Ticketing Commission"
+            value={`${Number(wallet.effective_ticketing_fee_percent || 0).toFixed(2)}%`}
           />
           <MetricCard
             title="Last Updated"
@@ -417,9 +424,12 @@ export default function OrganizerWalletPage() {
 
       {wallet && (
         <div className="rounded-xl border border-border bg-card p-4 text-sm text-muted-foreground">
-          <span className="font-semibold text-foreground">Current Fee Rule:</span>{' '}
-          {Number(wallet.effective_platform_fee_percent || 0).toFixed(2)}%{' '}
-          {wallet.fee_source === 'custom' ? '(custom fee set by admin for your account)' : '(default platform fee)'}
+          <span className="font-semibold text-foreground">Your fee rates:</span>{' '}
+          Vote {Number(wallet.effective_platform_fee_percent || 0).toFixed(2)}%
+          {wallet.vote_fee_source === 'custom' ? ' (custom)' : ' (platform default)'}
+          {' · '}
+          Ticketing {Number(wallet.effective_ticketing_fee_percent || 0).toFixed(2)}%
+          {wallet.ticketing_fee_source === 'custom' ? ' (custom)' : ' (platform default)'}
           <div className="mt-2">
             Available to request = net earnings minus withdrawals already requested and still under review or settlement.
           </div>
@@ -648,7 +658,7 @@ export default function OrganizerWalletPage() {
           <li className="flex gap-3">
             <span className="text-orange-500">•</span>
             <span>
-              <strong>Platform Fee Rate:</strong> Applied to each paid vote using your configured percentage ({Number(wallet?.effective_platform_fee_percent || 0).toFixed(2)}%).
+              <strong>Fee rates:</strong> Paid votes use {Number(wallet?.effective_platform_fee_percent || 0).toFixed(2)}% and ticket sales use {Number(wallet?.effective_ticketing_fee_percent || 0).toFixed(2)}%.
             </span>
           </li>
           <li className="flex gap-3">

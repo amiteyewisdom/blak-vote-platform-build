@@ -27,26 +27,23 @@ export async function GET(request: NextRequest) {
       return auth.response
     }
 
-    const [{ data: feeOverride }, { data: globalSettings }, { data: feeResult }] = await Promise.all([
-      adminSupabase
-        .from('organizer_fee_overrides')
-        .select('platform_fee_percent')
-        .eq('organizer_user_id', auth.userId)
-        .maybeSingle(),
-      adminSupabase
-        .from('platform_settings')
-        .select('platform_fee_percent')
-        .limit(1)
-        .maybeSingle(),
-      adminSupabase.rpc('get_effective_platform_fee_percent', {
-        p_organizer_ref: auth.userId,
-      }),
-    ])
-
-    const effectivePlatformFeePercent = Number(
-      feeResult ?? feeOverride?.platform_fee_percent ?? globalSettings?.platform_fee_percent ?? 10
+    const { getEffectiveTicketingFeePercent, getEffectiveVotePlatformFeePercent } = await import(
+      '@/lib/organizer-fees'
     )
-    const feeSource = feeOverride?.platform_fee_percent != null ? 'custom' : 'default'
+
+    const [{ data: feeOverride }, effectiveVoteFeePercent, effectiveTicketingFeePercent] =
+      await Promise.all([
+        adminSupabase
+          .from('organizer_fee_overrides')
+          .select('platform_fee_percent, ticketing_fee_percent')
+          .eq('organizer_user_id', auth.userId)
+          .maybeSingle(),
+        getEffectiveVotePlatformFeePercent(adminSupabase, auth.userId),
+        getEffectiveTicketingFeePercent(adminSupabase, auth.userId),
+      ])
+
+    const voteFeeSource = feeOverride?.platform_fee_percent != null ? 'custom' : 'default'
+    const ticketingFeeSource = feeOverride?.ticketing_fee_percent != null ? 'custom' : 'default'
 
     const wallet = await getOrganizerWalletSummaryData(adminSupabase, auth.userId)
 
@@ -60,8 +57,11 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(
       {
         ...walletWithoutFeeAmounts,
-        effective_platform_fee_percent: effectivePlatformFeePercent,
-        fee_source: feeSource,
+        effective_platform_fee_percent: effectiveVoteFeePercent,
+        effective_ticketing_fee_percent: effectiveTicketingFeePercent,
+        vote_fee_source: voteFeeSource,
+        ticketing_fee_source: ticketingFeeSource,
+        fee_source: voteFeeSource,
       },
       { status: 200 }
     )

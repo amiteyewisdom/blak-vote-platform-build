@@ -24,6 +24,40 @@ function normalizeGhanaPhone(phone: string): string {
   return p
 }
 
+function decodeBasicAuthCredentials(value: string) {
+  const trimmed = value.trim()
+  const encoded = trimmed.toLowerCase().startsWith('basic ')
+    ? trimmed.slice(6).trim()
+    : trimmed
+
+  try {
+    const decoded = Buffer.from(encoded, 'base64').toString('utf8')
+    const separatorIndex = decoded.indexOf(':')
+    if (separatorIndex === -1) {
+      return null
+    }
+
+    return {
+      username: decoded.slice(0, separatorIndex),
+      password: decoded.slice(separatorIndex + 1),
+    }
+  } catch {
+    return null
+  }
+}
+
+function isSmsAuthKeyMisconfigured() {
+  const smsAuthKey = process.env.NALO_SMS_AUTH_KEY?.trim()
+  const transHashSecret = process.env.NALO_TRANS_HASH_SECRET?.trim()
+
+  return Boolean(
+    smsAuthKey &&
+      transHashSecret &&
+      smsAuthKey === transHashSecret &&
+      !process.env.NALO_SMS_USERNAME?.trim()
+  )
+}
+
 function isSmsResponseSuccessful(status: number, responseText: string) {
   if (!status || status < 200 || status >= 300) {
     return false
@@ -44,12 +78,29 @@ function isSmsResponseSuccessful(status: number, responseText: string) {
 export async function sendNaloSms(phoneNumber: string, message: string): Promise<void> {
   const normalizedPhone = normalizeGhanaPhone(phoneNumber)
   const usernamePrefix = process.env.NALO_SMS_USERNAME_PREFIX?.trim() || 'Resl_Nalo'
-  const authKey = process.env.NALO_SMS_AUTH_KEY?.trim()
+  const rawAuthKey = process.env.NALO_SMS_AUTH_KEY?.trim()
+  const smsBasicAuthHeader = process.env.NALO_SMS_BASIC_AUTH_HEADER?.trim()
   const username = process.env.NALO_SMS_USERNAME?.trim()
   const password = process.env.NALO_SMS_PASSWORD?.trim()
   const source = process.env.NALO_SMS_SOURCE?.trim() || 'BLAKVOTE'
 
-  if (!authKey && !(username && password)) {
+  if (isSmsAuthKeyMisconfigured()) {
+    console.error(
+      '[NALO_SMS_MISCONFIGURED] NALO_SMS_AUTH_KEY matches NALO_TRANS_HASH_SECRET. ' +
+        'MoMo payment secrets cannot be used for SMS. Set NALO_SMS_AUTH_KEY to the SMS API key from the Nalo SMS portal, ' +
+        'or use NALO_SMS_USERNAME and NALO_SMS_PASSWORD instead.'
+    )
+  }
+
+  const basicCredentials =
+    (username && password ? { username, password } : null) ||
+    (rawAuthKey ? decodeBasicAuthCredentials(rawAuthKey) : null) ||
+    (smsBasicAuthHeader ? decodeBasicAuthCredentials(smsBasicAuthHeader) : null)
+
+  const plainAuthKey =
+    rawAuthKey && !rawAuthKey.toLowerCase().startsWith('basic ') ? rawAuthKey : null
+
+  if (!plainAuthKey && !basicCredentials) {
     console.warn('[NALO_SMS_SKIPPED_NO_AUTH]', { phoneNumber: normalizedPhone })
     return
   }
@@ -71,40 +122,114 @@ export async function sendNaloSms(phoneNumber: string, message: string): Promise
     init: RequestInit
   }> = []
 
-  const jsonBody: Record<string, string> = {
-    msisdn: normalizedPhone,
-    sender_id: source,
-    message,
+  const buildJsonBody = (includeKey: boolean) => {
+    const body: Record<string, string> = {
+      msisdn: normalizedPhone,
+      sender_id: source,
+      message,
+    }
+
+    if (includeKey && plainAuthKey) {
+      body.key = plainAuthKey
+    }
+
+    if (basicCredentials) {
+      body.username = basicCredentials.username
+      body.password = basicCredentials.password
+    }
+
+    return body
   }
-  if (authKey) jsonBody.key = authKey
-  if (username) jsonBody.username = username
-  if (password) jsonBody.password = password
+
+  const buildLegacyQuery = (includeKey: boolean) => {
+    const query = new URLSearchParams()
+    query.set('type', process.env.NALO_SMS_TYPE?.trim() || '0')
+    query.set('destination', normalizedPhone)
+    query.set('dlr', process.env.NALO_SMS_DLR?.trim() || '1')
+    query.set('source', source)
+    query.set('message', message)
+
+    if (includeKey && plainAuthKey) {
+      query.set('key', plainAuthKey)
+    }
+
+    if (basicCredentials) {
+      query.set('username', basicCredentials.username)
+      query.set('password', basicCredentials.password)
+    }
+
+    return query
+  }
+
+  const authHeaders: Array<{ label: string; headers: Record<string, string> }> = []
+  if (rawAuthKey?.toLowerCase().startsWith('basic ')) {
+    authHeaders.push({
+      label: 'authorization-sms-auth-key',
+      headers: { Authorization: rawAuthKey },
+    })
+  }
+  if (smsBasicAuthHeader) {
+    authHeaders.push({
+      label: 'authorization-sms-basic-header',
+      headers: {
+        Authorization: smsBasicAuthHeader.toLowerCase().startsWith('basic ')
+          ? smsBasicAuthHeader
+          : `Basic ${smsBasicAuthHeader}`,
+      },
+    })
+  }
 
   attempts.push({
-    label: 'post-json-primary',
+    label: 'post-json-key',
     url: primaryEndpoint,
     init: {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(jsonBody),
+      body: JSON.stringify(buildJsonBody(true)),
     },
   })
 
-  const legacyQuery = new URLSearchParams()
-  legacyQuery.set('type', process.env.NALO_SMS_TYPE?.trim() || '0')
-  legacyQuery.set('destination', normalizedPhone)
-  legacyQuery.set('dlr', process.env.NALO_SMS_DLR?.trim() || '1')
-  legacyQuery.set('source', source)
-  legacyQuery.set('message', message)
-  if (authKey) legacyQuery.set('key', authKey)
-  if (username) legacyQuery.set('username', username)
-  if (password) legacyQuery.set('password', password)
+  if (basicCredentials) {
+    attempts.push({
+      label: 'post-json-username-password',
+      url: primaryEndpoint,
+      init: {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(buildJsonBody(false)),
+      },
+    })
+  }
 
+  for (const authHeader of authHeaders) {
+    attempts.push({
+      label: `post-json-${authHeader.label}`,
+      url: primaryEndpoint,
+      init: {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...authHeader.headers,
+        },
+        body: JSON.stringify(buildJsonBody(false)),
+      },
+    })
+  }
+
+  const legacyQuery = buildLegacyQuery(Boolean(plainAuthKey))
   attempts.push({
-    label: 'get-legacy-primary',
+    label: 'get-legacy-key',
     url: `${primaryEndpoint}?${legacyQuery.toString()}`,
     init: { method: 'GET' },
   })
+
+  if (basicCredentials) {
+    attempts.push({
+      label: 'get-legacy-username-password',
+      url: `${primaryEndpoint}?${buildLegacyQuery(false).toString()}`,
+      init: { method: 'GET' },
+    })
+  }
 
   attempts.push({
     label: 'post-json-legacy-endpoint',
@@ -112,7 +237,7 @@ export async function sendNaloSms(phoneNumber: string, message: string): Promise
     init: {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(jsonBody),
+      body: JSON.stringify(buildJsonBody(true)),
     },
   })
 
@@ -157,6 +282,14 @@ export async function sendNaloSms(phoneNumber: string, message: string): Promise
     finalStatus: lastStatus,
     responseText: lastResponseText,
   })
+
+  if (lastResponseText.includes('1713') || /invalid auth key/i.test(lastResponseText)) {
+    throw new Error(
+      'Nalo SMS rejected the auth key (1713). NALO_SMS_AUTH_KEY must be the SMS API key from the Nalo SMS portal, ' +
+        'not NALO_TRANS_HASH_SECRET or NALO_BASIC_AUTH_HEADER used for MoMo payments.'
+    )
+  }
+
   throw new Error(`Nalo SMS send failed (${lastStatus}): ${lastResponseText || 'no response body'}`)
 }
 
