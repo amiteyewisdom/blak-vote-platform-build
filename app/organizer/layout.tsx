@@ -4,7 +4,7 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { usePathname } from 'next/navigation'
 import { Header } from '@/components/header'
 import { SidebarNav } from '@/components/sidebar-nav'
-import { BarChart3, Plus, Settings, Wallet, Ticket, QrCode } from 'lucide-react'
+import { BarChart3, Plus, Settings, Ticket, QrCode } from 'lucide-react'
 
 export default function OrganizerLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname()
@@ -50,7 +50,6 @@ export default function OrganizerLayout({ children }: { children: ReactNode }) {
 
   const navItems = [
     { label: 'Dashboard', href: '/organizer', icon: BarChart3 },
-    { label: 'Wallet', href: '/organizer/wallet', icon: Wallet },
     { label: 'New Event', href: '/organizer/create-event', icon: Plus },
     { label: 'Ticketing', href: '/organizer/create-ticketing', icon: Ticket },
     { label: 'QR Codes', href: '/organizer/qr-codes', icon: QrCode },

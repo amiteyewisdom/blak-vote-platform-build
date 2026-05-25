@@ -67,6 +67,9 @@ export async function POST(request: NextRequest) {
     const amount = Number(body.amount)
     const method = typeof body.method === 'string' ? body.method : 'bank_transfer'
     const eventId = typeof body.eventId === 'string' ? body.eventId : null
+    const orphanedEventIds: string[] = Array.isArray(body.orphanedEventIds)
+      ? body.orphanedEventIds.filter((id: unknown) => typeof id === 'string')
+      : []
     const withdrawalType = ['vote', 'ticket', 'combined'].includes(body.withdrawalType)
       ? body.withdrawalType
       : 'combined'
@@ -139,6 +142,7 @@ export async function POST(request: NextRequest) {
         platformFeePercent: effectivePlatformFeePercent,
         eventId,
         withdrawalType,
+        orphanedEventIds: orphanedEventIds.length > 0 ? orphanedEventIds : undefined,
       })
     } catch (error) {
       return NextResponse.json(

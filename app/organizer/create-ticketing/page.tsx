@@ -105,21 +105,19 @@ export default function CreateTicketingPage() {
     let imageUrl: string | null = null
 
     if (image) {
+      const uploadForm = new FormData()
+      uploadForm.append('image', image)
       const uploadRes = await fetch('/api/organizer/upload-event-image', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ fileName: image.name, fileType: image.type }),
+        body: uploadForm,
       })
-      const uploadPayload = await uploadRes.json()
-
-      if (uploadPayload.uploadUrl) {
-        await fetch(uploadPayload.uploadUrl, {
-          method: 'PUT',
-          headers: { 'Content-Type': image.type },
-          body: image,
-        })
-        imageUrl = uploadPayload.publicUrl || uploadPayload.url || null
+      const uploadPayload = await uploadRes.json().catch(() => ({}))
+      if (!uploadRes.ok || !uploadPayload.imageUrl) {
+        toast({ title: 'Image upload failed', description: uploadPayload.error || 'Could not upload cover image', variant: 'destructive' })
+        setLoading(false)
+        return
       }
+      imageUrl = uploadPayload.imageUrl
     }
 
     const eventRes = await fetch('/api/events', {
@@ -185,34 +183,46 @@ export default function CreateTicketingPage() {
         <section className="space-y-4">
           <h2 className="text-base font-semibold text-foreground">Event Details</h2>
 
-          <DSInput
-            label="Event Title *"
-            value={form.title}
-            onChange={(e) => update('title', e.target.value)}
-            placeholder="e.g. Annual Gala Night 2026"
-          />
+          <div className="space-y-1">
+            <DSInput
+              label="Event Title *"
+              value={form.title}
+              onChange={(e) => update('title', e.target.value)}
+              placeholder="e.g. Annual Gala Night 2026"
+            />
+            <p className="text-xs text-muted-foreground px-1">The public name of your event shown on all tickets and listings.</p>
+          </div>
 
-          <DSTextarea
-            label="Description *"
-            value={form.description}
-            onChange={(e) => update('description', e.target.value)}
-            placeholder="Describe the event, venue, dress code…"
-            rows={4}
-          />
+          <div className="space-y-1">
+            <DSTextarea
+              label="Description *"
+              value={form.description}
+              onChange={(e) => update('description', e.target.value)}
+              placeholder="Describe the event — venue, dress code, agenda, what to expect…"
+              rows={4}
+            />
+            <p className="text-xs text-muted-foreground px-1">Shown on the public event page to help attendees understand what the event is about.</p>
+          </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <DSInput
-              label="Start Date & Time *"
-              type="datetime-local"
-              value={form.startDate}
-              onChange={(e) => update('startDate', e.target.value)}
-            />
-            <DSInput
-              label="End Date & Time *"
-              type="datetime-local"
-              value={form.endDate}
-              onChange={(e) => update('endDate', e.target.value)}
-            />
+            <div className="space-y-1">
+              <DSInput
+                label="Start Date & Time *"
+                type="datetime-local"
+                value={form.startDate}
+                onChange={(e) => update('startDate', e.target.value)}
+              />
+              <p className="text-xs text-muted-foreground px-1">When doors open / event begins. Tickets become purchasable after publishing.</p>
+            </div>
+            <div className="space-y-1">
+              <DSInput
+                label="End Date & Time *"
+                type="datetime-local"
+                value={form.endDate}
+                onChange={(e) => update('endDate', e.target.value)}
+              />
+              <p className="text-xs text-muted-foreground px-1">When the event closes. Ticket sales stop at this time.</p>
+            </div>
           </div>
         </section>
 
@@ -269,38 +279,59 @@ export default function CreateTicketingPage() {
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <DSInput
+                    label="Ticket Name *"
+                    value={plan.name}
+                    onChange={(e) => updatePlan(index, 'name', e.target.value)}
+                    placeholder="e.g. VIP, General Admission, Early Bird"
+                  />
+                  <p className="text-xs text-muted-foreground px-1">The tier or category of this ticket (shown at checkout).</p>
+                </div>
+                <div className="space-y-1">
+                  <DSInput
+                    label="Price (GHS) *"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={plan.price}
+                    onChange={(e) => updatePlan(index, 'price', e.target.value)}
+                    placeholder="0.00"
+                  />
+                  <p className="text-xs text-muted-foreground px-1">Amount each buyer pays. Enter 0 for a free ticket tier.</p>
+                </div>
+                <div className="space-y-1">
+                  <DSInput
+                    label="Quantity Available *"
+                    type="number"
+                    min="1"
+                    value={plan.quantity}
+                    onChange={(e) => updatePlan(index, 'quantity', e.target.value)}
+                    placeholder="e.g. 100"
+                  />
+                  <p className="text-xs text-muted-foreground px-1">Total number of tickets available for this tier. Sales stop when sold out.</p>
+                </div>
+                <div className="space-y-1">
+                  <DSInput
+                    label="Admin Fee (GHS, optional)"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={plan.adminFee}
+                    onChange={(e) => updatePlan(index, 'adminFee', e.target.value)}
+                    placeholder="0.00"
+                  />
+                  <p className="text-xs text-muted-foreground px-1">Optional extra processing/service fee charged on top of the ticket price.</p>
+                </div>
+              </div>
+              <div className="space-y-1">
                 <DSInput
-                  label="Ticket Name *"
-                  value={plan.name}
-                  onChange={(e) => updatePlan(index, 'name', e.target.value)}
-                  placeholder="e.g. VIP, General, Early Bird"
+                  label="Plan Description (optional)"
+                  value={plan.description}
+                  onChange={(e) => updatePlan(index, 'description', e.target.value)}
+                  placeholder="e.g. Includes backstage access and welcome drink"
                 />
-                <DSInput
-                  label="Price (GHS) *"
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={plan.price}
-                  onChange={(e) => updatePlan(index, 'price', e.target.value)}
-                  placeholder="0.00"
-                />
-                <DSInput
-                  label="Quantity Available *"
-                  type="number"
-                  min="1"
-                  value={plan.quantity}
-                  onChange={(e) => updatePlan(index, 'quantity', e.target.value)}
-                  placeholder="100"
-                />
-                <DSInput
-                  label="Admin Fee (GHS, optional)"
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={plan.adminFee}
-                  onChange={(e) => updatePlan(index, 'adminFee', e.target.value)}
-                  placeholder="0.00"
-                />
+                <p className="text-xs text-muted-foreground px-1">Short description shown below the ticket name at checkout.</p>
               </div>
             </div>
           ))}

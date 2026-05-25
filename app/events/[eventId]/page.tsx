@@ -65,6 +65,13 @@ export default function EventPage() {
     }
   }, [eventCode])
 
+  // Redirect ticketing events to their ticket purchase page
+  useEffect(() => {
+    if (event && event.event_type === 'ticketing') {
+      router.replace(`/events/${eventCode}/tickets`)
+    }
+  }, [event, eventCode, router])
+
   const fetchEventData = async () => {
     try {
       const res = await fetch(`/api/events/public?code=${eventCode}`, { cache: 'no-store' })
@@ -725,12 +732,6 @@ export default function EventPage() {
                       className="inline-flex items-center gap-2 px-4 py-2 bg-surface/70 hover:bg-surface/80 border border-border rounded-xl transition-all duration-200 text-sm"
                     >
                       🗂 View Categories
-                    </Link>
-                    <Link
-                      href={`/events/${eventCode}/tickets`}
-                      className="inline-flex items-center gap-2 px-4 py-2 bg-[hsl(var(--gold))]/20 hover:bg-[hsl(var(--gold))]/30 border border-[hsl(var(--gold))]/30 text-[hsl(var(--gold))] rounded-xl transition-all duration-200 text-sm"
-                    >
-                      🎟 Buy Tickets
                     </Link>
                   </div>
                 </div>

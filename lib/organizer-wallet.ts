@@ -529,6 +529,7 @@ export async function createOrganizerWithdrawalRequest(
     platformFeePercent: number
     eventId?: string | null
     withdrawalType?: 'vote' | 'ticket' | 'combined'
+    orphanedEventIds?: string[]
   },
 ) {
   const wallet = await getOrganizerWalletSummaryData(adminSupabase, userId)
@@ -541,6 +542,13 @@ export async function createOrganizerWithdrawalRequest(
   const feeAmount = 0
   const netAmount = Number(Math.max(input.amount, 0).toFixed(2))
 
+  // Embed orphaned event IDs into account_details so the admin panel / payout
+  // processor can zero-out each deleted event's revenue_left after approval.
+  const storedAccountDetails: Record<string, unknown> = { ...input.accountDetails }
+  if (input.orphanedEventIds && input.orphanedEventIds.length > 0) {
+    storedAccountDetails._orphaned_event_ids = input.orphanedEventIds
+  }
+
   const { data, error } = await adminSupabase
     .from('organizer_withdrawals')
     .insert({
@@ -551,7 +559,7 @@ export async function createOrganizerWithdrawalRequest(
       platform_fee_amount: feeAmount,
       net_amount: netAmount,
       method: input.method,
-      account_details: input.accountDetails,
+      account_details: storedAccountDetails,
       withdrawal_type: input.withdrawalType || 'combined',
       status: 'pending',
       requested_at: new Date().toISOString(),

@@ -34,6 +34,7 @@ type PublicEvent = {
   end_date?: string
   location?: string
   venue?: string
+  status?: string
 }
 
 export default function PublicEventTicketsPage() {
@@ -182,7 +183,8 @@ export default function PublicEventTicketsPage() {
 
   const selectedTotal = selectedTicket ? Number(selectedTicket.price || 0) * selectedQuantity : 0
   const isSoldOut = filteredTickets.length > 0 && filteredTickets.every((ticket) => ticket.isSoldOut)
-  const hasValidSelection = !!selectedTicket && !selectedTicket.isSoldOut && selectedQuantity >= 1 && selectedQuantity <= selectedTicket.remainingQuantity
+  const ticketsOpen = eventData?.status === 'active'
+  const hasValidSelection = ticketsOpen && !!selectedTicket && !selectedTicket.isSoldOut && selectedQuantity >= 1 && selectedQuantity <= selectedTicket.remainingQuantity
 
   const initializePayment = async (payload: Record<string, unknown>) => {
     let response = await fetch('/api/payment-init', {
@@ -311,6 +313,16 @@ export default function PublicEventTicketsPage() {
             Refresh Data
           </Button>
         </div>
+
+        {!ticketsOpen && !loading && eventData && (
+          <div className="rounded-2xl border border-orange-400/40 bg-orange-500/10 px-5 py-4 flex items-center gap-3">
+            <span className="text-2xl">🔒</span>
+            <div>
+              <p className="font-semibold text-orange-700 dark:text-orange-300">Ticket sales are currently closed</p>
+              <p className="text-sm text-orange-600/80 dark:text-orange-300/70 mt-0.5">The organizer has paused ticket purchases for this event. Check back later.</p>
+            </div>
+          </div>
+        )}
 
         <Card className="overflow-hidden border-border shadow-[0_10px_35px_hsl(var(--foreground)/0.08)]">
           {eventImage ? (
@@ -542,8 +554,8 @@ export default function PublicEventTicketsPage() {
                   <span className="text-xl font-bold text-[hsl(var(--gold))]">GHS {selectedTotal.toFixed(2)}</span>
                 </div>
 
-                <Button className="w-full" size="lg" disabled={busy || !hasValidSelection || !buyerName || !buyerEmail || isSoldOut} onClick={() => void buyTicket()}>
-                  {busy ? <><Loader2 className="h-4 w-4 animate-spin" /> Processing...</> : 'Proceed to Payment'}
+                <Button className="w-full" size="lg" disabled={busy || !hasValidSelection || !buyerName || !buyerEmail || isSoldOut || !ticketsOpen} onClick={() => void buyTicket()}>
+                  {busy ? <><Loader2 className="h-4 w-4 animate-spin" /> Processing...</> : !ticketsOpen ? 'Ticket Sales Closed' : 'Proceed to Payment'}
                 </Button>
 
                 <div className="space-y-2 rounded-xl border border-border bg-surface/40 p-4 text-sm text-muted-foreground">

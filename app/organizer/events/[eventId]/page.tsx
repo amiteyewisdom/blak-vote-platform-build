@@ -16,6 +16,8 @@ import {
   CalendarClock,
   Play,
   Pause,
+  Ticket,
+  ScanLine,
 } from 'lucide-react'
 
 export default function EventDashboardPage() {
@@ -94,11 +96,14 @@ export default function EventDashboardPage() {
 
     if (response.ok) {
       if (result.data) setEvent(result.data)
+      const isTicketing = event?.event_type === 'ticketing'
       toast({
-        title: nextStatus === 'active' ? 'Voting Opened' : 'Voting Closed',
+        title: nextStatus === 'active'
+          ? (isTicketing ? 'Tickets Opened' : 'Voting Opened')
+          : (isTicketing ? 'Tickets Closed' : 'Voting Closed'),
         description: nextStatus === 'active'
-          ? 'Voting is now open for this event.'
-          : 'Voting has been closed. The event remains published publicly.',
+          ? (isTicketing ? 'Ticket sales are now open for this event.' : 'Voting is now open for this event.')
+          : (isTicketing ? 'Ticket sales are closed. The event remains visible publicly.' : 'Voting has been closed. The event remains published publicly.'),
       })
     } else {
       toast({
@@ -144,7 +149,7 @@ export default function EventDashboardPage() {
 
           <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm text-foreground/70">
             <div className="rounded-2xl border border-border bg-[hsl(var(--legacy-bg-card))] px-4 py-3">
-              <p className="text-muted-foreground text-xs mb-1">Voting Starts</p>
+              <p className="text-muted-foreground text-xs mb-1">{event.event_type === 'ticketing' ? 'Event Starts' : 'Voting Starts'}</p>
               <p>
                 {event.start_date
                   ? new Date(event.start_date).toLocaleString()
@@ -152,7 +157,7 @@ export default function EventDashboardPage() {
               </p>
             </div>
             <div className="rounded-2xl border border-border bg-[hsl(var(--legacy-bg-card))] px-4 py-3">
-              <p className="text-muted-foreground text-xs mb-1">Voting Ends</p>
+              <p className="text-muted-foreground text-xs mb-1">{event.event_type === 'ticketing' ? 'Event Ends' : 'Voting Ends'}</p>
               <p>
                 {event.end_date
                   ? new Date(event.end_date).toLocaleString()
@@ -175,27 +180,55 @@ export default function EventDashboardPage() {
             </span>
           </button>
 
-          <button
-            onClick={() => updateEventStatus('active')}
-            disabled={savingStatus || event.status === 'active'}
-            className="min-h-11 px-5 py-3 rounded-2xl border border-emerald-400 bg-emerald-100 text-emerald-700 font-semibold hover:bg-emerald-200 dark:border-emerald-500/30 dark:bg-emerald-500/20 dark:text-emerald-300 dark:hover:bg-emerald-500/30 disabled:opacity-50"
-          >
-            <span className="flex items-center justify-center gap-2">
-              <Play size={16} />
-              {savingStatus ? 'Updating…' : 'Open Voting'}
-            </span>
-          </button>
+          {event.event_type === 'ticketing' ? (
+            <>
+              <button
+                onClick={() => updateEventStatus('active')}
+                disabled={savingStatus || event.status === 'active'}
+                className="min-h-11 px-5 py-3 rounded-2xl border border-emerald-400 bg-emerald-100 text-emerald-700 font-semibold hover:bg-emerald-200 dark:border-emerald-500/30 dark:bg-emerald-500/20 dark:text-emerald-300 dark:hover:bg-emerald-500/30 disabled:opacity-50"
+              >
+                <span className="flex items-center justify-center gap-2">
+                  <Play size={16} />
+                  {savingStatus ? 'Updating…' : 'Open Tickets'}
+                </span>
+              </button>
 
-          <button
-            onClick={() => updateEventStatus('pending')}
-            disabled={savingStatus || event.status === 'pending'}
-            className="min-h-11 px-5 py-3 rounded-2xl border border-orange-400 bg-orange-100 text-orange-700 font-semibold hover:bg-orange-200 dark:border-orange-500/30 dark:bg-orange-500/20 dark:text-orange-300 dark:hover:bg-orange-500/30 disabled:opacity-50"
-          >
-            <span className="flex items-center justify-center gap-2">
-              <Pause size={16} />
-              {savingStatus ? 'Updating…' : 'Close Voting'}
-            </span>
-          </button>
+              <button
+                onClick={() => updateEventStatus('pending')}
+                disabled={savingStatus || event.status === 'pending'}
+                className="min-h-11 px-5 py-3 rounded-2xl border border-orange-400 bg-orange-100 text-orange-700 font-semibold hover:bg-orange-200 dark:border-orange-500/30 dark:bg-orange-500/20 dark:text-orange-300 dark:hover:bg-orange-500/30 disabled:opacity-50"
+              >
+                <span className="flex items-center justify-center gap-2">
+                  <Pause size={16} />
+                  {savingStatus ? 'Updating…' : 'Close Tickets'}
+                </span>
+              </button>
+            </>
+          ) : (
+            <>
+              <button
+                onClick={() => updateEventStatus('active')}
+                disabled={savingStatus || event.status === 'active'}
+                className="min-h-11 px-5 py-3 rounded-2xl border border-emerald-400 bg-emerald-100 text-emerald-700 font-semibold hover:bg-emerald-200 dark:border-emerald-500/30 dark:bg-emerald-500/20 dark:text-emerald-300 dark:hover:bg-emerald-500/30 disabled:opacity-50"
+              >
+                <span className="flex items-center justify-center gap-2">
+                  <Play size={16} />
+                  {savingStatus ? 'Updating…' : 'Open Voting'}
+                </span>
+              </button>
+
+              <button
+                onClick={() => updateEventStatus('pending')}
+                disabled={savingStatus || event.status === 'pending'}
+                className="min-h-11 px-5 py-3 rounded-2xl border border-orange-400 bg-orange-100 text-orange-700 font-semibold hover:bg-orange-200 dark:border-orange-500/30 dark:bg-orange-500/20 dark:text-orange-300 dark:hover:bg-orange-500/30 disabled:opacity-50"
+              >
+                <span className="flex items-center justify-center gap-2">
+                  <Pause size={16} />
+                  {savingStatus ? 'Updating…' : 'Close Voting'}
+                </span>
+              </button>
+            </>
+          )}
         </div>
       </div>
 
@@ -239,11 +272,21 @@ export default function EventDashboardPage() {
       )}
 
       <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4 md:gap-6">
-        <MenuCard title="Categories" icon={FolderPlus} path={`/organizer/events/${id}/categories`} />
-        <MenuCard title="Nominees" icon={Trophy} path={`/organizer/events/${id}/nominees`} />
-        <MenuCard title="Votes" icon={BarChart3} path={`/organizer/events/${id}/votes`} />
-        <MenuCard title="Results" icon={FileText} path={`/organizer/events/${id}/results`} />
-        <MenuCard title="Withdrawals" icon={CreditCard} path={`/organizer/events/${id}/withdraw`} />
+        {event.event_type === 'ticketing' ? (
+          <>
+            <MenuCard title="Ticket Plans" description="View sales, add or edit ticket tiers for this event." icon={Ticket} path={`/organizer/events/${id}/tickets`} />
+            <MenuCard title="Scan Tickets" description="Scan QR codes at the door to validate attendee tickets." icon={ScanLine} path={`/organizer/events/${id}/scan`} />
+            <MenuCard title="Withdraw" description="Request a payout of your ticket sales revenue." icon={CreditCard} path={`/organizer/events/${id}/withdraw`} />
+          </>
+        ) : (
+          <>
+            <MenuCard title="Categories" icon={FolderPlus} path={`/organizer/events/${id}/categories`} />
+            <MenuCard title="Nominees" icon={Trophy} path={`/organizer/events/${id}/nominees`} />
+            <MenuCard title="Votes" icon={BarChart3} path={`/organizer/events/${id}/votes`} />
+            <MenuCard title="Results" icon={FileText} path={`/organizer/events/${id}/results`} />
+            <MenuCard title="Withdraw" icon={CreditCard} path={`/organizer/events/${id}/withdraw`} />
+          </>
+        )}
       </div>
     </div>
   )
@@ -273,10 +316,12 @@ function MenuCard({
   title,
   icon: Icon,
   path,
+  description,
 }: {
   title: string
   icon: any
   path: string
+  description?: string
 }) {
   const router = useRouter()
 
@@ -293,7 +338,7 @@ function MenuCard({
       </div>
 
       <p className="text-muted-foreground text-sm">
-        Manage {title.toLowerCase()} for this event.
+        {description ?? `Manage ${title.toLowerCase()} for this event.`}
       </p>
     </button>
   )
