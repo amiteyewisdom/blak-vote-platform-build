@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { Calendar, Users, Clock } from 'lucide-react'
+import { Calendar, Users, Clock, Ticket } from 'lucide-react'
 import PublicNav from '@/components/PublicNav'
 
 interface Nominee {
@@ -14,9 +14,17 @@ interface Nominee {
   category_name?: string | null
 }
 
+interface TicketPlan {
+  id: string
+  name: string
+  price: number
+  remaining: number
+}
+
 interface EventWithNominees {
   event: any
   nominees: Nominee[]
+  ticketPlans?: TicketPlan[]
 }
 
 export default function EventsPage() {
@@ -95,7 +103,7 @@ export default function EventsPage() {
           <p className="text-[11px] uppercase tracking-[0.2em] text-gold/85">Discover</p>
           <h1 className="mt-2 text-2xl font-semibold tracking-[-0.02em] text-foreground dark:bg-gradient-to-r dark:from-white dark:via-slate-100 dark:to-gold dark:bg-clip-text dark:text-transparent sm:text-4xl">Public Events</h1>
           <p className="mt-3 text-sm leading-relaxed text-foreground/60 sm:text-base">
-            Browse live and upcoming voting events.
+            Browse live and upcoming voting and ticketing events.
           </p>
         </div>
 
@@ -173,6 +181,11 @@ export default function EventsPage() {
                       <span className={`absolute top-3 right-3 rounded-full border px-2.5 py-0.5 text-[10px] font-medium uppercase tracking-[0.08em] backdrop-blur-sm ${status.className}`}>
                         {status.label}
                       </span>
+                      {event.event_type === 'ticketing' && (
+                        <span className="absolute top-3 left-3 rounded-full border border-violet-400/50 bg-violet-500/20 px-2.5 py-0.5 text-[10px] font-medium uppercase tracking-[0.08em] text-violet-200 backdrop-blur-sm">
+                          Ticketing
+                        </span>
+                      )}
                     </div>
 
                     {/* Card body */}
@@ -198,14 +211,22 @@ export default function EventsPage() {
                       {/* Stats + CTA */}
                       <div className="mt-auto pt-4 flex items-center justify-between">
                         <div className="flex items-center gap-4 text-[12px]">
+                          {event.event_type === 'ticketing' ? (
+                          <span className="inline-flex items-center gap-1 text-violet-600 dark:text-violet-300/80">
+                            <Ticket className="w-3.5 h-3.5" />
+                            <span className="font-semibold tabular-nums">{(eventNominees.find((en) => en.event.id === event.id)?.ticketPlans || []).length}</span>
+                            <span className="text-foreground/45">ticket plans</span>
+                          </span>
+                        ) : (
                           <span className="inline-flex items-center gap-1 text-emerald-700 dark:text-emerald-200/80">
                             <Users className="w-3.5 h-3.5" />
                             <span className="font-semibold tabular-nums">{nominees.length}</span>
                             <span className="text-foreground/45">nominees</span>
                           </span>
+                        )}
                         </div>
-                        <span className="inline-flex h-8 items-center justify-center rounded-md px-3.5 text-xs font-medium border border-gold/35 bg-gold/10 text-gold transition-colors group-hover:bg-gold/20">
-                          Open
+                        <span className={`inline-flex h-8 items-center justify-center rounded-md px-3.5 text-xs font-medium border transition-colors group-hover:brightness-110 ${ event.event_type === 'ticketing' ? 'border-violet-400/35 bg-violet-400/10 text-violet-500 dark:text-violet-300' : 'border-gold/35 bg-gold/10 text-gold' }`}>
+                          {event.event_type === 'ticketing' ? 'Buy Tickets' : 'Vote Now'}
                         </span>
                       </div>
                     </div>

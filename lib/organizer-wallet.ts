@@ -26,6 +26,7 @@ type WalletSummaryData = {
   available_balance: number
   pending_withdrawals: number
   total_cashed_out: number
+  transferable_balance: number
   last_updated: string
 }
 
@@ -50,12 +51,14 @@ type OrganizerEventEarningRow = {
 
 type OrganizerWithdrawalRow = {
   id: number
+  event_id: string | null
   amount_requested: number
   platform_fee_percent: number
   platform_fee_amount: number
   net_amount: number
   method: string
   account_details: Record<string, unknown> | null
+  withdrawal_type: string
   status: string
   admin_note: string | null
   requested_at: string
@@ -118,13 +121,36 @@ async function resolveEffectivePlatformFeePercent(adminSupabase: SupabaseLike, u
   return Number(feeResult ?? feeOverride?.platform_fee_percent ?? globalSettings?.platform_fee_percent ?? 10)
 }
 
+async function resolveEffectiveTicketingFeePercent(adminSupabase: SupabaseLike, userId: string) {
+  const [{ data: feeOverride }, { data: globalSettings }, { data: feeResult }] = await Promise.all([
+    adminSupabase
+      .from('organizer_fee_overrides')
+      .select('ticketing_fee_percent')
+      .eq('organizer_user_id', userId)
+      .maybeSingle(),
+    adminSupabase
+      .from('platform_settings')
+      .select('ticketing_commission_percent, platform_fee_percent')
+      .limit(1)
+      .maybeSingle(),
+    adminSupabase.rpc('get_effective_ticketing_fee_percent', {
+      p_organizer_ref: userId,
+    }),
+  ])
+
+  return Number(
+    feeResult ?? feeOverride?.ticketing_fee_percent ?? globalSettings?.ticketing_commission_percent ?? globalSettings?.platform_fee_percent ?? 10
+  )
+}
+
 async function buildOrganizerEventMetrics(adminSupabase: SupabaseLike, userId: string) {
   const refs = await resolveOrganizerRefs(adminSupabase, userId)
-  const effectivePlatformFeePercent = await resolveEffectivePlatformFeePercent(adminSupabase, userId)
+  const globalVoteFee = await resolveEffectivePlatformFeePercent(adminSupabase, userId)
+  const globalTicketingFee = await resolveEffectiveTicketingFeePercent(adminSupabase, userId)
 
   const { data: eventRows, error: eventsError } = await adminSupabase
     .from('events')
-    .select('id,title,organizer_id,updated_at,status')
+    .select('id,title,organizer_id,updated_at,status,event_type,vote_platform_fee_percent,ticketing_fee_percent')
     .in('organizer_id', refs.aliases)
 
   if (eventsError) {
@@ -137,6 +163,9 @@ async function buildOrganizerEventMetrics(adminSupabase: SupabaseLike, userId: s
     organizer_id?: string | null
     updated_at?: string | null
     status?: string | null
+    event_type?: string | null
+    vote_platform_fee_percent?: number | null
+    ticketing_fee_percent?: number | null
   }>
 
   const activeEvents = events.filter((event) => {
@@ -148,6 +177,7 @@ async function buildOrganizerEventMetrics(adminSupabase: SupabaseLike, userId: s
   const metrics = new Map<string, {
     event_id: string
     event_title: string
+    event_type: string
     total_votes: number
     paid_votes: number
     free_votes: number
@@ -161,15 +191,24 @@ async function buildOrganizerEventMetrics(adminSupabase: SupabaseLike, userId: s
     vote_platform_fee_deducted: number
     ticket_platform_fee_deducted: number
     net_earnings: number
-      cashed_out_amount: number
-      revenue_left: number
+    vote_net_earnings: number
+    ticket_net_earnings: number
+    cashed_out_amount: number
+    revenue_left: number
+    withdrawn_vote_revenue: number
+    withdrawn_ticket_revenue: number
     updated_at: string
   }>()
 
   for (const event of activeEvents) {
+    const voteFee = Number(event.vote_platform_fee_percent ?? globalVoteFee)
+    const ticketFee = Number(event.ticketing_fee_percent ?? globalTicketingFee)
+    const overallFee = event.event_type === 'ticketing' ? ticketFee : voteFee
+
     metrics.set(String(event.id), {
       event_id: String(event.id),
       event_title: event.title || 'Untitled event',
+      event_type: event.event_type || 'voting',
       total_votes: 0,
       paid_votes: 0,
       free_votes: 0,
@@ -178,13 +217,17 @@ async function buildOrganizerEventMetrics(adminSupabase: SupabaseLike, userId: s
       total_revenue: 0,
       vote_revenue: 0,
       ticket_revenue: 0,
-      platform_fee_percent: effectivePlatformFeePercent,
+      platform_fee_percent: overallFee,
       platform_fee_deducted: 0,
       vote_platform_fee_deducted: 0,
       ticket_platform_fee_deducted: 0,
       net_earnings: 0,
+      vote_net_earnings: 0,
+      ticket_net_earnings: 0,
       cashed_out_amount: 0,
       revenue_left: 0,
+      withdrawn_vote_revenue: 0,
+      withdrawn_ticket_revenue: 0,
       updated_at: event.updated_at || new Date().toISOString(),
     })
   }
@@ -193,7 +236,7 @@ async function buildOrganizerEventMetrics(adminSupabase: SupabaseLike, userId: s
     return Array.from(metrics.values())
   }
 
-  const [{ data: voteRows, error: votesError }, { data: ticketPaymentRows, error: ticketError }, { data: feeRows, error: feeError }] = await Promise.all([
+  const [{ data: voteRows, error: votesError }, { data: ticketPaymentRows, error: ticketError }, { data: feeRows, error: feeError }, { data: withdrawalRows, error: withdrawalError }] = await Promise.all([
     adminSupabase
       .from('votes')
       .select('event_id,quantity,amount_paid,vote_type,created_at')
@@ -208,26 +251,23 @@ async function buildOrganizerEventMetrics(adminSupabase: SupabaseLike, userId: s
       .from('admin_revenue_transactions')
       .select('event_id,payment_context,platform_fee_amount,processed_at')
       .in('event_id', eventIds),
+    adminSupabase
+      .from('organizer_withdrawals')
+      .select('event_id,amount_requested,withdrawal_type,status')
+      .eq('organizer_id', userId)
+      .in('status', ['pending', 'approved', 'processed'])
+      .not('event_id', 'is', null),
   ])
 
-  if (votesError) {
-    throw new Error(votesError.message)
-  }
-
-  if (ticketError) {
-    throw new Error(ticketError.message)
-  }
-
-  if (feeError) {
-    throw new Error(feeError.message)
-  }
+  if (votesError) throw new Error(votesError.message)
+  if (ticketError) throw new Error(ticketError.message)
+  if (feeError) throw new Error(feeError.message)
+  if (withdrawalError) throw new Error(withdrawalError.message)
 
   for (const row of (voteRows || []) as Array<Record<string, unknown>>) {
     const eventId = String(row.event_id || '')
     const metric = metrics.get(eventId)
-    if (!metric) {
-      continue
-    }
+    if (!metric) continue
 
     const quantity = Math.max(toNumber(row.quantity), 0)
     const voteType = String(row.vote_type || '').toLowerCase()
@@ -244,33 +284,25 @@ async function buildOrganizerEventMetrics(adminSupabase: SupabaseLike, userId: s
     }
 
     const createdAt = typeof row.created_at === 'string' ? row.created_at : ''
-    if (createdAt && createdAt > metric.updated_at) {
-      metric.updated_at = createdAt
-    }
+    if (createdAt && createdAt > metric.updated_at) metric.updated_at = createdAt
   }
 
   for (const row of (ticketPaymentRows || []) as Array<Record<string, unknown>>) {
     const eventId = String(row.event_id || '')
     const metric = metrics.get(eventId)
-    if (!metric) {
-      continue
-    }
+    if (!metric) continue
 
     metric.paid_ticket_count += Math.max(toNumber(row.quantity), 1)
     metric.ticket_revenue += toNumber(row.amount)
 
     const createdAt = typeof row.created_at === 'string' ? row.created_at : ''
-    if (createdAt && createdAt > metric.updated_at) {
-      metric.updated_at = createdAt
-    }
+    if (createdAt && createdAt > metric.updated_at) metric.updated_at = createdAt
   }
 
   for (const row of (feeRows || []) as Array<Record<string, unknown>>) {
     const eventId = String(row.event_id || '')
     const metric = metrics.get(eventId)
-    if (!metric) {
-      continue
-    }
+    if (!metric) continue
 
     const feeAmount = toNumber(row.platform_fee_amount)
     const paymentContext = String(row.payment_context || 'vote').toLowerCase()
@@ -281,37 +313,33 @@ async function buildOrganizerEventMetrics(adminSupabase: SupabaseLike, userId: s
     }
 
     const processedAt = typeof row.processed_at === 'string' ? row.processed_at : ''
-    if (processedAt && processedAt > metric.updated_at) {
-      metric.updated_at = processedAt
+    if (processedAt && processedAt > metric.updated_at) metric.updated_at = processedAt
+  }
+
+  for (const row of (withdrawalRows || []) as Array<Record<string, unknown>>) {
+    const eventId = String(row.event_id || '')
+    const metric = metrics.get(eventId)
+    if (!metric) continue
+
+    const amount = toNumber(row.amount_requested)
+    const wType = String(row.withdrawal_type || 'combined').toLowerCase()
+    if (wType === 'vote') {
+      metric.withdrawn_vote_revenue += amount
+    } else if (wType === 'ticket') {
+      metric.withdrawn_ticket_revenue += amount
+    } else {
+      metric.withdrawn_vote_revenue += amount
     }
   }
 
   return Array.from(metrics.values()).map((metric) => {
     metric.total_revenue = metric.vote_revenue + metric.ticket_revenue
     metric.platform_fee_deducted = metric.vote_platform_fee_deducted + metric.ticket_platform_fee_deducted
-
-    if (metric.total_revenue > 0 && metric.platform_fee_deducted === 0) {
-      metric.platform_fee_deducted = Number(((metric.total_revenue * metric.platform_fee_percent) / 100).toFixed(2))
-
-      if (metric.vote_revenue > 0 && metric.ticket_revenue > 0) {
-        metric.vote_platform_fee_deducted = Number(
-          ((metric.platform_fee_deducted * metric.vote_revenue) / metric.total_revenue).toFixed(2)
-        )
-        metric.ticket_platform_fee_deducted = Number(
-          (metric.platform_fee_deducted - metric.vote_platform_fee_deducted).toFixed(2)
-        )
-      } else if (metric.vote_revenue > 0) {
-        metric.vote_platform_fee_deducted = metric.platform_fee_deducted
-        metric.ticket_platform_fee_deducted = 0
-      } else {
-        metric.vote_platform_fee_deducted = 0
-        metric.ticket_platform_fee_deducted = metric.platform_fee_deducted
-      }
-    }
-
-    metric.net_earnings = Number((metric.total_revenue - metric.platform_fee_deducted).toFixed(2))
-    metric.cashed_out_amount = 0
-    metric.revenue_left = metric.net_earnings
+    metric.vote_net_earnings = Number((metric.vote_revenue - metric.vote_platform_fee_deducted).toFixed(2))
+    metric.ticket_net_earnings = Number((metric.ticket_revenue - metric.ticket_platform_fee_deducted).toFixed(2))
+    metric.net_earnings = Number((metric.vote_net_earnings + metric.ticket_net_earnings).toFixed(2))
+    metric.cashed_out_amount = Number((metric.withdrawn_vote_revenue + metric.withdrawn_ticket_revenue).toFixed(2))
+    metric.revenue_left = Number(Math.max(metric.net_earnings - metric.cashed_out_amount, 0).toFixed(2))
     return metric
   })
 }
@@ -386,13 +414,18 @@ function distributeProcessedWithdrawalsAcrossEvents(
 export async function getOrganizerWalletSummaryData(adminSupabase: SupabaseLike, userId: string): Promise<WalletSummaryData> {
   const eventMetrics = await buildOrganizerEventMetrics(adminSupabase, userId)
 
-  const [{ data: pendingRows, error: pendingError }, processedWithdrawals] = await Promise.all([
+  const [{ data: pendingRows, error: pendingError }, processedWithdrawals, { data: walletRow }] = await Promise.all([
     adminSupabase
       .from('organizer_withdrawals')
       .select('amount_requested,status')
       .eq('organizer_id', userId)
       .in('status', WITHDRAWAL_PENDING_STATUSES),
     getOrganizerProcessedWithdrawalTotal(adminSupabase, userId),
+    adminSupabase
+      .from('organizer_wallets')
+      .select('transferable_balance')
+      .eq('organizer_id', userId)
+      .maybeSingle(),
   ])
 
   if (pendingError) {
@@ -404,8 +437,10 @@ export async function getOrganizerWalletSummaryData(adminSupabase: SupabaseLike,
     0,
   )
 
+  const transferableBalance = toNumber(walletRow?.transferable_balance)
+
   const summary = eventMetrics.reduce(
-    (accumulator: WalletSummaryData, row: Record<string, unknown>) => {
+    (accumulator: WalletSummaryData, row: any) => {
       accumulator.total_revenue += toNumber(row.total_revenue)
       accumulator.vote_revenue += toNumber(row.vote_revenue)
       accumulator.ticket_revenue += toNumber(row.ticket_revenue)
@@ -439,6 +474,7 @@ export async function getOrganizerWalletSummaryData(adminSupabase: SupabaseLike,
       available_balance: 0,
       pending_withdrawals: 0,
       total_cashed_out: 0,
+      transferable_balance: 0,
       last_updated: new Date(0).toISOString(),
     },
   )
@@ -446,7 +482,8 @@ export async function getOrganizerWalletSummaryData(adminSupabase: SupabaseLike,
   summary.gross_revenue = summary.total_revenue
   summary.pending_withdrawals = pendingWithdrawals
   summary.total_cashed_out = Number(processedWithdrawals.toFixed(2))
-  summary.available_balance = Math.max(summary.net_balance - pendingWithdrawals, 0)
+  summary.transferable_balance = transferableBalance
+  summary.available_balance = Math.max(summary.net_balance - pendingWithdrawals + transferableBalance, 0)
   if (summary.last_updated === new Date(0).toISOString()) {
     summary.last_updated = new Date().toISOString()
   }
@@ -470,7 +507,7 @@ export async function getOrganizerWithdrawalHistoryData(
 ) {
   const { data, error } = await adminSupabase
     .from('organizer_withdrawals')
-    .select('id,amount_requested,platform_fee_percent,platform_fee_amount,net_amount,method,account_details,status,admin_note,requested_at,approved_at,processed_at,payout_provider,payout_reference,payout_recipient_code,payout_attempted_at,payout_failure_reason,payout_metadata,created_at')
+    .select('id,event_id,amount_requested,platform_fee_percent,platform_fee_amount,net_amount,method,account_details,withdrawal_type,status,admin_note,requested_at,approved_at,processed_at,payout_provider,payout_reference,payout_recipient_code,payout_attempted_at,payout_failure_reason,payout_metadata,created_at')
     .eq('organizer_id', userId)
     .order('created_at', { ascending: false })
     .range(offset, offset + limit - 1)
@@ -490,6 +527,8 @@ export async function createOrganizerWithdrawalRequest(
     method: string
     accountDetails: Record<string, unknown>
     platformFeePercent: number
+    eventId?: string | null
+    withdrawalType?: 'vote' | 'ticket' | 'combined'
   },
 ) {
   const wallet = await getOrganizerWalletSummaryData(adminSupabase, userId)
@@ -506,16 +545,18 @@ export async function createOrganizerWithdrawalRequest(
     .from('organizer_withdrawals')
     .insert({
       organizer_id: userId,
+      event_id: input.eventId || null,
       amount_requested: Number(input.amount.toFixed(2)),
       platform_fee_percent: feePercent,
       platform_fee_amount: feeAmount,
       net_amount: netAmount,
       method: input.method,
       account_details: input.accountDetails,
+      withdrawal_type: input.withdrawalType || 'combined',
       status: 'pending',
       requested_at: new Date().toISOString(),
     })
-    .select('id,amount_requested,platform_fee_percent,platform_fee_amount,net_amount,method,account_details,status,admin_note,requested_at,approved_at,processed_at,payout_provider,payout_reference,payout_recipient_code,payout_attempted_at,payout_failure_reason,payout_metadata,created_at')
+    .select('id,event_id,amount_requested,platform_fee_percent,platform_fee_amount,net_amount,method,account_details,withdrawal_type,status,admin_note,requested_at,approved_at,processed_at,payout_provider,payout_reference,payout_recipient_code,payout_attempted_at,payout_failure_reason,payout_metadata,created_at')
     .maybeSingle()
 
   if (error) {

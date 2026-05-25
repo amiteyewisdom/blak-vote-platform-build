@@ -3,16 +3,20 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { isLiveEventStatus } from '@/lib/event-status'
-import { Settings, Edit, Clock } from 'lucide-react'
+import { Settings, Edit, Clock, Ticket } from 'lucide-react'
 
 interface VotingEvent {
   id: string
   title: string
   description: string
   status: string
+  event_type: string
   total_revenue: number
   revenue_left: number
   cashed_out_amount: number
+  platform_fee_percent: number
+  vote_platform_fee_deducted: number
+  ticket_platform_fee_deducted: number
   start_date: string
   end_date: string
   image_url?: string
@@ -170,8 +174,14 @@ export default function OrganizerDashboard() {
                   </p>
                 </div>
 
-                <div className="flex-shrink-0">
+                <div className="flex flex-col items-end gap-2">
                   <StatusBadge status={event.status} />
+                  {event.event_type === 'ticketing' && (
+                    <span className="inline-flex items-center gap-1 rounded-full border border-violet-400/40 bg-violet-500/15 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-violet-400">
+                      <Ticket className="w-3 h-3" />
+                      Ticketing
+                    </span>
+                  )}
                 </div>
               </div>
 
@@ -194,6 +204,25 @@ export default function OrganizerDashboard() {
                     GHS {Number(event.cashed_out_amount || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </div>
                 </div>
+                {(event.platform_fee_percent > 0 || event.vote_platform_fee_deducted > 0 || event.ticket_platform_fee_deducted > 0) && (
+                  <div className="flex flex-wrap gap-2 pt-1">
+                    {event.vote_platform_fee_deducted > 0 && (
+                      <span className="text-[10px] rounded-md border border-amber-400/30 bg-amber-400/10 px-2 py-0.5 text-amber-400 font-medium">
+                        Vote fee deducted: GHS {Number(event.vote_platform_fee_deducted).toFixed(2)}
+                      </span>
+                    )}
+                    {event.ticket_platform_fee_deducted > 0 && (
+                      <span className="text-[10px] rounded-md border border-violet-400/30 bg-violet-400/10 px-2 py-0.5 text-violet-400 font-medium">
+                        Ticket fee deducted: GHS {Number(event.ticket_platform_fee_deducted).toFixed(2)}
+                      </span>
+                    )}
+                    {event.platform_fee_percent > 0 && (
+                      <span className="text-[10px] rounded-md border border-border bg-white/5 px-2 py-0.5 text-foreground/50 font-medium">
+                        {Number(event.platform_fee_percent).toFixed(1)}% platform fee
+                      </span>
+                    )}
+                  </div>
+                )}
                 <div className="flex items-center gap-1 text-foreground/40 text-xs pt-1">
                   <Clock className="w-3.5 h-3.5" />
                   <span>

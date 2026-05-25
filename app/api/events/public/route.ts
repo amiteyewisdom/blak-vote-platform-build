@@ -146,11 +146,39 @@ export async function GET(request: NextRequest) {
       return status !== 'deleted' && status !== 'cancelled'
     })
 
-    // For each event, fetch nominees sorted by votes desc
+    // For each event, fetch nominees or ticket plans depending on event_type
     const eventNominees = await Promise.all(filteredEvents.map(async (event) => {
-      const [nomineeResult, publicResultsEnabled] = await Promise.all([
-        fetchCandidatesForPublicEvent(supabase, event.id),
+      const eventType = String(event.event_type || 'voting').toLowerCase()
+      const [publicResultsEnabled] = await Promise.all([
         isPublicResultsEnabledForEvent(supabase, event.organizer_id),
+      ])
+
+      if (eventType === 'ticketing') {
+        const { data: ticketPlans } = await supabase
+          .from('tickets')
+          .select('id, name, price, quantity, sold_count, admin_fee')
+          .eq('event_id', event.id)
+          .eq('ticket_kind', 'plan')
+          .order('created_at', { ascending: true })
+
+        return {
+          event: {
+            ...event,
+            public_results_enabled: publicResultsEnabled,
+          },
+          nominees: [],
+          ticketPlans: (ticketPlans || []).map((plan: any) => ({
+            id: plan.id,
+            name: plan.name,
+            price: plan.price,
+            remaining: Math.max((plan.quantity || 0) - (plan.sold_count || 0), 0),
+            admin_fee: plan.admin_fee,
+          })),
+        }
+      }
+
+      const [nomineeResult] = await Promise.all([
+        fetchCandidatesForPublicEvent(supabase, event.id),
       ])
       const nominees = nomineeResult.data ?? []
       return {
@@ -167,6 +195,7 @@ export async function GET(request: NextRequest) {
           voting_code: nominee.short_code || nominee.voting_code,
           vote_count: nominee.vote_count,
         })),
+        ticketPlans: [],
       };
     }));
 

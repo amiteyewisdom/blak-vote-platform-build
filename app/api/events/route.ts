@@ -39,6 +39,9 @@ export async function POST(request: NextRequest) {
       votingFee,
       maxVoters,
       candidates,
+      eventType,
+      votePlatformFeePercent,
+      ticketingFeePercent,
     } = body
 
     const effectiveOrganizerId = auth.role === 'admin' ? organizerId : auth.userId
@@ -106,6 +109,13 @@ export async function POST(request: NextRequest) {
         base.vote_price = resolvedVotePrice
         base.cost_per_vote = resolvedVotePrice
         base.max_voters = maxVoters
+        base.event_type = eventType ?? 'voting'
+        if (votePlatformFeePercent !== undefined && votePlatformFeePercent !== '') {
+          base.vote_platform_fee_percent = Number(votePlatformFeePercent)
+        }
+        if (ticketingFeePercent !== undefined && ticketingFeePercent !== '') {
+          base.ticketing_fee_percent = Number(ticketingFeePercent)
+        }
       }
 
       return base

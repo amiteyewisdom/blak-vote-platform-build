@@ -19,7 +19,7 @@ export async function GET() {
       getOrganizerEventEarningsData(adminSupabase, auth.userId),
       adminSupabase
         .from('events')
-        .select('id, title, description, status, start_date, end_date, image_url, is_active, created_at')
+        .select('id, title, description, status, event_type, start_date, end_date, image_url, is_active, created_at')
         .in('organizer_id', refs.aliases)
         .neq('status', 'deleted')
         .order('created_at', { ascending: false }),
@@ -44,6 +44,7 @@ export async function GET() {
         title: String(event.title || ''),
         description: String(event.description || ''),
         status: String(event.status || ''),
+        event_type: String(event.event_type || 'voting'),
         start_date: event.start_date || null,
         end_date: event.end_date || null,
         image_url: event.image_url || null,
@@ -51,6 +52,9 @@ export async function GET() {
         total_revenue: Number(earning?.net_earnings || 0),
         revenue_left: Number(earning?.revenue_left || 0),
         cashed_out_amount: Number(earning?.cashed_out_amount || 0),
+        platform_fee_percent: Number(earning?.platform_fee_percent || 0),
+        vote_platform_fee_deducted: Number(earning?.vote_platform_fee_deducted || 0),
+        ticket_platform_fee_deducted: Number(earning?.ticket_platform_fee_deducted || 0),
       }
     })
 

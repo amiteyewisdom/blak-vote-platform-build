@@ -38,7 +38,7 @@ export async function GET(request: NextRequest) {
 
     const adminSupabase = getSupabaseAdminClient()
 
-    const data = await getOrganizerWithdrawalHistoryData(adminSupabase, auth.userId, limit, offset)
+    const data = await getOrganizerWithdrawalHistoryData(adminSupabase as any, auth.userId, limit, offset)
 
     return NextResponse.json(
       {
@@ -66,6 +66,10 @@ export async function POST(request: NextRequest) {
     const body = await request.json().catch(() => ({}))
     const amount = Number(body.amount)
     const method = typeof body.method === 'string' ? body.method : 'bank_transfer'
+    const eventId = typeof body.eventId === 'string' ? body.eventId : null
+    const withdrawalType = ['vote', 'ticket', 'combined'].includes(body.withdrawalType)
+      ? body.withdrawalType
+      : 'combined'
     const accountDetails = body.accountDetails && typeof body.accountDetails === 'object'
       ? body.accountDetails
       : {}
@@ -128,11 +132,13 @@ export async function POST(request: NextRequest) {
     let withdrawal = null
 
     try {
-      withdrawal = await createOrganizerWithdrawalRequest(adminSupabase, auth.userId, {
+      withdrawal = await createOrganizerWithdrawalRequest(adminSupabase as any, auth.userId, {
         amount,
         method,
         accountDetails: normalizedAccountDetails,
         platformFeePercent: effectivePlatformFeePercent,
+        eventId,
+        withdrawalType,
       })
     } catch (error) {
       return NextResponse.json(

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { requireRole } from '@/lib/api-auth'
+import { getSupabaseAdminClient } from '@/lib/server-security'
 
 const ALLOWED_ROLES = new Set(['admin', 'organizer', 'voter'])
 
@@ -12,16 +13,29 @@ export async function GET() {
       return auth.response
     }
 
-    const { data, error } = await supabase
-      .from('users')
-      .select('id, email, role, status, first_name, last_name, full_name, created_at')
-      .order('created_at', { ascending: false })
+    const adminSupabase = getSupabaseAdminClient()
+
+    const [usersResult, currentAdminRow] = await Promise.all([
+      adminSupabase
+        .from('users')
+        .select('id, email, role, status, first_name, last_name, full_name, created_at, is_super_admin')
+        .order('created_at', { ascending: false }),
+      adminSupabase
+        .from('users')
+        .select('is_super_admin')
+        .eq('id', auth.userId)
+        .maybeSingle(),
+    ])
+
+    const { data, error } = usersResult
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
-    return NextResponse.json({ users: data || [] })
+    const isSuperAdmin = Boolean(currentAdminRow.data?.is_super_admin)
+
+    return NextResponse.json({ users: data || [], isSuperAdmin })
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : 'Failed to load users' }, { status: 500 })
   }

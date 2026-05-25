@@ -12,6 +12,7 @@ interface User {
   first_name?: string
   last_name?: string
   created_at: string
+  is_super_admin?: boolean
 }
 
 export default function AdminUsersPage() {
@@ -25,6 +26,8 @@ export default function AdminUsersPage() {
   const [defaultVoteFeePercent, setDefaultVoteFeePercent] = useState('10')
   const [defaultTicketingFeePercent, setDefaultTicketingFeePercent] = useState('10')
   const [savingFeeId, setSavingFeeId] = useState<string | null>(null)
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false)
+  const [impersonatingId, setImpersonatingId] = useState<string | null>(null)
 
   useEffect(() => {
     fetchUsers()
@@ -37,6 +40,7 @@ export default function AdminUsersPage() {
     if (res.ok && Array.isArray(payload?.users)) {
       setUsers(payload.users)
       setFilteredUsers(payload.users)
+      setIsSuperAdmin(Boolean(payload?.isSuperAdmin))
     }
 
     await fetchOrganizerFees()
@@ -212,6 +216,39 @@ export default function AdminUsersPage() {
     setSavingFeeId(null)
   }
 
+  const toggleSuperAdmin = async (userId: string, currentValue: boolean) => {
+    const action = currentValue ? 'Revoke' : 'Grant'
+    if (!confirm(`${action} super admin privileges for this user?`)) return
+    const res = await fetch('/api/admin/super-admin', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId, isSuperAdmin: !currentValue }),
+    })
+    const payload = await res.json().catch(() => ({}))
+    if (!res.ok) {
+      alert(payload?.error || `Failed to ${action.toLowerCase()} super admin`)
+    } else {
+      void fetchUsers()
+    }
+  }
+
+  const loginAs = async (targetUserId: string) => {
+    if (!confirm('You are about to impersonate this user. Your current session will be replaced. Continue?')) return
+    setImpersonatingId(targetUserId)
+    const res = await fetch('/api/admin/impersonate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ targetUserId }),
+    })
+    const payload = await res.json().catch(() => ({}))
+    if (res.ok && payload?.redirectTo) {
+      window.location.href = payload.redirectTo
+    } else {
+      alert(payload?.error || 'Impersonation failed')
+      setImpersonatingId(null)
+    }
+  }
+
   const resetOrganizerFees = async (organizerId: string) => {
     setSavingFeeId(organizerId)
 
@@ -254,11 +291,16 @@ export default function AdminUsersPage() {
 
   return (
     <div className="flex-1 space-y-8 p-4 text-foreground md:space-y-10 md:p-8">
-      <div>
-        <h1 className="text-2xl md:text-3xl font-bold tracking-tight">User Management</h1>
-        <p className="text-muted-foreground">
-          Manage platform users and roles.
-        </p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl md:text-3xl font-bold tracking-tight">User Management</h1>
+          <p className="text-muted-foreground">Manage platform users and roles.</p>
+        </div>
+        {isSuperAdmin && (
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-gold/50 bg-gold/15 px-3 py-1 text-xs font-bold uppercase tracking-wider text-gold">
+            ⭐ Super Admin
+          </span>
+        )}
       </div>
 
       <DSCard className="p-6 space-y-6">
@@ -411,6 +453,30 @@ export default function AdminUsersPage() {
                   >
                     Delete Organizer
                   </button>
+                )}
+
+                {isSuperAdmin && (
+                  <>
+                    <button
+                      onClick={() => loginAs(user.id)}
+                      disabled={impersonatingId === user.id}
+                      className="min-h-11 px-3 py-2 rounded-xl text-sm font-semibold border border-gold/40 bg-gold/10 text-gold hover:bg-gold/20 disabled:opacity-50"
+                    >
+                      {impersonatingId === user.id ? 'Logging in…' : 'Login As'}
+                    </button>
+                    {user.role === 'admin' && (
+                      <button
+                        onClick={() => toggleSuperAdmin(user.id, Boolean(user.is_super_admin))}
+                        className={`min-h-11 px-3 py-2 rounded-xl text-sm font-semibold border ${
+                          user.is_super_admin
+                            ? 'border-amber-400/40 bg-amber-400/10 text-amber-400 hover:bg-amber-400/20'
+                            : 'border-border bg-white/5 text-foreground/60 hover:bg-white/10'
+                        }`}
+                      >
+                        {user.is_super_admin ? '⭐ Revoke Super Admin' : 'Grant Super Admin'}
+                      </button>
+                    )}
+                  </>
                 )}
               </div>
             </div>
@@ -568,6 +634,30 @@ export default function AdminUsersPage() {
                         >
                           Delete
                         </button>
+                      )}
+
+                      {isSuperAdmin && (
+                        <>
+                          <button
+                            onClick={() => loginAs(user.id)}
+                            disabled={impersonatingId === user.id}
+                            className="min-h-10 px-3 py-2 rounded-xl text-xs font-semibold border border-gold/40 bg-gold/10 text-gold hover:bg-gold/20 disabled:opacity-50"
+                          >
+                            {impersonatingId === user.id ? '…' : 'Login As'}
+                          </button>
+                          {user.role === 'admin' && (
+                            <button
+                              onClick={() => toggleSuperAdmin(user.id, Boolean(user.is_super_admin))}
+                              className={`min-h-10 px-3 py-2 rounded-xl text-xs font-semibold border ${
+                                user.is_super_admin
+                                  ? 'border-amber-400/40 bg-amber-400/10 text-amber-400 hover:bg-amber-400/20'
+                                  : 'border-border bg-white/5 text-foreground/60 hover:bg-white/10'
+                              }`}
+                            >
+                              {user.is_super_admin ? '⭐' : '+'} SA
+                            </button>
+                          )}
+                        </>
                       )}
                     </div>
                   </td>
