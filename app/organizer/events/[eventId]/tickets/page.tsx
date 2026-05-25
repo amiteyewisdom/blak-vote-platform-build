@@ -463,7 +463,7 @@ export default function EventTicketsPage() {
                   </div>
                 </div>
 
-                <div className="grid gap-3 md:grid-cols-5 text-sm">
+                <div className="grid gap-3 md:grid-cols-4 text-sm">
                   <div className="rounded-xl border border-border p-3">
                     <p className="text-muted-foreground">Capacity</p>
                     <p className="mt-1 font-semibold">{plan.totalQuantity}</p>
@@ -471,10 +471,6 @@ export default function EventTicketsPage() {
                   <div className="rounded-xl border border-border p-3">
                     <p className="text-muted-foreground">Sold</p>
                     <p className="mt-1 font-semibold">{plan.soldCount}</p>
-                  </div>
-                  <div className="rounded-xl border border-border p-3">
-                    <p className="text-muted-foreground">Platform Fee</p>
-                    <p className="mt-1 font-semibold">GHS {plan.admin_fee.toFixed(2)}</p>
                   </div>
                   <div className="rounded-xl border border-border p-3">
                     <p className="text-muted-foreground">Gross Revenue</p>
