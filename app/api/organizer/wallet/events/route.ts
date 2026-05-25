@@ -54,6 +54,16 @@ export async function GET(request: NextRequest) {
     const queryParams = parsedQuery.data
 
     const results = await getOrganizerEventEarningsData(adminSupabase, auth.userId)
+
+    const eventIds = results.map((r: Record<string, unknown>) => String(r.event_id || '')).filter(Boolean)
+    const { data: eventRows } = eventIds.length
+      ? await adminSupabase.from('events').select('id, title, event_type').in('id', eventIds)
+      : { data: [] }
+
+    const eventMeta = new Map(
+      (eventRows || []).map((e: Record<string, unknown>) => [String(e.id), e])
+    )
+
     const sanitizedResults = results.map((item: Record<string, unknown>) => {
       const {
         platform_fee_deducted: _platformFeeDeducted,
@@ -62,7 +72,12 @@ export async function GET(request: NextRequest) {
         ...rest
       } = item
 
-      return rest
+      const meta = eventMeta.get(String(item.event_id || ''))
+      return {
+        ...rest,
+        event_title: meta ? String((meta as Record<string, unknown>).title || '') : rest.event_title || '',
+        event_type: meta ? String((meta as Record<string, unknown>).event_type || 'voting') : 'voting',
+      }
     })
 
     // Apply pagination

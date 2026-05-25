@@ -30,12 +30,20 @@ interface WalletSummary {
 interface EventEarning {
   event_id: string
   event_title?: string
+  event_type: string
   total_votes: number
   paid_votes: number
   free_votes: number
+  paid_ticket_count: number
+  vote_revenue: number
+  ticket_revenue: number
   total_revenue: number
   platform_fee_percent: number
   net_earnings: number
+  vote_net_earnings: number
+  ticket_net_earnings: number
+  withdrawn_vote_revenue: number
+  withdrawn_ticket_revenue: number
   cashed_out_amount: number
   revenue_left: number
   updated_at: string
@@ -125,6 +133,7 @@ export default function OrganizerWalletPage() {
   const [verifiedBankAccount, setVerifiedBankAccount] = useState<VerifiedBankAccount | null>(null)
   const [submittingWithdraw, setSubmittingWithdraw] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [activeTab, setActiveTab] = useState<'voting' | 'ticketing'>('voting')
 
   useEffect(() => {
     const fetchWalletData = async () => {
@@ -273,6 +282,7 @@ export default function OrganizerWalletPage() {
           amount: parsedAmount,
           method: withdrawMethod,
           accountDetails: parsedAccountDetails,
+          withdrawalType: activeTab === 'ticketing' ? 'ticket' : 'vote',
         }),
       })
 
@@ -439,7 +449,23 @@ export default function OrganizerWalletPage() {
       {wallet && (
         <div className="space-y-4 rounded-xl border border-border bg-card p-5 sm:p-6">
           <div className="space-y-2">
-            <h2 className="text-2xl font-bold">Withdraw Funds</h2>
+            <div className="flex items-center gap-3 flex-wrap">
+              <h2 className="text-2xl font-bold">Withdraw Funds</h2>
+              <div className="flex rounded-lg border border-border overflow-hidden text-xs">
+                <button
+                  onClick={() => setActiveTab('voting')}
+                  className={`px-3 py-1.5 font-semibold transition-colors ${activeTab === 'voting' ? 'bg-gold text-black' : 'bg-card text-muted-foreground hover:text-foreground'}`}
+                >
+                  Events
+                </button>
+                <button
+                  onClick={() => setActiveTab('ticketing')}
+                  className={`px-3 py-1.5 font-semibold transition-colors ${activeTab === 'ticketing' ? 'bg-violet-500 text-white' : 'bg-card text-muted-foreground hover:text-foreground'}`}
+                >
+                  Ticketing
+                </button>
+              </div>
+            </div>
             <p className="text-muted-foreground">Available to request now: {formatCurrency(wallet.available_balance)}
             </p>
             <p className="text-xs text-muted-foreground">
@@ -603,47 +629,95 @@ export default function OrganizerWalletPage() {
       </div>
 
       <div className="space-y-4">
-        <h2 className="text-xl sm:text-2xl font-bold">Per-Event Breakdown</h2>
+        <div className="flex items-center justify-between">
+          <h2 className="text-xl sm:text-2xl font-bold">Earnings Breakdown</h2>
+          <div className="flex rounded-xl border border-border overflow-hidden">
+            <button
+              onClick={() => setActiveTab('voting')}
+              className={`px-4 py-2 text-sm font-semibold transition-colors ${
+                activeTab === 'voting'
+                  ? 'bg-gold text-black'
+                  : 'bg-card text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              Events
+            </button>
+            <button
+              onClick={() => setActiveTab('ticketing')}
+              className={`px-4 py-2 text-sm font-semibold transition-colors ${
+                activeTab === 'ticketing'
+                  ? 'bg-violet-500 text-white'
+                  : 'bg-card text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              Ticketing
+            </button>
+          </div>
+        </div>
 
-        {earnings.length === 0 ? (
-          <div className="rounded-xl border border-border bg-card p-8 text-center">
-            <p className="text-muted-foreground">No earnings yet. Start creating paid events!</p>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="border-b border-border">
-                <tr className="text-left text-muted-foreground">
-                  <th className="pb-3 font-semibold">Event</th>
-                  <th className="pb-3 font-semibold">Total Votes</th>
-                  <th className="pb-3 font-semibold">Gross Revenue</th>
-                  <th className="pb-3 font-semibold">Fee Rate</th>
-                  <th className="pb-3 font-semibold">Cashed Out</th>
-                  <th className="pb-3 font-semibold">Revenue Left</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border/60">
-                {earnings.map((earning) => (
-                  <tr key={earning.event_id} className="transition hover:bg-muted/30">
-                    <td className="py-4">
-                      <div className="font-medium text-foreground">
-                        {earning.event_title || `Event ${earning.event_id.slice(0, 8)}`}
-                      </div>
-                      <div className="font-mono text-xs text-gold">
-                        {earning.event_id.slice(0, 8)}...
-                      </div>
-                    </td>
-                    <td className="py-4">{earning.total_votes.toLocaleString()}</td>
-                    <td className="py-4 font-semibold">{formatCurrency(earning.total_revenue)}</td>
-                    <td className="py-4">{Number(earning.platform_fee_percent || 0).toFixed(2)}%</td>
-                    <td className="py-4 text-orange-400">{formatCurrency(earning.cashed_out_amount || 0)}</td>
-                    <td className="py-4 font-semibold text-blue-400">{formatCurrency(earning.revenue_left || 0)}</td>
+        {(() => {
+          const filtered = earnings.filter((e) =>
+            activeTab === 'ticketing' ? e.event_type === 'ticketing' : e.event_type !== 'ticketing'
+          )
+          if (filtered.length === 0) {
+            return (
+              <div className="rounded-xl border border-border bg-card p-8 text-center">
+                <p className="text-muted-foreground">
+                  {activeTab === 'ticketing'
+                    ? 'No ticketing revenue yet.'
+                    : 'No voting event revenue yet.'}
+                </p>
+              </div>
+            )
+          }
+          return (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="border-b border-border">
+                  <tr className="text-left text-muted-foreground">
+                    <th className="pb-3 font-semibold">Event</th>
+                    {activeTab === 'voting' ? (
+                      <th className="pb-3 font-semibold">Votes</th>
+                    ) : (
+                      <th className="pb-3 font-semibold">Tickets Sold</th>
+                    )}
+                    <th className="pb-3 font-semibold">Your Revenue</th>
+                    <th className="pb-3 font-semibold">Withdrawn</th>
+                    <th className="pb-3 font-semibold">Available</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+                </thead>
+                <tbody className="divide-y divide-border/60">
+                  {filtered.map((earning) => {
+                    const netEarnings = activeTab === 'ticketing'
+                      ? Number(earning.ticket_net_earnings || earning.net_earnings || 0)
+                      : Number(earning.vote_net_earnings || earning.net_earnings || 0)
+                    const withdrawn = activeTab === 'ticketing'
+                      ? Number(earning.withdrawn_ticket_revenue || 0)
+                      : Number(earning.withdrawn_vote_revenue || 0)
+                    const available = Math.max(netEarnings - withdrawn, 0)
+                    return (
+                      <tr key={earning.event_id} className="transition hover:bg-muted/30">
+                        <td className="py-4">
+                          <div className="font-medium text-foreground">
+                            {earning.event_title || `Event ${earning.event_id.slice(0, 8)}`}
+                          </div>
+                        </td>
+                        {activeTab === 'voting' ? (
+                          <td className="py-4">{Number(earning.total_votes || 0).toLocaleString()}</td>
+                        ) : (
+                          <td className="py-4">{Number(earning.paid_ticket_count || 0).toLocaleString()}</td>
+                        )}
+                        <td className="py-4 font-semibold text-gold">{formatCurrency(netEarnings)}</td>
+                        <td className="py-4 text-orange-400">{formatCurrency(withdrawn)}</td>
+                        <td className="py-4 font-semibold text-emerald-400">{formatCurrency(available)}</td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )
+        })()}
       </div>
 
       <div className="space-y-4 rounded-xl border border-border bg-card p-5 sm:p-6">

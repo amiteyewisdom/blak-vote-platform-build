@@ -187,7 +187,7 @@ export default function OrganizerDashboard() {
 
               <div className="rounded-lg border border-white/8 bg-white/5 p-3 sm:p-4 space-y-2.5">
                 <div>
-                  <div className="text-foreground/50 text-[11px] font-semibold uppercase tracking-wider mb-1">Total Revenue</div>
+                  <div className="text-foreground/50 text-[11px] font-semibold uppercase tracking-wider mb-1">Your Revenue</div>
                   <div className="text-lg font-bold text-gold">
                     GHS {Number(event.total_revenue || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </div>
@@ -204,21 +204,15 @@ export default function OrganizerDashboard() {
                     GHS {Number(event.cashed_out_amount || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </div>
                 </div>
-                {(event.platform_fee_percent > 0 || event.vote_platform_fee_deducted > 0 || event.ticket_platform_fee_deducted > 0) && (
-                  <div className="flex flex-wrap gap-2 pt-1">
-                    {event.vote_platform_fee_deducted > 0 && (
-                      <span className="text-[10px] rounded-md border border-amber-400/30 bg-amber-400/10 px-2 py-0.5 text-amber-400 font-medium">
-                        Vote fee deducted: GHS {Number(event.vote_platform_fee_deducted).toFixed(2)}
+                {event.platform_fee_percent > 0 && (
+                  <div className="flex flex-wrap gap-1.5 pt-1">
+                    {event.event_type === 'ticketing' ? (
+                      <span className="text-[10px] text-foreground/40">
+                        {Number(event.platform_fee_percent).toFixed(0)}% ticketing fee
                       </span>
-                    )}
-                    {event.ticket_platform_fee_deducted > 0 && (
-                      <span className="text-[10px] rounded-md border border-violet-400/30 bg-violet-400/10 px-2 py-0.5 text-violet-400 font-medium">
-                        Ticket fee deducted: GHS {Number(event.ticket_platform_fee_deducted).toFixed(2)}
-                      </span>
-                    )}
-                    {event.platform_fee_percent > 0 && (
-                      <span className="text-[10px] rounded-md border border-border bg-white/5 px-2 py-0.5 text-foreground/50 font-medium">
-                        {Number(event.platform_fee_percent).toFixed(1)}% platform fee
+                    ) : (
+                      <span className="text-[10px] text-foreground/40">
+                        {Number(event.platform_fee_percent).toFixed(0)}% platform fee
                       </span>
                     )}
                   </div>

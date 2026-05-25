@@ -10,7 +10,6 @@ import {
   FolderPlus,
   BarChart3,
   CreditCard,
-  Ticket,
   FileText,
   Pencil,
   ArrowLeft,
@@ -243,7 +242,6 @@ export default function EventDashboardPage() {
         <MenuCard title="Categories" icon={FolderPlus} path={`/organizer/events/${id}/categories`} />
         <MenuCard title="Nominees" icon={Trophy} path={`/organizer/events/${id}/nominees`} />
         <MenuCard title="Votes" icon={BarChart3} path={`/organizer/events/${id}/votes`} />
-        <MenuCard title="Tickets" icon={Ticket} path={`/organizer/events/${id}/tickets`} />
         <MenuCard title="Results" icon={FileText} path={`/organizer/events/${id}/results`} />
         <MenuCard title="Withdrawals" icon={CreditCard} path={`/organizer/events/${id}/withdraw`} />
       </div>
