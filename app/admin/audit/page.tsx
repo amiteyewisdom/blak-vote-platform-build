@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { supabase } from '@/lib/supabaseClient'
 import { DSSelect } from '@/components/ui/design-system'
 
 interface EventOption {
@@ -12,7 +11,7 @@ interface EventOption {
 }
 
 interface NomineeOption {
-  id: string
+  nominee_id: string
   nominee_name: string
 }
 
@@ -62,41 +61,49 @@ export default function AdminAuditPage() {
   async function loadEvents() {
     setLoading(true)
 
-    const { data, error } = await supabase
-      .from('events')
-      .select('id, title, status, created_at')
-      .neq('status', 'deleted')
-      .order('created_at', { ascending: false })
+    try {
+      const res = await fetch('/api/admin/events', { cache: 'no-store' })
+      const payload = await res.json().catch(() => ({}))
 
-    if (error) {
-      console.error('Failed to load events', error)
+      if (!res.ok) {
+        console.error('Failed to load events', payload?.error)
+        setLoading(false)
+        return
+      }
+
+      const eventRows: EventOption[] = (payload.events ?? []).map((e: any) => ({
+        id: String(e.id),
+        title: String(e.title ?? e.id),
+        status: e.status ?? null,
+        created_at: e.created_at ?? '',
+      }))
+
+      setEvents(eventRows)
+
+      if (eventRows[0]?.id) {
+        setSelectedEventId(eventRows[0].id)
+      }
+    } catch (err) {
+      console.error('Failed to load events', err)
+    } finally {
       setLoading(false)
-      return
     }
-
-    const eventRows = data ?? []
-    setEvents(eventRows)
-
-    if (eventRows[0]?.id) {
-      setSelectedEventId(eventRows[0].id)
-    }
-
-    setLoading(false)
   }
 
   async function loadNominees(eventId: string) {
-    const { data, error } = await supabase
-      .from('nominations')
-      .select('id, nominee_name')
-      .eq('event_id', eventId)
-      .order('nominee_name', { ascending: true })
+    try {
+      const res = await fetch(`/api/nominations/by-event?event_id=${encodeURIComponent(eventId)}`, { cache: 'no-store' })
+      const payload = await res.json().catch(() => ({}))
 
-    if (error) {
-      console.error('Failed to load nominees', error)
-      return
+      if (!res.ok) {
+        console.error('Failed to load nominees', payload?.error)
+        return
+      }
+
+      setNominees(payload.nominees ?? [])
+    } catch (err) {
+      console.error('Failed to load nominees', err)
     }
-
-    setNominees(data ?? [])
   }
 
   async function loadAuditLogs(eventId: string) {
@@ -133,7 +140,7 @@ export default function AdminAuditPage() {
       return 'Unknown candidate'
     }
 
-    return nominees.find((nominee) => nominee.id === candidateId)?.nominee_name || candidateId
+    return nominees.find((n) => n.nominee_id === candidateId)?.nominee_name || candidateId
   }
 
   if (loading) {

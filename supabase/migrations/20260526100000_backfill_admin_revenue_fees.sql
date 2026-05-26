@@ -172,6 +172,40 @@ AS $$
   ORDER BY total_platform_revenue DESC;
 $$;
 
+-- =============================================================================
+-- Backfill vote_audit_log from existing votes.
+-- The trigger only fires on NEW inserts, so historical votes are missing.
+-- ON CONFLICT DO NOTHING makes this safe to re-run.
+-- =============================================================================
+INSERT INTO vote_audit_log (
+  vote_id, event_id, candidate_id, voter_id, voter_phone,
+  vote_type, is_manual, quantity, vote_source, payment_method,
+  transaction_id, added_by_user_id, manual_entry_mode, occurred_at
+)
+SELECT
+  v.id::TEXT,
+  v.event_id::TEXT,
+  v.candidate_id::TEXT,
+  v.voter_id::TEXT,
+  v.voter_phone,
+  COALESCE(v.vote_type, 'free'),
+  COALESCE(v.is_manual, FALSE),
+  COALESCE(v.quantity, 1),
+  v.vote_source,
+  v.payment_method,
+  v.transaction_id,
+  NULL,
+  NULL,
+  COALESCE(v.created_at, timezone('utc', now()))
+FROM votes v
+WHERE NOT EXISTS (
+  SELECT 1 FROM vote_audit_log wal WHERE wal.vote_id = v.id::TEXT
+)
+ON CONFLICT (vote_id) DO NOTHING;
+
+-- =============================================================================
+-- get_admin_revenue_source_summary  (conditional on payment_provider column)
+-- =============================================================================
 DO $$
 BEGIN
   DROP FUNCTION IF EXISTS get_admin_revenue_source_summary();
