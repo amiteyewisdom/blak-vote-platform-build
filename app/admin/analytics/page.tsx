@@ -9,6 +9,8 @@ interface DashboardStats {
   totalEvents: number
   totalVotes: number
   totalPlatformRevenue: number
+  votePlatformRevenue: number
+  ticketPlatformRevenue: number
   totalGrossRevenue: number
   totalRevenueTransactions: number
   providerBreakdown: Array<{
@@ -61,6 +63,8 @@ export default function AnalyticsPage() {
         totalEvents: Number(dashboardData.totalEvents || 0),
         totalVotes: Number(dashboardData.totalVotes || 0),
         totalPlatformRevenue: Number(revenueSummary.total_platform_revenue || 0),
+        votePlatformRevenue: Number(revenueSummary.vote_platform_revenue || 0),
+        ticketPlatformRevenue: Number(revenueSummary.ticket_platform_revenue || 0),
         totalGrossRevenue: Number(revenueSummary.total_gross_revenue || 0),
         totalRevenueTransactions: Number(revenueSummary.total_transactions || 0),
         providerBreakdown: Array.isArray(revenueData.providerBreakdown)
@@ -172,6 +176,16 @@ export default function AnalyticsPage() {
         </div>
         <div className="text-3xl font-bold text-emerald-300">
           GHS {stats.totalPlatformRevenue.toFixed(2)}
+        </div>
+        <div className="mt-3 grid grid-cols-2 gap-3">
+          <div className="rounded-lg bg-white/5 px-3 py-2">
+            <div className="text-[10px] text-muted-foreground uppercase tracking-wider mb-0.5">From Votes</div>
+            <div className="text-sm font-semibold text-emerald-300">GHS {stats.votePlatformRevenue.toFixed(2)}</div>
+          </div>
+          <div className="rounded-lg bg-white/5 px-3 py-2">
+            <div className="text-[10px] text-muted-foreground uppercase tracking-wider mb-0.5">From Tickets</div>
+            <div className="text-sm font-semibold text-emerald-300">GHS {stats.ticketPlatformRevenue.toFixed(2)}</div>
+          </div>
         </div>
         <div className="mt-2 text-xs text-muted-foreground">
           {stats.totalRevenueTransactions} transactions

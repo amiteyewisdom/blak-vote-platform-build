@@ -11,13 +11,17 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { BarChart3, Loader2, RotateCcw, Users, Zap } from 'lucide-react'
+import { BarChart3, DollarSign, Loader2, RotateCcw, Users, Zap } from 'lucide-react'
 
 interface DashboardStats {
   totalUsers: number
   totalEvents: number
   totalVotes: number
   activeEvents: number
+  totalPlatformRevenue: number
+  votePlatformRevenue: number
+  ticketPlatformRevenue: number
+  totalGrossRevenue: number
 }
 
 type PaymentProviderOption = 'auto' | 'paystack' | 'nalo' | 'paypal'
@@ -48,6 +52,10 @@ export default function AdminDashboard() {
           totalEvents: Number(payload.totalEvents || 0),
           totalVotes: Number(payload.totalVotes || 0),
           activeEvents: Number(payload.activeEvents || 0),
+          totalPlatformRevenue: Number(payload.totalPlatformRevenue || 0),
+          votePlatformRevenue: Number(payload.votePlatformRevenue || 0),
+          ticketPlatformRevenue: Number(payload.ticketPlatformRevenue || 0),
+          totalGrossRevenue: Number(payload.totalGrossRevenue || 0),
         })
       } catch (error) {
         console.error('Error fetching stats:', error)
@@ -120,6 +128,31 @@ export default function AdminDashboard() {
           )
         })}
       </div>
+
+      {stats && (
+        <Card className="border-emerald-500/30">
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">Total Platform Revenue</CardTitle>
+            <DollarSign className="h-4 w-4 text-emerald-400" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-3xl font-bold text-emerald-300">
+              GHS {stats.totalPlatformRevenue.toFixed(2)}
+            </div>
+            <div className="mt-3 grid grid-cols-2 gap-3">
+              <div className="rounded-lg bg-white/5 px-3 py-2">
+                <div className="text-[10px] text-muted-foreground uppercase tracking-wider mb-0.5">From Votes</div>
+                <div className="text-sm font-semibold text-emerald-300">GHS {stats.votePlatformRevenue.toFixed(2)}</div>
+              </div>
+              <div className="rounded-lg bg-white/5 px-3 py-2">
+                <div className="text-[10px] text-muted-foreground uppercase tracking-wider mb-0.5">From Tickets</div>
+                <div className="text-sm font-semibold text-emerald-300">GHS {stats.ticketPlatformRevenue.toFixed(2)}</div>
+              </div>
+            </div>
+            <p className="mt-2 text-xs text-muted-foreground">Gross collected: GHS {stats.totalGrossRevenue.toFixed(2)}</p>
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardHeader>

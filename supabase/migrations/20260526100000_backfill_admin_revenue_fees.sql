@@ -111,3 +111,112 @@ $$;
 -- the now-corrected fee data.
 SELECT sync_organizer_wallet_from_ledger();
 SELECT sync_admin_platform_wallet_from_ledger();
+
+-- =============================================================================
+-- Admin revenue RPC functions
+-- These are called by GET /api/admin/revenue and displayed on the analytics page.
+-- They read directly from admin_revenue_transactions so the numbers always match
+-- the corrected ledger data (including the backfill above).
+-- =============================================================================
+
+DROP FUNCTION IF EXISTS get_admin_revenue_summary();
+CREATE OR REPLACE FUNCTION get_admin_revenue_summary()
+RETURNS TABLE (
+  total_platform_revenue  NUMERIC,
+  vote_platform_revenue   NUMERIC,
+  ticket_platform_revenue NUMERIC,
+  total_gross_revenue     NUMERIC,
+  total_transactions      BIGINT,
+  last_transaction_at     TIMESTAMPTZ
+)
+LANGUAGE sql
+STABLE
+AS $$
+  SELECT
+    COALESCE(SUM(platform_fee_amount), 0)                                                              AS total_platform_revenue,
+    COALESCE(SUM(CASE WHEN payment_context = 'vote'   THEN platform_fee_amount ELSE 0 END), 0)        AS vote_platform_revenue,
+    COALESCE(SUM(CASE WHEN payment_context = 'ticket' THEN platform_fee_amount ELSE 0 END), 0)        AS ticket_platform_revenue,
+    COALESCE(SUM(gross_amount), 0)                                                                     AS total_gross_revenue,
+    COUNT(*)::BIGINT                                                                                   AS total_transactions,
+    MAX(processed_at)                                                                                  AS last_transaction_at
+  FROM admin_revenue_transactions;
+$$;
+
+DROP FUNCTION IF EXISTS get_admin_revenue_by_event();
+CREATE OR REPLACE FUNCTION get_admin_revenue_by_event()
+RETURNS TABLE (
+  event_id                TEXT,
+  event_title             TEXT,
+  total_platform_revenue  NUMERIC,
+  vote_platform_revenue   NUMERIC,
+  ticket_platform_revenue NUMERIC,
+  total_gross_revenue     NUMERIC,
+  total_transactions      BIGINT,
+  last_transaction_at     TIMESTAMPTZ
+)
+LANGUAGE sql
+STABLE
+AS $$
+  SELECT
+    art.event_id,
+    COALESCE(e.title, art.event_title, art.event_id)                                                   AS event_title,
+    COALESCE(SUM(art.platform_fee_amount), 0)                                                          AS total_platform_revenue,
+    COALESCE(SUM(CASE WHEN art.payment_context = 'vote'   THEN art.platform_fee_amount ELSE 0 END), 0) AS vote_platform_revenue,
+    COALESCE(SUM(CASE WHEN art.payment_context = 'ticket' THEN art.platform_fee_amount ELSE 0 END), 0) AS ticket_platform_revenue,
+    COALESCE(SUM(art.gross_amount), 0)                                                                 AS total_gross_revenue,
+    COUNT(*)::BIGINT                                                                                   AS total_transactions,
+    MAX(art.processed_at)                                                                              AS last_transaction_at
+  FROM admin_revenue_transactions art
+  LEFT JOIN events e ON e.id::TEXT = art.event_id
+  GROUP BY art.event_id, COALESCE(e.title, art.event_title, art.event_id)
+  ORDER BY total_platform_revenue DESC;
+$$;
+
+DO $$
+BEGIN
+  DROP FUNCTION IF EXISTS get_admin_revenue_source_summary();
+
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name   = 'admin_revenue_transactions'
+      AND column_name  = 'payment_provider'
+  ) THEN
+    EXECUTE '
+      CREATE FUNCTION get_admin_revenue_source_summary()
+      RETURNS TABLE (
+        provider               TEXT,
+        total_platform_revenue NUMERIC,
+        total_gross_revenue    NUMERIC,
+        total_transactions     BIGINT
+      )
+      LANGUAGE sql STABLE AS $f$
+        SELECT
+          COALESCE(payment_provider, ''unknown'') AS provider,
+          COALESCE(SUM(platform_fee_amount), 0)   AS total_platform_revenue,
+          COALESCE(SUM(gross_amount), 0)           AS total_gross_revenue,
+          COUNT(*)::BIGINT                         AS total_transactions
+        FROM admin_revenue_transactions
+        GROUP BY COALESCE(payment_provider, ''unknown'')
+        ORDER BY total_platform_revenue DESC;
+      $f$';
+  ELSE
+    EXECUTE '
+      CREATE FUNCTION get_admin_revenue_source_summary()
+      RETURNS TABLE (
+        provider               TEXT,
+        total_platform_revenue NUMERIC,
+        total_gross_revenue    NUMERIC,
+        total_transactions     BIGINT
+      )
+      LANGUAGE sql STABLE AS $f$
+        SELECT
+          ''unknown''::TEXT                       AS provider,
+          COALESCE(SUM(platform_fee_amount), 0)   AS total_platform_revenue,
+          COALESCE(SUM(gross_amount), 0)           AS total_gross_revenue,
+          COUNT(*)::BIGINT                         AS total_transactions
+        FROM admin_revenue_transactions;
+      $f$';
+  END IF;
+END;
+$$;
