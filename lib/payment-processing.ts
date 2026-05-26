@@ -661,6 +661,83 @@ async function ensureAdminRevenueCapturedForPayment(params: {
   }
 }
 
+async function recordPaymentSplit(params: {
+  supabase: ReturnType<typeof getSupabaseAdminClient>
+  payment: any
+  verificationReference: string
+  paymentContext: 'vote' | 'ticket'
+  voteId?: string | null
+  amountPaid: number
+  processedAtIso: string
+}) {
+  const { supabase, payment, verificationReference, paymentContext, voteId, amountPaid, processedAtIso } = params
+
+  const paymentId = String(payment?.id || '').trim()
+  const eventId = String(payment?.event_id || '').trim()
+
+  if (!paymentId || !eventId || amountPaid <= 0) {
+    return
+  }
+
+  const { data: eventRow } = await supabase
+    .from('events')
+    .select('title, organizer_id')
+    .eq('id', eventId)
+    .maybeSingle()
+
+  const organizerId: string | null = eventRow?.organizer_id || null
+
+  const feePercent = await resolveAdminRevenueFeePercent({
+    supabase,
+    paymentContext,
+    organizerId,
+  })
+
+  const provider = payment.provider
+    ? String(payment.provider).trim().toLowerCase()
+    : normalizeStoredPaymentProvider(String(payment.reference || ''), payment.provider)
+
+  // ── Primary path: atomic RPC (requires migration 20260526000000) ────────
+  if (organizerId) {
+    const { error: rpcError } = await supabase.rpc('record_payment_split', {
+      p_payment_id:        paymentId,
+      p_payment_reference: verificationReference,
+      p_event_id:          eventId,
+      p_organizer_id:      organizerId,
+      p_gross_amount:      Number(amountPaid.toFixed(2)),
+      p_payment_context:   paymentContext,
+      p_fee_percent:       Number(feePercent.toFixed(2)),
+      p_vote_id:           paymentContext === 'vote' ? (voteId ?? null) : null,
+      p_provider:          provider,
+      p_processed_at:      processedAtIso,
+    })
+
+    if (!rpcError) {
+      return // All four accounting tables updated atomically.
+    }
+
+    const rpcMsg = String(rpcError.message || '').toLowerCase()
+    // If it's an insufficient-data error (not a missing-function error), propagate.
+    if (!rpcMsg.includes('function') && !rpcMsg.includes('does not exist')) {
+      console.error('[ACCOUNTING] record_payment_split RPC error:', rpcError.message, { paymentId, eventId })
+    } else {
+      // Migration not yet deployed — log and fall through to legacy path.
+      console.warn('[ACCOUNTING] record_payment_split not available, using legacy fallback:', rpcError.message)
+    }
+  }
+
+  // ── Fallback: legacy row-by-row insert into admin_revenue_transactions ───
+  await ensureAdminRevenueCapturedForPayment({
+    supabase,
+    payment,
+    verificationReference,
+    paymentContext,
+    voteId,
+    amountPaid,
+    processedAtIso,
+  })
+}
+
 async function issueTicketPurchaseFallback(params: {
   supabase: ReturnType<typeof getSupabaseAdminClient>
   planId: string
@@ -1717,7 +1794,7 @@ export async function processConfirmedPayment(verification: PaymentVerificationP
       })
       .eq('reference', verification.reference)
 
-    await ensureAdminRevenueCapturedForPayment({
+    await recordPaymentSplit({
       supabase,
       payment,
       verificationReference: verification.reference,
@@ -1838,10 +1915,11 @@ export async function processConfirmedPayment(verification: PaymentVerificationP
       console.error('[VOTE_PAYMENT_UPDATE_FAIL]', paymentUpdateError)
     }
 
-    await ensureAdminRevenueCapturedForVote({
+    await recordPaymentSplit({
       supabase,
       payment: effectivePayment,
       verificationReference: verification.reference,
+      paymentContext: 'vote',
       voteId: fallbackVote.voteId,
       amountPaid,
       processedAtIso,

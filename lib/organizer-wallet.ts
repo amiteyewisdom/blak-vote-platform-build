@@ -23,6 +23,15 @@ type WalletSummaryData = {
   vote_platform_fees_deducted: number
   ticket_platform_fees_deducted: number
   net_balance: number
+  // Per-type organizer net earnings
+  voting_earnings: number
+  ticket_earnings: number
+  total_earnings: number
+  // Spendable balance fields (stored atomically post-migration)
+  withdrawable_balance: number
+  pending_balance: number
+  total_withdrawn: number
+  // Legacy computed balance
   available_balance: number
   pending_withdrawals: number
   total_cashed_out: number
@@ -423,7 +432,7 @@ export async function getOrganizerWalletSummaryData(adminSupabase: SupabaseLike,
     getOrganizerProcessedWithdrawalTotal(adminSupabase, userId),
     adminSupabase
       .from('organizer_wallets')
-      .select('transferable_balance')
+      .select('transferable_balance,withdrawable_balance,pending_balance,total_withdrawn,voting_earnings,ticket_earnings,total_earnings')
       .eq('organizer_id', userId)
       .maybeSingle(),
   ])
@@ -471,6 +480,12 @@ export async function getOrganizerWalletSummaryData(adminSupabase: SupabaseLike,
       vote_platform_fees_deducted: 0,
       ticket_platform_fees_deducted: 0,
       net_balance: 0,
+      voting_earnings: 0,
+      ticket_earnings: 0,
+      total_earnings: 0,
+      withdrawable_balance: 0,
+      pending_balance: 0,
+      total_withdrawn: 0,
       available_balance: 0,
       pending_withdrawals: 0,
       total_cashed_out: 0,
@@ -484,6 +499,18 @@ export async function getOrganizerWalletSummaryData(adminSupabase: SupabaseLike,
   summary.total_cashed_out = Number(processedWithdrawals.toFixed(2))
   summary.transferable_balance = transferableBalance
   summary.available_balance = Math.max(summary.net_balance - pendingWithdrawals + transferableBalance, 0)
+
+  // Merge stored atomic fields from organizer_wallets when available.
+  const storedWithdrawable = toNumber(walletRow?.withdrawable_balance)
+  summary.withdrawable_balance = storedWithdrawable > 0
+    ? storedWithdrawable
+    : summary.available_balance
+  summary.pending_balance   = toNumber(walletRow?.pending_balance)
+  summary.total_withdrawn   = toNumber(walletRow?.total_withdrawn)
+  summary.voting_earnings   = toNumber(walletRow?.voting_earnings)
+  summary.ticket_earnings   = toNumber(walletRow?.ticket_earnings)
+  summary.total_earnings    = toNumber(walletRow?.total_earnings) || summary.net_balance
+
   if (summary.last_updated === new Date(0).toISOString()) {
     summary.last_updated = new Date().toISOString()
   }
@@ -519,6 +546,9 @@ export async function getOrganizerWithdrawalHistoryData(
   return (data || []) as OrganizerWithdrawalRow[]
 }
 
+const WITHDRAWAL_SELECT_COLUMNS =
+  'id,event_id,amount_requested,platform_fee_percent,platform_fee_amount,net_amount,method,account_details,withdrawal_type,status,admin_note,requested_at,approved_at,processed_at,payout_provider,payout_reference,payout_recipient_code,payout_attempted_at,payout_failure_reason,payout_metadata,created_at'
+
 export async function createOrganizerWithdrawalRequest(
   adminSupabase: SupabaseLike,
   userId: string,
@@ -532,15 +562,10 @@ export async function createOrganizerWithdrawalRequest(
     orphanedEventIds?: string[]
   },
 ) {
-  const wallet = await getOrganizerWalletSummaryData(adminSupabase, userId)
-
-  if (input.amount > wallet.available_balance) {
-    throw new Error('Insufficient available balance')
+  const amount = Number(Math.max(toNumber(input.amount), 0).toFixed(2))
+  if (amount <= 0) {
+    throw new Error('Withdrawal amount must be positive')
   }
-
-  const feePercent = Math.max(toNumber(input.platformFeePercent), 0)
-  const feeAmount = 0
-  const netAmount = Number(Math.max(input.amount, 0).toFixed(2))
 
   // Embed orphaned event IDs into account_details so the admin panel / payout
   // processor can zero-out each deleted event's revenue_left after approval.
@@ -549,22 +574,69 @@ export async function createOrganizerWithdrawalRequest(
     storedAccountDetails._orphaned_event_ids = input.orphanedEventIds
   }
 
+  // ── Primary path: atomic RPC with row-level lock ──────────────────────────
+  // Requires migration 20260526000000_enterprise_accounting_ledger to be deployed.
+  const { data: rpcData, error: rpcError } = await adminSupabase.rpc(
+    'process_organizer_withdrawal',
+    {
+      p_organizer_id:    userId,
+      p_amount:          amount,
+      p_method:          input.method,
+      p_account_details: storedAccountDetails,
+      p_event_id:        input.eventId || null,
+      p_withdrawal_type: input.withdrawalType || 'combined',
+    },
+  )
+
+  if (!rpcError && rpcData) {
+    const result = rpcData as { withdrawal_id: number }
+    const { data: withdrawalRow } = await adminSupabase
+      .from('organizer_withdrawals')
+      .select(WITHDRAWAL_SELECT_COLUMNS)
+      .eq('id', result.withdrawal_id)
+      .maybeSingle()
+    return withdrawalRow as OrganizerWithdrawalRow | null
+  }
+
+  // If RPC definitively rejected with a domain error (insufficient balance,
+  // wallet not found), do NOT fall through — surface the error immediately.
+  if (rpcError) {
+    const msg = String(rpcError.message || '').toLowerCase()
+    const isFunctionMissing =
+      msg.includes('function') ||
+      msg.includes('does not exist') ||
+      msg.includes('could not find')
+
+    if (!isFunctionMissing) {
+      throw new Error(rpcError.message)
+    }
+
+    console.warn('[ACCOUNTING] process_organizer_withdrawal RPC not available, using legacy fallback:', rpcError.message)
+  }
+
+  // ── Fallback: legacy path (migration not yet deployed) ───────────────────
+  const wallet = await getOrganizerWalletSummaryData(adminSupabase, userId)
+  if (amount > wallet.available_balance) {
+    throw new Error('Insufficient available balance')
+  }
+
+  const feePercent = Math.max(toNumber(input.platformFeePercent), 0)
   const { data, error } = await adminSupabase
     .from('organizer_withdrawals')
     .insert({
-      organizer_id: userId,
-      event_id: input.eventId || null,
-      amount_requested: Number(input.amount.toFixed(2)),
+      organizer_id:         userId,
+      event_id:             input.eventId || null,
+      amount_requested:     amount,
       platform_fee_percent: feePercent,
-      platform_fee_amount: feeAmount,
-      net_amount: netAmount,
-      method: input.method,
-      account_details: storedAccountDetails,
-      withdrawal_type: input.withdrawalType || 'combined',
-      status: 'pending',
-      requested_at: new Date().toISOString(),
+      platform_fee_amount:  0,
+      net_amount:           amount,
+      method:               input.method,
+      account_details:      storedAccountDetails,
+      withdrawal_type:      input.withdrawalType || 'combined',
+      status:               'pending',
+      requested_at:         new Date().toISOString(),
     })
-    .select('id,event_id,amount_requested,platform_fee_percent,platform_fee_amount,net_amount,method,account_details,withdrawal_type,status,admin_note,requested_at,approved_at,processed_at,payout_provider,payout_reference,payout_recipient_code,payout_attempted_at,payout_failure_reason,payout_metadata,created_at')
+    .select(WITHDRAWAL_SELECT_COLUMNS)
     .maybeSingle()
 
   if (error) {
