@@ -12,17 +12,18 @@ async function fetchGlobalFeeDefaults(supabase: SupabaseLike) {
     .limit(1)
     .maybeSingle()
 
-  const voteDefault = Number(data?.platform_fee_percent)
-  const ticketingDefault = Number(data?.ticketing_commission_percent)
+  const rawVote = data?.platform_fee_percent
+  const rawTicket = data?.ticketing_commission_percent
 
-  return {
-    voteDefault: Number.isFinite(voteDefault) ? voteDefault : 10,
-    ticketingDefault: Number.isFinite(ticketingDefault)
-      ? ticketingDefault
-      : Number.isFinite(voteDefault)
-        ? voteDefault
-        : 10,
-  }
+  // Use null-check BEFORE Number() conversion: Number(null) === 0 which is
+  // finite and would be treated as an explicit 0% fee — incorrect behaviour.
+  const voteDefault = rawVote != null && Number.isFinite(Number(rawVote)) ? Number(rawVote) : 10
+  const ticketingDefault =
+    rawTicket != null && Number.isFinite(Number(rawTicket))
+      ? Number(rawTicket)
+      : voteDefault
+
+  return { voteDefault, ticketingDefault }
 }
 
 export async function getEffectiveVotePlatformFeePercent(
@@ -31,11 +32,12 @@ export async function getEffectiveVotePlatformFeePercent(
 ) {
   if (organizerRef) {
     try {
-      const { data: rpcFee } = await supabase.rpc('get_effective_platform_fee_percent', {
+      const { data: rpcFee, error: rpcError } = await supabase.rpc('get_effective_platform_fee_percent', {
         p_organizer_ref: organizerRef,
       })
 
-      if (Number.isFinite(Number(rpcFee))) {
+      // Guard: null means RPC failed/returned nothing — do NOT treat as 0%.
+      if (!rpcError && rpcFee != null && Number.isFinite(Number(rpcFee))) {
         return Number(rpcFee)
       }
     } catch {
@@ -63,11 +65,12 @@ export async function getEffectiveTicketingFeePercent(
 ) {
   if (organizerRef) {
     try {
-      const { data: rpcFee } = await supabase.rpc('get_effective_ticketing_fee_percent', {
+      const { data: rpcFee, error: rpcError } = await supabase.rpc('get_effective_ticketing_fee_percent', {
         p_organizer_ref: organizerRef,
       })
 
-      if (Number.isFinite(Number(rpcFee))) {
+      // Guard: null means RPC failed/returned nothing — do NOT treat as 0%.
+      if (!rpcError && rpcFee != null && Number.isFinite(Number(rpcFee))) {
         return Number(rpcFee)
       }
     } catch {
