@@ -258,7 +258,7 @@ async function buildOrganizerEventMetrics(adminSupabase: SupabaseLike, userId: s
       .in('status', PAID_PAYMENT_STATUSES),
     adminSupabase
       .from('admin_revenue_transactions')
-      .select('event_id,payment_context,platform_fee_amount,processed_at')
+      .select('event_id,payment_context,platform_fee_amount,platform_fee_percent,gross_amount,processed_at')
       .in('event_id', eventIds),
     adminSupabase
       .from('organizer_withdrawals')
@@ -313,8 +313,23 @@ async function buildOrganizerEventMetrics(adminSupabase: SupabaseLike, userId: s
     const metric = metrics.get(eventId)
     if (!metric) continue
 
-    const feeAmount = toNumber(row.platform_fee_amount)
-    const paymentContext = String(row.payment_context || 'vote').toLowerCase()
+    const storedFeeAmount  = toNumber(row.platform_fee_amount)
+    const storedFeePercent = toNumber(row.platform_fee_percent)
+    const grossAmount      = toNumber(row.gross_amount)
+    const paymentContext   = String(row.payment_context || 'vote').toLowerCase()
+
+    // If the stored fee amount is 0 but we have the gross and a non-zero percent,
+    // recompute on the fly (guards against the Number(null)=0 historical bug).
+    let feeAmount = storedFeeAmount
+    if (feeAmount === 0 && grossAmount > 0) {
+      if (storedFeePercent > 0) {
+        feeAmount = Number((grossAmount * storedFeePercent / 100).toFixed(2))
+      } else {
+        // Last-resort: use the event's currently configured fee percent
+        feeAmount = Number((grossAmount * toNumber(metric.platform_fee_percent) / 100).toFixed(2))
+      }
+    }
+
     if (paymentContext === 'ticket') {
       metric.ticket_platform_fee_deducted += feeAmount
     } else {
