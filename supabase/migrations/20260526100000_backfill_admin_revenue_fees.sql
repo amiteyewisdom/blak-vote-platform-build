@@ -1,4 +1,43 @@
 -- =============================================================================
+-- 0. Ensure platform_settings has a valid default fee.
+--    COALESCE(platform_fee_percent, 10) in DB functions treats NULL as 10,
+--    but stores nothing — so 0 slips through as a "real" value.
+--    This upsert seeds 10% if the row is missing, and fixes accidental 0 %
+--    rows that were written before the admin configured a real fee.
+-- =============================================================================
+
+-- Insert a default row if none exists
+INSERT INTO platform_settings (platform_fee_percent, updated_at)
+SELECT 10, timezone('utc', now())
+WHERE NOT EXISTS (SELECT 1 FROM platform_settings LIMIT 1);
+
+-- Fix platform_fee_percent where never intentionally set (NULL or 0)
+UPDATE platform_settings
+SET
+  platform_fee_percent = 10,
+  updated_at           = timezone('utc', now())
+WHERE platform_fee_percent IS NULL
+   OR platform_fee_percent = 0;
+
+-- Fix ticketing_commission_percent only if the column exists in this DB
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name   = 'platform_settings'
+      AND column_name  = 'ticketing_commission_percent'
+  ) THEN
+    UPDATE platform_settings
+    SET ticketing_commission_percent = 10,
+        updated_at                   = timezone('utc', now())
+    WHERE ticketing_commission_percent IS NULL
+       OR ticketing_commission_percent = 0;
+  END IF;
+END;
+$$;
+
+-- =============================================================================
 -- Migration: Backfill correct platform fees in admin_revenue_transactions
 --
 -- Root cause fixed: NULL platform_fee_percent in platform_settings was being

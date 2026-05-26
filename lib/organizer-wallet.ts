@@ -110,6 +110,14 @@ export async function resolveOrganizerRefs(adminSupabase: SupabaseLike, userId: 
   }
 }
 
+function positiveFee(...candidates: Array<unknown>): number {
+  for (const c of candidates) {
+    const n = Number(c)
+    if (Number.isFinite(n) && n > 0) return n
+  }
+  return 10
+}
+
 async function resolveEffectivePlatformFeePercent(adminSupabase: SupabaseLike, userId: string) {
   const [{ data: feeOverride }, { data: globalSettings }, { data: feeResult }] = await Promise.all([
     adminSupabase
@@ -127,7 +135,7 @@ async function resolveEffectivePlatformFeePercent(adminSupabase: SupabaseLike, u
     }),
   ])
 
-  return Number(feeResult ?? feeOverride?.platform_fee_percent ?? globalSettings?.platform_fee_percent ?? 10)
+  return positiveFee(feeResult, feeOverride?.platform_fee_percent, globalSettings?.platform_fee_percent)
 }
 
 async function resolveEffectiveTicketingFeePercent(adminSupabase: SupabaseLike, userId: string) {
@@ -147,8 +155,11 @@ async function resolveEffectiveTicketingFeePercent(adminSupabase: SupabaseLike, 
     }),
   ])
 
-  return Number(
-    feeResult ?? feeOverride?.ticketing_fee_percent ?? globalSettings?.ticketing_commission_percent ?? globalSettings?.platform_fee_percent ?? 10
+  return positiveFee(
+    feeResult,
+    feeOverride?.ticketing_fee_percent,
+    globalSettings?.ticketing_commission_percent,
+    globalSettings?.platform_fee_percent,
   )
 }
 
@@ -196,6 +207,8 @@ async function buildOrganizerEventMetrics(adminSupabase: SupabaseLike, userId: s
     vote_revenue: number
     ticket_revenue: number
     platform_fee_percent: number
+    vote_fee_percent: number
+    ticket_fee_percent: number
     platform_fee_deducted: number
     vote_platform_fee_deducted: number
     ticket_platform_fee_deducted: number
@@ -227,6 +240,8 @@ async function buildOrganizerEventMetrics(adminSupabase: SupabaseLike, userId: s
       vote_revenue: 0,
       ticket_revenue: 0,
       platform_fee_percent: overallFee,
+      vote_fee_percent: voteFee,
+      ticket_fee_percent: ticketFee,
       platform_fee_deducted: 0,
       vote_platform_fee_deducted: 0,
       ticket_platform_fee_deducted: 0,
@@ -358,6 +373,17 @@ async function buildOrganizerEventMetrics(adminSupabase: SupabaseLike, userId: s
 
   return Array.from(metrics.values()).map((metric) => {
     metric.total_revenue = metric.vote_revenue + metric.ticket_revenue
+
+    // Compute fee deductions directly from gross revenue × effective fee percent.
+    // This is reliable regardless of what admin_revenue_transactions contains,
+    // handling the case where stored platform_fee_amount = 0 due to a historical bug.
+    metric.vote_platform_fee_deducted = Number(
+      (metric.vote_revenue * metric.vote_fee_percent / 100).toFixed(2)
+    )
+    metric.ticket_platform_fee_deducted = Number(
+      (metric.ticket_revenue * metric.ticket_fee_percent / 100).toFixed(2)
+    )
+
     metric.platform_fee_deducted = metric.vote_platform_fee_deducted + metric.ticket_platform_fee_deducted
     metric.vote_net_earnings = Number((metric.vote_revenue - metric.vote_platform_fee_deducted).toFixed(2))
     metric.ticket_net_earnings = Number((metric.ticket_revenue - metric.ticket_platform_fee_deducted).toFixed(2))
