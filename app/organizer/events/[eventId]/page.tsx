@@ -164,6 +164,26 @@ export default function EventDashboardPage() {
                   : 'Not set'}
               </p>
             </div>
+            {event.event_type !== 'ticketing' && (
+              <>
+                <div className="rounded-2xl border border-border bg-[hsl(var(--legacy-bg-card))] px-4 py-3">
+                  <p className="text-muted-foreground text-xs mb-1">Nominations Open</p>
+                  <p>
+                    {event.nomination_open_date
+                      ? new Date(event.nomination_open_date).toLocaleString()
+                      : 'Not set'}
+                  </p>
+                </div>
+                <div className="rounded-2xl border border-border bg-[hsl(var(--legacy-bg-card))] px-4 py-3">
+                  <p className="text-muted-foreground text-xs mb-1">Nominations Close</p>
+                  <p>
+                    {event.nomination_close_date
+                      ? new Date(event.nomination_close_date).toLocaleString()
+                      : 'Not set'}
+                  </p>
+                </div>
+              </>
+            )}
           </div>
         </div>
 

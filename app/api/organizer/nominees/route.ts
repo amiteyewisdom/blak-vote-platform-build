@@ -469,6 +469,63 @@ export async function POST(request: Request) {
   )
 }
 
+export async function PATCH(request: Request) {
+  const sessionClient = await createServerClient()
+  const auth = await requireRole(sessionClient, ['organizer', 'admin'])
+  if (!auth.ok) return auth.response
+
+  const body = await request.json().catch(() => ({}))
+  const nomineeId = String(body.id || '')
+  if (!nomineeId) {
+    return NextResponse.json({ error: 'Missing id' }, { status: 400 })
+  }
+
+  const adminSupabase = getSupabaseAdminClient()
+
+  const { data: nominee, error: nomineeError } = await adminSupabase
+    .from('nominations')
+    .select('id, event_id')
+    .eq('id', nomineeId)
+    .maybeSingle()
+
+  if (nomineeError || !nominee) {
+    return NextResponse.json({ error: 'Nominee not found' }, { status: 404 })
+  }
+
+  if (auth.role === 'organizer') {
+    const ownershipError = await ensureEventOwnedByOrganizer(adminSupabase, nominee.event_id, auth.userId)
+    if (ownershipError) return ownershipError
+  }
+
+  const updatePayload: Record<string, unknown> = {}
+  if ('nominee_name' in body) updatePayload.nominee_name = String(body.nominee_name || '').trim() || null
+  if ('nominee_email' in body) updatePayload.nominee_email = body.nominee_email ? String(body.nominee_email).trim() : null
+  if ('nominee_phone' in body) updatePayload.nominee_phone = body.nominee_phone ? String(body.nominee_phone).trim() : null
+  if ('bio' in body) updatePayload.bio = String(body.bio || '').trim() || null
+  if ('photo_url' in body) updatePayload.photo_url = body.photo_url ? String(body.photo_url) : null
+  if ('category_id' in body) updatePayload.category_id = String(body.category_id || '') || null
+  if ('status' in body) updatePayload.status = String(body.status || '')
+
+  updatePayload.updated_at = new Date().toISOString()
+
+  if (Object.keys(updatePayload).length === 1) {
+    return NextResponse.json({ error: 'No fields to update' }, { status: 400 })
+  }
+
+  const { data, error } = await adminSupabase
+    .from('nominations')
+    .update(updatePayload)
+    .eq('id', nomineeId)
+    .select('*')
+    .single()
+
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 400 })
+  }
+
+  return NextResponse.json({ nominee: { ...data, photo_url: resolveNomineePhotoUrl(data) }, success: true })
+}
+
 export async function DELETE(request: Request) {
   const sessionClient = await createServerClient()
   const auth = await requireRole(sessionClient, ['organizer', 'admin'])

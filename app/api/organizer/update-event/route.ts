@@ -11,7 +11,7 @@ export async function POST(req: Request) {
     return auth.response
   }
 
-  const { eventId, title, description, cost_per_vote, vote_price, start_date, end_date, image_url, status } = await req.json()
+  const { eventId, title, description, cost_per_vote, vote_price, start_date, end_date, image_url, status, nomination_open_date, nomination_close_date } = await req.json()
 
   if (!eventId) {
     return NextResponse.json({ error: 'Missing eventId' }, { status: 400 })
@@ -34,6 +34,8 @@ export async function POST(req: Request) {
   if (image_url !== undefined) updatePayload.image_url = image_url
   if (status !== undefined) updatePayload.status = status
   if (status !== undefined) updatePayload.is_active = status === 'active'
+  if (nomination_open_date !== undefined) updatePayload.nomination_open_date = nomination_open_date || null
+  if (nomination_close_date !== undefined) updatePayload.nomination_close_date = nomination_close_date || null
   updatePayload.updated_at = new Date().toISOString()
 
   const { data, error } = await adminSupabase

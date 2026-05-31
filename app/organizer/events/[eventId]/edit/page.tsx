@@ -36,6 +36,8 @@ export default function EventSettingsPage() {
     status: 'active',
     start_date: '',
     end_date: '',
+    nomination_open_date: '',
+    nomination_close_date: '',
   })
 
   const [image, setImage] = useState<File | null>(null)
@@ -75,6 +77,8 @@ export default function EventSettingsPage() {
       status: data.status || 'active',
       start_date: data.start_date ? new Date(data.start_date).toISOString().slice(0, 16) : '',
       end_date: data.end_date ? new Date(data.end_date).toISOString().slice(0, 16) : '',
+      nomination_open_date: data.nomination_open_date ? new Date(data.nomination_open_date).toISOString().slice(0, 16) : '',
+      nomination_close_date: data.nomination_close_date ? new Date(data.nomination_close_date).toISOString().slice(0, 16) : '',
     })
 
     setPreview(data.image_url || null)
@@ -161,6 +165,8 @@ export default function EventSettingsPage() {
         image_url: imageUrl,
         start_date: form.start_date || null,
         end_date: form.end_date || null,
+        nomination_open_date: form.nomination_open_date || null,
+        nomination_close_date: form.nomination_close_date || null,
       }),
     })
 
@@ -489,6 +495,33 @@ export default function EventSettingsPage() {
               }
               className="w-full bg-surface rounded-2xl px-6 h-14"
             />
+          </div>
+        </div>
+
+        <div className="space-y-3 rounded-2xl border border-border bg-surface p-4">
+          <div>
+            <h3 className="text-sm font-semibold">Public Nomination Window</h3>
+            <p className="text-xs text-muted-foreground">Set when the public can submit nominations.</p>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs text-muted-foreground mb-2">Nominations Open</label>
+              <DSInput
+                type="datetime-local"
+                value={form.nomination_open_date}
+                onChange={(e) => setForm({ ...form, nomination_open_date: e.target.value })}
+                className="w-full bg-surface rounded-2xl px-6 h-14"
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-muted-foreground mb-2">Nominations Close</label>
+              <DSInput
+                type="datetime-local"
+                value={form.nomination_close_date}
+                onChange={(e) => setForm({ ...form, nomination_close_date: e.target.value })}
+                className="w-full bg-surface rounded-2xl px-6 h-14"
+              />
+            </div>
           </div>
         </div>
 

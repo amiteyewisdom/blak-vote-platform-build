@@ -2,7 +2,14 @@
 
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { ArrowLeft, Plus, Trash2, Upload } from 'lucide-react'
+import { ArrowLeft, Eye, Pencil, Plus, Trash2, Upload, X } from 'lucide-react'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from '@/components/ui/dialog'
 import { useToast } from '@/hooks/use-toast'
 import { DSCard, DSInput, DSPrimaryButton, DSSelect, DSTextarea } from '@/components/ui/design-system'
 
@@ -22,6 +29,21 @@ export default function NomineesPage() {
   const [loading, setLoading] = useState(true)
   const [creating, setCreating] = useState(false)
   const [reviewingId, setReviewingId] = useState<string | null>(null)
+
+  const [viewNominee, setViewNominee] = useState<any>(null)
+  const [editNominee, setEditNominee] = useState<any>(null)
+  const [editForm, setEditForm] = useState({
+    nominee_name: '',
+    nominee_email: '',
+    nominee_phone: '',
+    bio: '',
+    categoryId: '',
+    status: '',
+    photoUrl: '',
+    imageFile: null as File | null,
+    preview: '',
+  })
+  const [updatingNominee, setUpdatingNominee] = useState(false)
 
   useEffect(() => {
     if (!eventId || eventId === 'undefined' || eventId === 'null') return
@@ -173,6 +195,88 @@ export default function NomineesPage() {
     setReviewingId(null)
   }
 
+  const getCategoryName = (catId: string | null) => {
+    if (!catId) return 'Uncategorized'
+    return categories.find((c) => c.id === catId)?.name || catId
+  }
+
+  const openViewModal = (nominee: any) => {
+    setViewNominee(nominee)
+  }
+
+  const openEditModal = (nominee: any) => {
+    setEditNominee(nominee)
+    setEditForm({
+      nominee_name: nominee.nominee_name || '',
+      nominee_email: nominee.nominee_email || '',
+      nominee_phone: nominee.nominee_phone || '',
+      bio: nominee.bio || '',
+      categoryId: nominee.category_id || '',
+      status: nominee.status || 'candidate',
+      photoUrl: nominee.photo_url || '',
+      imageFile: null,
+      preview: nominee.photo_url || '',
+    })
+    setEditNominee(nominee)
+  }
+
+  const handleUpdateNominee = async () => {
+    if (!editNominee) return
+    setUpdatingNominee(true)
+
+    try {
+      let photoUrl = editForm.photoUrl
+
+      if (editForm.imageFile) {
+        const formData = new FormData()
+        formData.append('eventId', eventId)
+        formData.append('image', editForm.imageFile)
+
+        const uploadRes = await fetch('/api/organizer/upload-nominee-image', {
+          method: 'POST',
+          body: formData,
+        })
+
+        const uploadPayload = await uploadRes.json().catch(() => ({}))
+
+        if (!uploadRes.ok || !uploadPayload?.imageUrl) {
+          throw new Error(uploadPayload?.error || 'Could not upload nominee image')
+        }
+
+        photoUrl = String(uploadPayload.imageUrl)
+      }
+
+      const res = await fetch('/api/organizer/nominees', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: editNominee.id,
+          nominee_name: editForm.nominee_name,
+          nominee_email: editForm.nominee_email || null,
+          nominee_phone: editForm.nominee_phone || null,
+          bio: editForm.bio || null,
+          category_id: editForm.categoryId || null,
+          status: editForm.status,
+          photo_url: photoUrl || null,
+        }),
+      })
+
+      const payload = await res.json()
+
+      if (!res.ok) {
+        throw new Error(payload?.error || 'Update failed')
+      }
+
+      toast({ title: 'Nominee updated' })
+      setEditNominee(null)
+      fetchData()
+    } catch (err: any) {
+      toast({ title: 'Error', description: err.message, variant: 'destructive' })
+    } finally {
+      setUpdatingNominee(false)
+    }
+  }
+
   if (loading)
     return (
       <div className="p-12">
@@ -307,6 +411,18 @@ export default function NomineesPage() {
 
                 <div className="flex items-center gap-2">
                   <button
+                    onClick={() => openViewModal(nominee)}
+                    className="text-blue-400 text-sm px-3 py-1 rounded-lg border border-blue-500/30"
+                  >
+                    <Eye size={14} className="inline mr-1" /> View
+                  </button>
+                  <button
+                    onClick={() => openEditModal(nominee)}
+                    className="text-violet-400 text-sm px-3 py-1 rounded-lg border border-violet-500/30"
+                  >
+                    <Pencil size={14} className="inline mr-1" /> Edit
+                  </button>
+                  <button
                     onClick={() => reviewNomination(nominee.id, true)}
                     disabled={reviewingId === nominee.id}
                     className="text-emerald-400 text-sm px-3 py-1 rounded-lg border border-emerald-500/30"
@@ -363,6 +479,18 @@ export default function NomineesPage() {
 
             <div className="flex items-center gap-2">
               <button
+                onClick={() => openViewModal(nominee)}
+                className="text-blue-400 text-sm px-3 py-1 rounded-lg border border-blue-500/30"
+              >
+                <Eye size={14} className="inline mr-1" /> View
+              </button>
+              <button
+                onClick={() => openEditModal(nominee)}
+                className="text-violet-400 text-sm px-3 py-1 rounded-lg border border-violet-500/30"
+              >
+                <Pencil size={14} className="inline mr-1" /> Edit
+              </button>
+              <button
                 onClick={() => handleDelete(nominee.id)}
                 className="text-red-500 hover:text-red-400 ml-auto"
               >
@@ -372,6 +500,179 @@ export default function NomineesPage() {
           </DSCard>
         ))}
       </div>
+
+      {/* ── View Nominee Dialog ── */}
+      <Dialog open={!!viewNominee} onOpenChange={(open) => !open && setViewNominee(null)}>
+        <DialogContent className="max-w-lg bg-surface-card border border-border rounded-3xl p-0 overflow-hidden">
+          {viewNominee && (
+            <div>
+              <div className="relative h-40 bg-gradient-to-br from-gold/20 to-gold-deep/20 flex items-center justify-center">
+                {viewNominee.photo_url ? (
+                  <img src={viewNominee.photo_url} className="w-24 h-24 rounded-full object-cover border-4 border-surface-card" />
+                ) : (
+                  <div className="w-24 h-24 rounded-full bg-surface flex items-center justify-center text-3xl font-bold text-muted-foreground">
+                    {(viewNominee.nominee_name || '?').charAt(0).toUpperCase()}
+                  </div>
+                )}
+              </div>
+              <div className="p-6 space-y-4">
+                <DialogHeader>
+                  <DialogTitle className="text-xl">{viewNominee.nominee_name}</DialogTitle>
+                  <DialogDescription>
+                    Status: <span className="uppercase font-medium">{viewNominee.status}</span> &middot; Category: {getCategoryName(viewNominee.category_id)}
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-3 text-sm">
+                  {viewNominee.nominee_email && (
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Email</span>
+                      <span>{viewNominee.nominee_email}</span>
+                    </div>
+                  )}
+                  {viewNominee.nominee_phone && (
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Phone</span>
+                      <span>{viewNominee.nominee_phone}</span>
+                    </div>
+                  )}
+                  {viewNominee.voting_code && (
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Voting Code</span>
+                      <span className="font-mono">{viewNominee.voting_code}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Votes</span>
+                    <span>{viewNominee.vote_count || 0}</span>
+                  </div>
+                  {viewNominee.bio && (
+                    <div className="pt-2 border-t border-border/60">
+                      <span className="text-muted-foreground block mb-1">Bio</span>
+                      <p className="text-foreground/80">{viewNominee.bio}</p>
+                    </div>
+                  )}
+                </div>
+                <button
+                  onClick={() => { setViewNominee(null); openEditModal(viewNominee) }}
+                  className="w-full mt-4 px-6 py-3 rounded-2xl bg-gradient-to-br from-gold to-gold-deep text-black font-semibold"
+                >
+                  Edit Nominee
+                </button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Edit Nominee Dialog ── */}
+      <Dialog open={!!editNominee} onOpenChange={(open) => !open && setEditNominee(null)}>
+        <DialogContent className="max-w-lg bg-surface-card border border-border rounded-3xl p-0 overflow-hidden max-h-[90vh] overflow-y-auto">
+          {editNominee && (
+            <div className="p-6 md:p-8 space-y-6">
+              <DialogHeader>
+                <DialogTitle>Edit Nominee</DialogTitle>
+                <DialogDescription>Update nominee information and photo.</DialogDescription>
+              </DialogHeader>
+
+              {/* Photo */}
+              <div className="flex flex-col items-center gap-3">
+                {editForm.preview ? (
+                  <img src={editForm.preview} className="w-24 h-24 rounded-full object-cover border-2 border-border" />
+                ) : (
+                  <div className="w-24 h-24 rounded-full bg-surface flex items-center justify-center text-2xl font-bold text-muted-foreground">
+                    {(editForm.nominee_name || '?').charAt(0).toUpperCase()}
+                  </div>
+                )}
+                <label className="cursor-pointer text-sm text-gold hover:text-gold-deep transition">
+                  <Upload size={14} className="inline mr-1" /> Change Photo
+                  <DSInput
+                    type="file"
+                    hidden
+                    accept="image/*"
+                    onChange={(e) => {
+                      if (e.target.files?.[0]) {
+                        setEditForm({
+                          ...editForm,
+                          imageFile: e.target.files[0],
+                          preview: URL.createObjectURL(e.target.files[0]),
+                        })
+                      }
+                    }}
+                  />
+                </label>
+              </div>
+
+              <div className="space-y-4">
+                <DSInput
+                  placeholder="Nominee Name"
+                  value={editForm.nominee_name}
+                  onChange={(e) => setEditForm({ ...editForm, nominee_name: e.target.value })}
+                  className="bg-surface rounded-2xl px-6 h-14 w-full"
+                />
+                <DSInput
+                  placeholder="Email"
+                  type="email"
+                  value={editForm.nominee_email}
+                  onChange={(e) => setEditForm({ ...editForm, nominee_email: e.target.value })}
+                  className="bg-surface rounded-2xl px-6 h-14 w-full"
+                />
+                <DSInput
+                  placeholder="Phone Number"
+                  type="tel"
+                  value={editForm.nominee_phone}
+                  onChange={(e) => setEditForm({ ...editForm, nominee_phone: e.target.value })}
+                  className="bg-surface rounded-2xl px-6 h-14 w-full"
+                />
+                <DSSelect
+                  value={editForm.categoryId}
+                  onChange={(e) => setEditForm({ ...editForm, categoryId: e.target.value })}
+                  className="bg-surface rounded-2xl px-6 h-14 w-full"
+                >
+                  <option value="">Select Category</option>
+                  {categories.map((cat) => (
+                    <option key={cat.id} value={cat.id}>
+                      {cat.name}
+                    </option>
+                  ))}
+                </DSSelect>
+                <DSSelect
+                  value={editForm.status}
+                  onChange={(e) => setEditForm({ ...editForm, status: e.target.value })}
+                  className="bg-surface rounded-2xl px-6 h-14 w-full"
+                >
+                  <option value="candidate">Candidate</option>
+                  <option value="approved">Approved</option>
+                  <option value="pending">Pending</option>
+                  <option value="rejected">Rejected</option>
+                </DSSelect>
+                <DSTextarea
+                  placeholder="Short Bio"
+                  value={editForm.bio}
+                  onChange={(e) => setEditForm({ ...editForm, bio: e.target.value })}
+                  rows={4}
+                  className="bg-surface rounded-2xl px-6 py-4 w-full"
+                />
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  onClick={() => setEditNominee(null)}
+                  className="flex-1 px-6 py-3 rounded-2xl border border-border bg-card text-foreground font-medium"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleUpdateNominee}
+                  disabled={updatingNominee}
+                  className="flex-1 px-6 py-3 rounded-2xl bg-gradient-to-br from-gold to-gold-deep text-black font-semibold disabled:opacity-50"
+                >
+                  {updatingNominee ? 'Saving…' : 'Save Changes'}
+                </button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
     </div>
   )
