@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import { headers } from 'next/headers'
 import { getSupabaseAdminClient } from '@/lib/server-security'
 
 const DEFAULT_TITLE = 'BlakVote public event'
@@ -21,7 +22,6 @@ function normalizeImageUrl(value: unknown): string | null {
     return trimmed
   }
 
-  // If value references Supabase storage path (or similar), prefer SUPABASE_URL
   const looksLikeSupabasePath = /storage\/v1|nominee-images|event-images|uploads\//i.test(trimmed)
 
   if (/^\//.test(trimmed)) {
@@ -40,30 +40,44 @@ function normalizeImageUrl(value: unknown): string | null {
 
 export const dynamic = 'force-dynamic'
 
+function resolveMetadataBase(): URL {
+  const headersList = headers()
+  const host = headersList.get('x-forwarded-host') ?? headersList.get('host')
+  try {
+    return new URL(host ? `https://${host}` : SITE_ORIGIN)
+  } catch {
+    return new URL(SITE_ORIGIN)
+  }
+}
+
 export async function generateMetadata({
   params,
 }: {
   params: { eventId: string }
 }): Promise<Metadata> {
   const eventCode = String(params.eventId || '').trim()
-  const metadataBase = new URL(SITE_ORIGIN)
+  const metadataBase = resolveMetadataBase()
+  const baseOrigin = metadataBase.origin
 
   if (!eventCode) {
     return {
       metadataBase,
       title: DEFAULT_TITLE,
       description: DEFAULT_DESCRIPTION,
+      alternates: {
+        canonical: `${baseOrigin}/events`,
+      },
       openGraph: {
         title: DEFAULT_TITLE,
         description: DEFAULT_DESCRIPTION,
-        url: SITE_ORIGIN,
+        url: `${baseOrigin}/events`,
         images: [{ url: DEFAULT_IMAGE, alt: 'BlakVote logo' }],
       },
       twitter: {
         card: 'summary_large_image',
         title: DEFAULT_TITLE,
         description: DEFAULT_DESCRIPTION,
-        images: [DEFAULT_IMAGE],
+        images: [{ url: DEFAULT_IMAGE }],
       },
     }
   }
@@ -92,42 +106,50 @@ export async function generateMetadata({
     const title = event?.title ? `${event.title} | BlakVote` : DEFAULT_TITLE
     const description = event?.description?.trim() || DEFAULT_DESCRIPTION
     const imageUrl = normalizeImageUrl(event?.image_url || event?.banner_url) || DEFAULT_IMAGE
+    const canonicalUrl = `${baseOrigin}/events/${encodeURIComponent(eventCode)}`
 
     return {
       metadataBase,
       title,
       description,
+      alternates: {
+        canonical: canonicalUrl,
+      },
       openGraph: {
         title,
         description,
-        url: `${SITE_ORIGIN.replace(/\/$/, '')}/events/${encodeURIComponent(eventCode)}`,
+        url: canonicalUrl,
         images: [{ url: imageUrl, alt: event?.title ? `${event.title} image` : 'BlakVote event image' }],
       },
       twitter: {
         card: 'summary_large_image',
         title,
         description,
-        images: [imageUrl],
+        images: [{ url: imageUrl }],
       },
     }
   } catch (error) {
     console.error('[EventMetadata] Failed to load event metadata:', error)
+    const canonicalUrl = `${baseOrigin}/events/${encodeURIComponent(eventCode)}`
 
     return {
       metadataBase,
       title: DEFAULT_TITLE,
       description: DEFAULT_DESCRIPTION,
+      alternates: {
+        canonical: canonicalUrl,
+      },
       openGraph: {
         title: DEFAULT_TITLE,
         description: DEFAULT_DESCRIPTION,
-        url: `${SITE_ORIGIN.replace(/\/$/, '')}/events/${encodeURIComponent(eventCode)}`,
+        url: canonicalUrl,
         images: [{ url: DEFAULT_IMAGE, alt: 'BlakVote logo' }],
       },
       twitter: {
         card: 'summary_large_image',
         title: DEFAULT_TITLE,
         description: DEFAULT_DESCRIPTION,
-        images: [DEFAULT_IMAGE],
+        images: [{ url: DEFAULT_IMAGE }],
       },
     }
   }
