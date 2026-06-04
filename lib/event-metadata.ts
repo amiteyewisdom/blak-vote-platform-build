@@ -67,32 +67,49 @@ export async function buildEventMetadata(eventCode: string): Promise<Metadata> {
   }
 
   try {
+    console.log('[META] buildEventMetadata start', { eventCode: normalizedEventCode })
     const supabase = getSupabaseAdminClient()
+    console.log('[META] Supabase admin client initialized')
+
     const [byEventCode, byShortCode, byId] = await Promise.all([
       supabase
         .from('events')
-        .select('id,title,description,image_url,banner_url')
+        .select('*')
         .ilike('event_code', normalizedEventCode)
         .maybeSingle(),
       supabase
         .from('events')
-        .select('id,title,description,image_url,banner_url')
+        .select('*')
         .ilike('short_code', normalizedEventCode)
         .maybeSingle(),
       supabase
         .from('events')
-        .select('id,title,description,image_url,banner_url')
+        .select('*')
         .eq('id', normalizedEventCode)
         .maybeSingle(),
     ])
 
+    console.log('[META] byEventCode:', {
+      data: byEventCode.data,
+      error: byEventCode.error?.message ?? null,
+    })
+    console.log('[META] byShortCode:', {
+      data: byShortCode.data,
+      error: byShortCode.error?.message ?? null,
+    })
+    console.log('[META] byId:', {
+      data: byId.data,
+      error: byId.error?.message ?? null,
+    })
+
     const event = byEventCode.data ?? byShortCode.data ?? byId.data
+    console.log('[META] selected event:', event)
+
     const title = event?.title ? `${event.title} | BlakVote` : DEFAULT_TITLE
     const description = event?.description?.trim() || DEFAULT_DESCRIPTION
     const imageUrl = normalizeImageUrl(event?.image_url || event?.banner_url) || DEFAULT_IMAGE
     const canonicalUrl = `${baseOrigin}/events/${encodeURIComponent(normalizedEventCode)}`
-
-    return {
+    const metadata = {
       metadataBase,
       title,
       description,
@@ -112,11 +129,14 @@ export async function buildEventMetadata(eventCode: string): Promise<Metadata> {
         images: [{ url: imageUrl }],
       },
     }
+
+    console.log('[META RESULT]', metadata)
+    return metadata
   } catch (error) {
-    console.error('[EventMetadata] Failed to load event metadata:', error)
+    console.error('[META ERROR]', error)
     const canonicalUrl = `${baseOrigin}/events/${encodeURIComponent(normalizedEventCode)}`
 
-    return {
+    const fallbackMetadata = {
       metadataBase,
       title: DEFAULT_TITLE,
       description: DEFAULT_DESCRIPTION,
@@ -136,5 +156,8 @@ export async function buildEventMetadata(eventCode: string): Promise<Metadata> {
         images: [{ url: DEFAULT_IMAGE }],
       },
     }
+
+    console.log('[META RESULT]', fallbackMetadata)
+    return fallbackMetadata
   }
 }
