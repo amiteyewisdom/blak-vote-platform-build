@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
 import { useToast } from '@/hooks/use-toast'
 import { getPublicUssdShortcode } from '@/lib/ussd-shortcode'
+import { MAIN_SITE_ORIGIN } from '@/lib/site-metadata'
 import {
   Trophy,
   FolderPlus,
@@ -66,9 +67,7 @@ export default function EventDashboardPage() {
   }, [id, router])
 
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      setOrigin(window.location.origin)
-    }
+    setOrigin(MAIN_SITE_ORIGIN)
   }, [])
 
   if (loading) {

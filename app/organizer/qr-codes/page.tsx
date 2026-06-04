@@ -4,6 +4,7 @@ import { useEffect, useState, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { QrCode, Download, Calendar } from 'lucide-react'
 import QRCode from 'qrcode'
+import { MAIN_SITE_ORIGIN } from '@/lib/site-metadata'
 
 interface EventItem {
   id: string
@@ -58,8 +59,7 @@ export default function OrganizerQrCodesPage() {
 
   const getEventPublicUrl = useCallback((event: EventItem) => {
     const code = event.short_code || event.event_code || event.id
-    const base = typeof window !== 'undefined' ? window.location.origin : ''
-    return `${base}/events/${code}`
+    return `${MAIN_SITE_ORIGIN}/events/${code}`
   }, [])
 
   const downloadQr = useCallback(async (event: EventItem, label: string) => {
