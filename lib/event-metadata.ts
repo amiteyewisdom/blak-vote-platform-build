@@ -50,11 +50,17 @@ function normalizeImageUrl(value: unknown): string | null {
 }
 
 export async function buildEventMetadata(eventCode: string): Promise<Metadata> {
+  console.log('[META] buildEventMetadata called with:', { eventCode, type: typeof eventCode, length: String(eventCode).length })
+  
   const normalizedEventCode = String(eventCode || '').trim()
+  console.log('[META] normalizedEventCode:', { normalizedEventCode, length: normalizedEventCode.length, isEmpty: !normalizedEventCode })
+  
   const metadataBase = new URL(SITE_ORIGIN)
   const baseOrigin = metadataBase.origin
+  console.log('[META] baseOrigin:', baseOrigin)
 
   if (!normalizedEventCode) {
+    console.log('[META] EARLY RETURN: normalizedEventCode is empty, returning default metadata')
     return {
       metadataBase,
       title: DEFAULT_TITLE,
@@ -78,10 +84,11 @@ export async function buildEventMetadata(eventCode: string): Promise<Metadata> {
   }
 
   try {
-    console.log('[META] buildEventMetadata start', { eventCode: normalizedEventCode })
+    console.log('[META] buildEventMetadata try block: starting Supabase lookup')
     const supabase = getSupabaseAdminClient()
     console.log('[META] Supabase admin client initialized')
 
+    console.log('[META] executing queries with normalizedEventCode:', normalizedEventCode)
     const [byEventCode, byShortCode, byId] = await Promise.all([
       supabase
         .from('events')
@@ -100,21 +107,13 @@ export async function buildEventMetadata(eventCode: string): Promise<Metadata> {
         .maybeSingle(),
     ])
 
-    console.log('[META] byEventCode:', {
-      data: byEventCode.data ? { id: byEventCode.data.id, title: byEventCode.data.title } : null,
-      error: byEventCode.error?.message ?? null,
-    })
-    console.log('[META] byShortCode:', {
-      data: byShortCode.data ? { id: byShortCode.data.id, title: byShortCode.data.title } : null,
-      error: byShortCode.error?.message ?? null,
-    })
-    console.log('[META] byId:', {
-      data: byId.data ? { id: byId.data.id, title: byId.data.title } : null,
-      error: byId.error?.message ?? null,
-    })
+    console.log('[META] query results received')
+    console.log('[META] byEventCode.data:', byEventCode.data ? { id: byEventCode.data.id, title: byEventCode.data.title } : null, 'error:', byEventCode.error?.message)
+    console.log('[META] byShortCode.data:', byShortCode.data ? { id: byShortCode.data.id, title: byShortCode.data.title } : null, 'error:', byShortCode.error?.message)
+    console.log('[META] byId.data:', byId.data ? { id: byId.data.id, title: byId.data.title } : null, 'error:', byId.error?.message)
 
     const event = byEventCode.data ?? byShortCode.data ?? byId.data
-    console.log('[META] selected event:', event ? { id: event.id, title: event.title } : null)
+    console.log('[META] selected event:', event ? { id: event.id, title: event.title, image_url: event.image_url } : null)
 
     const title = event?.title ? `${event.title} | BlakVote` : DEFAULT_TITLE
     const description = event?.description?.trim() || DEFAULT_DESCRIPTION
@@ -141,10 +140,10 @@ export async function buildEventMetadata(eventCode: string): Promise<Metadata> {
       },
     }
 
-    console.log('[META RESULT]', metadata)
+    console.log('[META] returning metadata:', { title: metadata.title, canonical: metadata.alternates?.canonical })
     return metadata
   } catch (error) {
-    console.error('[META ERROR]', error)
+    console.error('[META] CAUGHT ERROR in buildEventMetadata:', error instanceof Error ? { message: error.message, stack: error.stack } : error)
     const canonicalUrl = `${baseOrigin}/events/${encodeURIComponent(normalizedEventCode)}`
 
     const fallbackMetadata = {
@@ -168,7 +167,7 @@ export async function buildEventMetadata(eventCode: string): Promise<Metadata> {
       },
     }
 
-    console.log('[META RESULT]', fallbackMetadata)
+    console.log('[META] returning fallback metadata due to error')
     return fallbackMetadata
   }
 }
