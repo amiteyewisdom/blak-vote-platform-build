@@ -8,6 +8,17 @@ const SITE_ORIGIN = MAIN_SITE_ORIGIN
 const SUPABASE_URL = (process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || '').replace(/\/$/, '')
 const DEFAULT_IMAGE = `${SITE_ORIGIN.replace(/\/$/, '')}/site-logo.png`
 
+type EventMetadataRow = {
+  id?: string
+  title?: string
+  description?: string
+  image_url?: string | null
+  banner_url?: string | null
+  banner_image_url?: string | null
+  event_code?: string | null
+  short_code?: string | null
+}
+
 function normalizeImageUrl(value: unknown): string | null {
   if (!value || typeof value !== 'string') {
     return null
@@ -90,24 +101,24 @@ export async function buildEventMetadata(eventCode: string): Promise<Metadata> {
     ])
 
     console.log('[META] byEventCode:', {
-      data: byEventCode.data,
+      data: byEventCode.data ? { id: byEventCode.data.id, title: byEventCode.data.title } : null,
       error: byEventCode.error?.message ?? null,
     })
     console.log('[META] byShortCode:', {
-      data: byShortCode.data,
+      data: byShortCode.data ? { id: byShortCode.data.id, title: byShortCode.data.title } : null,
       error: byShortCode.error?.message ?? null,
     })
     console.log('[META] byId:', {
-      data: byId.data,
+      data: byId.data ? { id: byId.data.id, title: byId.data.title } : null,
       error: byId.error?.message ?? null,
     })
 
     const event = byEventCode.data ?? byShortCode.data ?? byId.data
-    console.log('[META] selected event:', event)
+    console.log('[META] selected event:', event ? { id: event.id, title: event.title } : null)
 
     const title = event?.title ? `${event.title} | BlakVote` : DEFAULT_TITLE
     const description = event?.description?.trim() || DEFAULT_DESCRIPTION
-    const imageUrl = normalizeImageUrl(event?.image_url || event?.banner_url) || DEFAULT_IMAGE
+    const imageUrl = normalizeImageUrl(event?.image_url || event?.banner_image_url || event?.banner_url) || DEFAULT_IMAGE
     const canonicalUrl = `${baseOrigin}/events/${encodeURIComponent(normalizedEventCode)}`
     const metadata = {
       metadataBase,
