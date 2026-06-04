@@ -4,6 +4,7 @@ import { getSupabaseAdminClient } from '@/lib/server-security'
 const DEFAULT_TITLE = 'BlakVote public event'
 const DEFAULT_DESCRIPTION = 'Join this BlakVote event to vote, follow results, and participate in public online contests.'
 const SITE_ORIGIN = process.env.NEXT_PUBLIC_SITE_ORIGIN || 'https://blakvote.com'
+const SUPABASE_URL = (process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || '').replace(/\/$/, '')
 const DEFAULT_IMAGE = `${SITE_ORIGIN.replace(/\/$/, '')}/site-logo.png`
 
 function normalizeImageUrl(value: unknown): string | null {
@@ -20,8 +21,18 @@ function normalizeImageUrl(value: unknown): string | null {
     return trimmed
   }
 
-  if (trimmed.startsWith('/')) {
+  // If value references Supabase storage path (or similar), prefer SUPABASE_URL
+  const looksLikeSupabasePath = /storage\/v1|nominee-images|event-images|uploads\//i.test(trimmed)
+
+  if (/^\//.test(trimmed)) {
+    if (looksLikeSupabasePath && SUPABASE_URL) {
+      return `${SUPABASE_URL}${trimmed}`
+    }
     return `${SITE_ORIGIN.replace(/\/$/, '')}${trimmed}`
+  }
+
+  if (looksLikeSupabasePath && SUPABASE_URL) {
+    return `${SUPABASE_URL}/${trimmed.replace(/^\/+/, '')}`
   }
 
   return `${SITE_ORIGIN.replace(/\/$/, '')}/${trimmed.replace(/^\/+/, '')}`
