@@ -1,10 +1,10 @@
 import type { Metadata } from 'next'
-import { headers } from 'next/headers'
 import { getSupabaseAdminClient } from '@/lib/server-security'
+import { MAIN_SITE_ORIGIN } from '@/lib/site-metadata'
 
 const DEFAULT_TITLE = 'BlakVote public event'
 const DEFAULT_DESCRIPTION = 'Join this BlakVote event to vote, follow results, and participate in public online contests.'
-const SITE_ORIGIN = process.env.NEXT_PUBLIC_SITE_ORIGIN || 'https://blakvote.com'
+const SITE_ORIGIN = MAIN_SITE_ORIGIN
 const SUPABASE_URL = (process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || '').replace(/\/$/, '')
 const DEFAULT_IMAGE = `${SITE_ORIGIN.replace(/\/$/, '')}/site-logo.png`
 
@@ -40,23 +40,13 @@ function normalizeImageUrl(value: unknown): string | null {
 
 export const dynamic = 'force-dynamic'
 
-function resolveMetadataBase(): URL {
-  const headersList = headers()
-  const host = headersList.get('x-forwarded-host') ?? headersList.get('host')
-  try {
-    return new URL(host ? `https://${host}` : SITE_ORIGIN)
-  } catch {
-    return new URL(SITE_ORIGIN)
-  }
-}
-
 export async function generateMetadata({
   params,
 }: {
   params: { eventId: string }
 }): Promise<Metadata> {
   const eventCode = String(params.eventId || '').trim()
-  const metadataBase = resolveMetadataBase()
+  const metadataBase = new URL(SITE_ORIGIN)
   const baseOrigin = metadataBase.origin
 
   if (!eventCode) {
