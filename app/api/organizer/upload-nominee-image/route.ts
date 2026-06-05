@@ -3,7 +3,7 @@ import { createClient as createServerClient } from '@/lib/supabase/server'
 import { ensureEventOwnedByOrganizer, requireRole } from '@/lib/api-auth'
 import { getSupabaseAdminClient } from '@/lib/server-security'
 
-const SUPPORTED_NOMINEE_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp']
+const SUPPORTED_NOMINEE_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/jpg', 'image/heic', 'image/heif']
 const MAX_NOMINEE_IMAGE_SIZE_BYTES = 5 * 1024 * 1024
 
 function isInvalidId(value: unknown): boolean {

@@ -75,18 +75,33 @@ export default function NomineesPage() {
     formData.append('eventId', eventId)
     formData.append('image', file)
 
-    const uploadRes = await fetch('/api/organizer/upload-nominee-image', {
-      method: 'POST',
-      body: formData,
-    })
+    // Add timeout for upload to prevent hanging on slow devices
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 60000) // 60 second timeout
 
-    const uploadPayload = await uploadRes.json().catch(() => ({}))
+    try {
+      const uploadRes = await fetch('/api/organizer/upload-nominee-image', {
+        method: 'POST',
+        body: formData,
+        signal: controller.signal,
+      })
 
-    if (!uploadRes.ok || !uploadPayload?.imageUrl) {
-      throw new Error(uploadPayload?.error || 'Could not upload nominee image')
+      clearTimeout(timeoutId)
+
+      const uploadPayload = await uploadRes.json().catch(() => ({}))
+
+      if (!uploadRes.ok || !uploadPayload?.imageUrl) {
+        throw new Error(uploadPayload?.error || 'Could not upload nominee image')
+      }
+
+      return String(uploadPayload.imageUrl)
+    } catch (error: any) {
+      clearTimeout(timeoutId)
+      if (error.name === 'AbortError') {
+        throw new Error('Upload timed out. Please try again with a smaller image or better connection.')
+      }
+      throw error
     }
-
-    return String(uploadPayload.imageUrl)
   }
 
   const handleCreate = async () => {
@@ -114,8 +129,24 @@ export default function NomineesPage() {
       let imageUrl = null
 
       if (imageFile) {
+        // Validate file size before upload (client-side check)
+        const maxSize = 5 * 1024 * 1024 // 5MB
+        if (imageFile.size > maxSize) {
+          throw new Error('Image must be 5MB or smaller. Please choose a smaller image.')
+        }
+
+        // Validate file type
+        const validTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/jpg']
+        if (!validTypes.includes(imageFile.type)) {
+          throw new Error('Only JPG, PNG, and WebP images are supported.')
+        }
+
         imageUrl = await uploadImage(imageFile)
       }
+
+      // Add timeout to the create request as well
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 30000) // 30 second timeout
 
       const res = await fetch('/api/organizer/nominees', {
         method: 'POST',
@@ -127,7 +158,10 @@ export default function NomineesPage() {
           bio,
           photoUrl: imageUrl,
         }),
+        signal: controller.signal,
       })
+
+      clearTimeout(timeoutId)
 
       const payload = await res.json()
 
@@ -147,9 +181,18 @@ export default function NomineesPage() {
 
       fetchData()
     } catch (err: any) {
+      // Provide more helpful error messages for common issues
+      let errorMessage = err.message || 'Unable to create nominee'
+      
+      if (err.name === 'AbortError') {
+        errorMessage = 'Request timed out. Please check your connection and try again.'
+      } else if (errorMessage.includes('fetch')) {
+        errorMessage = 'Network error. Please check your internet connection and try again.'
+      }
+
       toast({
         title: 'Error',
-        description: err.message,
+        description: errorMessage,
         variant: 'destructive',
       })
     }

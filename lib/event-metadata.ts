@@ -29,21 +29,37 @@ function normalizeImageUrl(value: unknown): string | null {
     return null
   }
 
+  // If already a full URL, return as-is
   if (/^https?:\/\//i.test(trimmed)) {
     return trimmed
   }
 
   const looksLikeSupabasePath = /storage\/v1|nominee-images|event-images|uploads\//i.test(trimmed)
 
+  // Handle absolute paths
   if (/^\//.test(trimmed)) {
     if (looksLikeSupabasePath && SUPABASE_URL) {
+      // For Supabase storage, ensure we use the public URL
+      if (trimmed.includes('/storage/v1/object/public/')) {
+        return `${SUPABASE_URL}${trimmed}`
+      }
+      // Try to construct public URL for storage paths
+      const publicPath = trimmed.replace(/^\/+/, '')
+      if (publicPath.startsWith('storage/v1/')) {
+        return `${SUPABASE_URL}/${publicPath}`
+      }
       return `${SUPABASE_URL}${trimmed}`
     }
     return `${SITE_ORIGIN.replace(/\/$/, '')}${trimmed}`
   }
 
+  // Handle relative paths
   if (looksLikeSupabasePath && SUPABASE_URL) {
-    return `${SUPABASE_URL}/${trimmed.replace(/^\/+/, '')}`
+    const cleanPath = trimmed.replace(/^\/+/, '')
+    if (cleanPath.startsWith('storage/v1/')) {
+      return `${SUPABASE_URL}/${cleanPath}`
+    }
+    return `${SUPABASE_URL}/${cleanPath}`
   }
 
   return `${SITE_ORIGIN.replace(/\/$/, '')}/${trimmed.replace(/^\/+/, '')}`
@@ -119,6 +135,10 @@ export async function buildEventMetadata(eventCode: string): Promise<Metadata> {
     const description = event?.description?.trim() || DEFAULT_DESCRIPTION
     const imageUrl = normalizeImageUrl(event?.image_url || event?.banner_image_url || event?.banner_url) || DEFAULT_IMAGE
     const canonicalUrl = `${baseOrigin}/events/${encodeURIComponent(normalizedEventCode)}`
+
+    // Ensure image URL is absolute and properly formatted for social media
+    const absoluteImageUrl = imageUrl.startsWith('http') ? imageUrl : `${baseOrigin}${imageUrl.startsWith('/') ? '' : '/'}${imageUrl}`
+
     const metadata = {
       metadataBase,
       title,
@@ -127,16 +147,25 @@ export async function buildEventMetadata(eventCode: string): Promise<Metadata> {
         canonical: canonicalUrl,
       },
       openGraph: {
+        type: 'website',
+        siteName: 'BlakVote',
         title,
         description,
         url: canonicalUrl,
-        images: [{ url: imageUrl, alt: event?.title ? `${event.title} image` : 'BlakVote event image' }],
+        images: [
+          {
+            url: absoluteImageUrl,
+            width: 1200,
+            height: 630,
+            alt: event?.title ? `${event.title} event image` : 'BlakVote event image',
+          },
+        ],
       },
       twitter: {
         card: 'summary_large_image',
         title,
         description,
-        images: [{ url: imageUrl }],
+        images: [absoluteImageUrl],
       },
     }
 
@@ -154,16 +183,25 @@ export async function buildEventMetadata(eventCode: string): Promise<Metadata> {
         canonical: canonicalUrl,
       },
       openGraph: {
+        type: 'website',
+        siteName: 'BlakVote',
         title: DEFAULT_TITLE,
         description: DEFAULT_DESCRIPTION,
         url: canonicalUrl,
-        images: [{ url: DEFAULT_IMAGE, alt: 'BlakVote logo' }],
+        images: [
+          {
+            url: DEFAULT_IMAGE,
+            width: 1200,
+            height: 630,
+            alt: 'BlakVote logo',
+          },
+        ],
       },
       twitter: {
         card: 'summary_large_image',
         title: DEFAULT_TITLE,
         description: DEFAULT_DESCRIPTION,
-        images: [{ url: DEFAULT_IMAGE }],
+        images: [DEFAULT_IMAGE],
       },
     }
 
