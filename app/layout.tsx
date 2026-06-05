@@ -1,3 +1,4 @@
+import type { ReactNode } from "react"
 import type { Viewport } from "next"
 import { headers } from "next/headers"
 import { ToastProvider, ToastViewport } from "@/components/ui/toast"
@@ -26,7 +27,7 @@ export const viewport: Viewport = {
 export default async function RootLayout({
   children,
 }: {
-  children: React.ReactNode
+  children: ReactNode
 }) {
   const requestHeaders = await headers()
   const hostname = normalizeHost(
