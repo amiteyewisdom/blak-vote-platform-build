@@ -5,9 +5,10 @@ import { buildEventMetadata } from '@/lib/event-metadata'
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
 
-export async function generateMetadata({ params }: { params: { eventId: string } }): Promise<Metadata> {
+export async function generateMetadata({ params }: { params: Promise<{ eventId: string }> }): Promise<Metadata> {
   console.log('[META] layout.generateMetadata called', { params })
-  const eventId = String(params?.eventId || '').trim()
+  const resolvedParams = await params
+  const eventId = String(resolvedParams?.eventId || '').trim()
   console.log('[META] layout.generateMetadata eventId:', eventId)
 
   const metadata = await buildEventMetadata(eventId)
