@@ -17,9 +17,10 @@ export async function GET(request: Request) {
 
     const { searchParams } = new URL(request.url)
     const eventId = searchParams.get('eventId')
+    const eventCode = searchParams.get('eventCode')
 
-    if (!eventId) {
-      return NextResponse.json({ error: 'Missing eventId' }, { status: 400 })
+    if (!eventId && !eventCode) {
+      return NextResponse.json({ error: 'Missing eventId or eventCode' }, { status: 400 })
     }
 
     const supabase = createClient(
@@ -27,11 +28,24 @@ export async function GET(request: Request) {
       process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SECRET_KEY!
     )
 
-    const { data: event, error } = await supabase
-      .from('events')
-      .select('id, title, status, start_date, end_date, event_code, short_code, is_active')
-      .eq('id', eventId)
-      .single()
+    let event, error
+    if (eventId) {
+      const result = await supabase
+        .from('events')
+        .select('id, title, status, start_date, end_date, event_code, short_code, is_active, image_url, banner_url, banner_image_url, description')
+        .eq('id', eventId)
+        .single()
+      event = result.data
+      error = result.error
+    } else {
+      const result = await supabase
+        .from('events')
+        .select('id, title, status, start_date, end_date, event_code, short_code, is_active, image_url, banner_url, banner_image_url, description')
+        .ilike('event_code', eventCode!)
+        .single()
+      event = result.data
+      error = result.error
+    }
 
     if (error || !event) {
       return NextResponse.json({ error: 'Event not found', details: error?.message }, { status: 404 })
