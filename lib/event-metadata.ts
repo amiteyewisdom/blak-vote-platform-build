@@ -21,48 +21,68 @@ type EventMetadataRow = {
 
 function normalizeImageUrl(value: unknown): string | null {
   if (!value || typeof value !== 'string') {
+    console.log('[META] normalizeImageUrl: null or non-string value')
     return null
   }
 
   const trimmed = value.trim()
   if (!trimmed) {
+    console.log('[META] normalizeImageUrl: empty string after trim')
     return null
   }
 
+  console.log('[META] normalizeImageUrl input:', trimmed)
+
   // If already a full URL, return as-is
   if (/^https?:\/\//i.test(trimmed)) {
+    console.log('[META] normalizeImageUrl: already a full URL, returning as-is')
     return trimmed
   }
 
   const looksLikeSupabasePath = /storage\/v1|nominee-images|event-images|uploads\//i.test(trimmed)
+  console.log('[META] normalizeImageUrl: looksLikeSupabasePath:', looksLikeSupabasePath, 'SUPABASE_URL:', SUPABASE_URL)
 
   // Handle absolute paths
   if (/^\//.test(trimmed)) {
     if (looksLikeSupabasePath && SUPABASE_URL) {
       // For Supabase storage, ensure we use the public URL
       if (trimmed.includes('/storage/v1/object/public/')) {
-        return `${SUPABASE_URL}${trimmed}`
+        const result = `${SUPABASE_URL}${trimmed}`
+        console.log('[META] normalizeImageUrl: public path detected, result:', result)
+        return result
       }
       // Try to construct public URL for storage paths
       const publicPath = trimmed.replace(/^\/+/, '')
       if (publicPath.startsWith('storage/v1/')) {
-        return `${SUPABASE_URL}/${publicPath}`
+        const result = `${SUPABASE_URL}/${publicPath}`
+        console.log('[META] normalizeImageUrl: storage/v1 path, result:', result)
+        return result
       }
-      return `${SUPABASE_URL}${trimmed}`
+      const result = `${SUPABASE_URL}${trimmed}`
+      console.log('[META] normalizeImageUrl: other Supabase path, result:', result)
+      return result
     }
-    return `${SITE_ORIGIN.replace(/\/$/, '')}${trimmed}`
+    const result = `${SITE_ORIGIN.replace(/\/$/, '')}${trimmed}`
+    console.log('[META] normalizeImageUrl: absolute path with origin, result:', result)
+    return result
   }
 
   // Handle relative paths
   if (looksLikeSupabasePath && SUPABASE_URL) {
     const cleanPath = trimmed.replace(/^\/+/, '')
     if (cleanPath.startsWith('storage/v1/')) {
-      return `${SUPABASE_URL}/${cleanPath}`
+      const result = `${SUPABASE_URL}/${cleanPath}`
+      console.log('[META] normalizeImageUrl: relative storage path, result:', result)
+      return result
     }
-    return `${SUPABASE_URL}/${cleanPath}`
+    const result = `${SUPABASE_URL}/${cleanPath}`
+    console.log('[META] normalizeImageUrl: relative Supabase path, result:', result)
+    return result
   }
 
-  return `${SITE_ORIGIN.replace(/\/$/, '')}/${trimmed.replace(/^\/+/, '')}`
+  const result = `${SITE_ORIGIN.replace(/\/$/, '')}/${trimmed.replace(/^\/+/, '')}`
+  console.log('[META] normalizeImageUrl: relative path with origin, result:', result)
+  return result
 }
 
 export async function buildEventMetadata(eventCode: string): Promise<Metadata> {
@@ -167,9 +187,20 @@ export async function buildEventMetadata(eventCode: string): Promise<Metadata> {
         description,
         images: [absoluteImageUrl],
       },
+      // Additional meta tags for better social media support
+      other: {
+        'og:type': 'website',
+        'og:site_name': 'BlakVote',
+        'twitter:card': 'summary_large_image',
+      },
     }
 
-    console.log('[META] returning metadata:', { title: metadata.title, canonical: metadata.alternates?.canonical })
+    console.log('[META] returning metadata:', { 
+      title: metadata.title, 
+      canonical: metadata.alternates?.canonical,
+      ogImage: metadata.openGraph?.images?.[0]?.url,
+      twitterImage: metadata.twitter?.images?.[0]
+    })
     return metadata
   } catch (error) {
     console.error('[META] CAUGHT ERROR in buildEventMetadata:', error instanceof Error ? { message: error.message, stack: error.stack } : error)
@@ -202,6 +233,11 @@ export async function buildEventMetadata(eventCode: string): Promise<Metadata> {
         title: DEFAULT_TITLE,
         description: DEFAULT_DESCRIPTION,
         images: [DEFAULT_IMAGE],
+      },
+      other: {
+        'og:type': 'website',
+        'og:site_name': 'BlakVote',
+        'twitter:card': 'summary_large_image',
       },
     }
 

@@ -15,10 +15,20 @@ export async function generateMetadata({ params }: { params: { eventId: string }
     title: metadata.title,
     canonical: metadata.alternates?.canonical,
     openGraphUrl: metadata.openGraph?.url,
-    image: metadata.openGraph?.images?.[0]?.url,
   })
 
-  return metadata
+  // Ensure metadata is properly structured for social media crawlers
+  // Explicitly set all fields to override parent metadata
+  return {
+    ...metadata,
+    // Force override these critical fields
+    title: metadata.title,
+    description: metadata.description,
+    openGraph: metadata.openGraph,
+    twitter: metadata.twitter,
+    alternates: metadata.alternates,
+    metadataBase: metadata.metadataBase,
+  }
 }
 
 export default function EventSegmentLayout({ children }: { children: ReactNode }) {
