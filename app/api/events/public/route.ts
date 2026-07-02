@@ -220,6 +220,7 @@ async function fetchCandidatesForPublicEvent(supabase: any, eventId: string) {
   if (!withCategory.error) {
     const normalized = (withCategory.data ?? []).map((row: any) => ({
       id: row.id,
+      uuid_ref: row.uuid_ref ?? null,
       nominee_name: row.nominee_name ?? row.name ?? null,
       bio: row.bio ?? null,
       photo_url: resolveNomineePhotoUrl(row),
@@ -242,6 +243,7 @@ async function fetchCandidatesForPublicEvent(supabase: any, eventId: string) {
   if (!withoutCategory.error) {
     const normalized = (withoutCategory.data ?? []).map((row: any) => ({
       id: row.id,
+      uuid_ref: row.uuid_ref ?? null,
       nominee_name: row.nominee_name ?? row.name ?? null,
       bio: row.bio ?? null,
       photo_url: resolveNomineePhotoUrl(row),
