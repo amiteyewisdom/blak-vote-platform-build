@@ -336,18 +336,30 @@ async function verifyEventAndCandidate(
   const isEventUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(eventId)
 
   if (isEventUuid) {
-    // UUID passed but DB uses bigint - try to find by short_code
-    const { data: fallbackEvent, error: fallbackError } = await supabase
+    // UUID passed — DB id IS a UUID, so try direct id lookup first
+    const { data: byId, error: byIdError } = await supabase
       .from('events')
       .select('id, organizer_id, title, status, start_date, end_date, vote_price, cost_per_vote, voting_fee')
-      .eq('short_code', eventId)
+      .eq('id', eventId)
       .maybeSingle()
 
-    if (!fallbackError && fallbackEvent) {
-      event = fallbackEvent
+    if (!byIdError && byId) {
+      event = byId
       eventError = null
     } else {
-      eventError = fallbackError || new Error('Event not found')
+      // Fall back to short_code in case a short_code UUID was passed
+      const { data: byShortCode, error: byShortCodeError } = await supabase
+        .from('events')
+        .select('id, organizer_id, title, status, start_date, end_date, vote_price, cost_per_vote, voting_fee')
+        .eq('short_code', eventId)
+        .maybeSingle()
+
+      if (!byShortCodeError && byShortCode) {
+        event = byShortCode
+        eventError = null
+      } else {
+        eventError = byShortCodeError || byIdError || new Error('Event not found')
+      }
     }
   } else {
     // Direct bigint lookup - strict select first
