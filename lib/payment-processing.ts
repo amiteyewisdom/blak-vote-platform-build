@@ -773,7 +773,7 @@ async function ensureAdminRevenueCapturedForPayment(params: {
   const { data: eventRow } = await supabase
     .from('events')
     .select('title, organizer_id')
-    .eq('id', eventId)
+    .filter('id::text', 'eq', eventId)
     .maybeSingle()
 
   const feePercent = await resolveAdminRevenueFeePercent({
@@ -858,7 +858,7 @@ async function recordPaymentSplit(params: {
   const { data: eventRow } = await supabase
     .from('events')
     .select('title, organizer_id')
-    .eq('id', eventId)
+    .filter('id::text', 'eq', eventId)
     .maybeSingle()
 
   const organizerId: string | null = eventRow?.organizer_id || null
