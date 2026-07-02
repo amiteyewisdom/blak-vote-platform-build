@@ -583,6 +583,7 @@ async function createVoteFallback(params: {
   const rawCandidateId = String(payment.candidate_id || '')
   const voteEventId = UUID_RE.test(rawEventId) ? rawEventId : null
   const voteCandidateId = UUID_RE.test(rawCandidateId) ? rawCandidateId : null
+  console.log('[createVoteFallback] ids:', { rawEventId, rawCandidateId, voteEventId, voteCandidateId, reference: verificationReference })
 
   let insertedVoteId: string | null = null
   let insertError: { message?: string } | null = null
