@@ -339,7 +339,7 @@ async function verifyEventAndCandidate(
     // UUID passed — DB id IS a UUID, so try direct id lookup first
     const { data: byId, error: byIdError } = await supabase
       .from('events')
-      .select('id, organizer_id, title, status, start_date, end_date, vote_price, cost_per_vote, voting_fee')
+      .select('id, organizer_id, title, status, start_date, end_date, vote_price, cost_per_vote')
       .eq('id', eventId)
       .maybeSingle()
 
@@ -350,7 +350,7 @@ async function verifyEventAndCandidate(
       // Fall back to short_code in case a short_code UUID was passed
       const { data: byShortCode, error: byShortCodeError } = await supabase
         .from('events')
-        .select('id, organizer_id, title, status, start_date, end_date, vote_price, cost_per_vote, voting_fee')
+        .select('id, organizer_id, title, status, start_date, end_date, vote_price, cost_per_vote')
         .eq('short_code', eventId)
         .maybeSingle()
 
@@ -365,7 +365,7 @@ async function verifyEventAndCandidate(
     // Direct bigint lookup - strict select first
     const { data: strictEvent, error: strictEventError } = await supabase
       .from('events')
-      .select('id, organizer_id, title, status, start_date, end_date, vote_price, cost_per_vote, voting_fee')
+      .select('id, organizer_id, title, status, start_date, end_date, vote_price, cost_per_vote')
       .eq('id', eventId)
       .maybeSingle()
 
