@@ -578,8 +578,15 @@ async function createVoteFallback(params: {
 }) {
   const { supabase, payment, verificationReference, voterIdentifier, amountPaid, paymentMethod, voteSource } = params
 
+  const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+  const rawEventId = String(payment.event_id || '')
+  const rawCandidateId = String(payment.candidate_id || '')
+  // votes table columns are uuid type — only pass value if it looks like a UUID
+  const voteEventId = UUID_RE.test(rawEventId) ? rawEventId : undefined
+  const voteCandidateId = UUID_RE.test(rawCandidateId) ? rawCandidateId : undefined
+
   const basePayload = {
-    event_id: payment.event_id,
+    ...(voteEventId !== undefined ? { event_id: voteEventId } : {}),
     quantity: Number(payment.quantity || 1),
     voter_id: payment.user_id ?? null,
     voter_phone: voterIdentifier,
@@ -591,7 +598,7 @@ async function createVoteFallback(params: {
   const candidatePayloads = [
     {
       ...basePayload,
-      candidate_id: payment.candidate_id,
+      ...(voteCandidateId !== undefined ? { candidate_id: voteCandidateId } : {}),
       vote_source: voteSource,
       payment_method: paymentMethod,
       vote_type: amountPaid > 0 ? 'paid' : 'free',
@@ -599,7 +606,7 @@ async function createVoteFallback(params: {
     },
     {
       ...basePayload,
-      candidate_id: payment.candidate_id,
+      ...(voteCandidateId !== undefined ? { candidate_id: voteCandidateId } : {}),
     },
   ]
 
