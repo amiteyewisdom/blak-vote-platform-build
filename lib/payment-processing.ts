@@ -306,14 +306,28 @@ async function createPaymentRecordWithSchemaFallback(
     }
 
     const message = String(error?.message || '')
-    const missingColumnMatch = message.match(/Could not find the '([^']+)' column/)
 
+    const missingColumnMatch = message.match(/Could not find the '([^']+)' column/)
     if (missingColumnMatch) {
       const missingColumn = missingColumnMatch[1]
       if (Object.prototype.hasOwnProperty.call(mutablePayload, missingColumn)) {
         delete mutablePayload[missingColumn]
         continue
       }
+    }
+
+    // Handle UUID passed into a bigint column — null it out and retry
+    const bigintTypeMatch = message.match(/invalid input syntax for type bigint: "([^"]+)"/)
+    if (bigintTypeMatch) {
+      const badValue = bigintTypeMatch[1]
+      const fixedAny = Object.keys(mutablePayload).some((key) => {
+        if (mutablePayload[key] === badValue) {
+          mutablePayload[key] = null
+          return true
+        }
+        return false
+      })
+      if (fixedAny) continue
     }
 
     throw new Error(message || 'Unable to create payment record')
