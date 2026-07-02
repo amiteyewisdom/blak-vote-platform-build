@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { useParams } from 'next/navigation'
+import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, Vote } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
@@ -24,6 +24,7 @@ interface Candidate {
 
 export default function CandidateVotePage() {
   const params = useParams()
+  const router = useRouter()
   const eventCode = String(params?.eventId || '')
   const candidateId = String(params?.candidateId || '')
   const { toast } = useToast()
@@ -61,16 +62,17 @@ export default function CandidateVotePage() {
         )
 
         setEvent(payload.event)
-        setCandidate(
-          row
-            ? {
-                id: row.id,
-                nominee_name: row.nominee_name || row.name,
-                bio: row.bio || null,
-                photo_url: row.photo_url || null,
-              }
-            : null
-        )
+        if (!row) {
+          // Stale or invalid candidateId in URL — redirect to event page so user can pick a candidate
+          router.replace(`/events/${eventCode}`)
+          return
+        }
+        setCandidate({
+          id: row.id,
+          nominee_name: row.nominee_name || row.name,
+          bio: row.bio || null,
+          photo_url: row.photo_url || null,
+        })
 
         if (payload?.event?.id) {
           const pkgRes = await fetch(`/api/bulk-vote-packages?event_id=${encodeURIComponent(payload.event.id)}`)
