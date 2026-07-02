@@ -113,14 +113,8 @@ export default function CandidateVotePage() {
         body: JSON.stringify(paymentPayload),
       })
 
-      if (res.status === 404) {
-        res = await fetch('/api/payments/initialize', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(paymentPayload),
-        })
-      }
-
+      // Only fall through to the next endpoint if the route itself is missing (404).
+      // Do NOT retry on 429 (rate limit), 4xx errors, or 5xx — those are real errors.
       if (res.status === 404) {
         res = await fetch('/api/payments/create-checkout/initialize', {
           method: 'POST',
