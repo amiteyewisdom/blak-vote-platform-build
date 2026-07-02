@@ -1317,15 +1317,15 @@ export async function initializeVotePayment(input: PaymentInitInput | unknown) {
   const callbackUrl = `${getSiteBaseUrl()}/payment/success`
 
   const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-  const safeEventId = UUID_RE.test(String(eventId ?? '')) ? null : eventId
-  const safeCandidateId = UUID_RE.test(String(candidateId ?? '')) ? null : candidateId
-  const safeOrganizerId = organizerId && UUID_RE.test(String(organizerId)) ? null : organizerId
+  const eventIdIsUuid = UUID_RE.test(String(eventId ?? ''))
+  const candidateIdIsUuid = UUID_RE.test(String(candidateId ?? ''))
+  const organizerIdIsUuid = organizerId ? UUID_RE.test(String(organizerId)) : false
 
   const payment = await createPaymentRecordWithSchemaFallback(supabase, {
     reference,
-    event_id: safeEventId,
-    organizer_id: safeOrganizerId,
-    candidate_id: safeCandidateId,
+    ...(eventIdIsUuid ? {} : { event_id: eventId }),
+    ...(organizerIdIsUuid ? {} : { organizer_id: organizerId }),
+    ...(candidateIdIsUuid ? {} : { candidate_id: candidateId }),
     quantity,
     voter_email: email ?? null,
     voter_phone: phone ?? null,
