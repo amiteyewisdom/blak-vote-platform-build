@@ -15,9 +15,9 @@ export type PaymentMethod = 'paystack' | 'paypal' | 'momo' | 'manual' | 'stripe'
 const paystackInitSchema = z
   .object({
     paymentFor: z.enum(['vote', 'ticket']).optional(),
-    eventId: z.string().uuid().optional(),
-    candidateId: z.string().uuid().optional(),
-    nomineeId: z.string().uuid().optional(),
+    eventId: z.coerce.string().optional(),
+    candidateId: z.coerce.string().optional(),
+    nomineeId: z.coerce.string().optional(),
     quantity: z.coerce.number().int().min(1).max(1000).optional(),
     votes: z.coerce.number().int().min(1).max(1000).optional(),
     amount: z.coerce.number().positive().optional(),
