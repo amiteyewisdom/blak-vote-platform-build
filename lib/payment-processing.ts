@@ -388,8 +388,11 @@ async function verifyEventAndCandidate(
   }
 
   if (eventError || !event) {
+    console.error('[verifyEventAndCandidate] event not found:', { eventId, isEventUuid, error: eventError instanceof Error ? eventError.message : eventError })
     throw new Error('Event not found')
   }
+
+  console.log('[verifyEventAndCandidate] event found:', { eventId: event.id, status: event.status, start_date: event.start_date, end_date: event.end_date })
 
   if (!isVotingOpenStatus(event.status)) {
     throw new Error('Voting is not active for this event')
