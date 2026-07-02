@@ -396,19 +396,52 @@ async function verifyEventAndCandidate(
   const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(candidateId)
 
   if (isUuid) {
-    // UUID passed but DB uses bigint - try to find by uuid_ref, short_code, or voting_code
-    const { data: fallbackCandidate, error: fallbackError } = await supabase
+    // UUID passed — try uuid_ref first (requires migration), then short_code/voting_code
+    const { data: byUuidRef, error: uuidRefError } = await supabase
       .from('nominations')
       .select('id, nominee_name')
       .eq('event_id', eventId)
-      .or(`uuid_ref.eq.${candidateId},short_code.eq.${candidateId},voting_code.eq.${candidateId}`)
+      .eq('uuid_ref', candidateId)
       .maybeSingle()
 
-    if (!fallbackError && fallbackCandidate) {
-      candidate = fallbackCandidate
+    if (!uuidRefError && byUuidRef) {
+      candidate = byUuidRef
       candidateError = null
     } else {
-      candidateError = fallbackError || new Error('Candidate not found')
+      // uuid_ref column may not exist yet — try short_code / voting_code
+      const { data: byCode, error: byCodeError } = await supabase
+        .from('nominations')
+        .select('id, nominee_name')
+        .eq('event_id', eventId)
+        .or(`short_code.eq.${candidateId},voting_code.eq.${candidateId}`)
+        .maybeSingle()
+
+      if (!byCodeError && byCode) {
+        candidate = byCode
+        candidateError = null
+      } else {
+        // Last resort: fetch all nominations for this event and match candidateId by string
+        const { data: allNominees } = await supabase
+          .from('nominations')
+          .select('id, nominee_name, uuid_ref, short_code, voting_code')
+          .eq('event_id', eventId)
+          .in('status', ['candidate', 'approved'])
+
+        const matched = (allNominees ?? []).find(
+          (n: any) =>
+            String(n.uuid_ref) === candidateId ||
+            String(n.short_code) === candidateId ||
+            String(n.voting_code) === candidateId ||
+            String(n.id) === candidateId
+        )
+
+        if (matched) {
+          candidate = matched
+          candidateError = null
+        } else {
+          candidateError = new Error('Candidate not found')
+        }
+      }
     }
   } else {
     // Direct bigint lookup

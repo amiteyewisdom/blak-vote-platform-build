@@ -53,7 +53,12 @@ export default function CandidateVotePage() {
           return
         }
 
-        const row = (payload.candidates || []).find((item: any) => String(item.id) === candidateId)
+        const candidates = payload.candidates || []
+        const row = candidates.find((item: any) =>
+          String(item.id) === candidateId ||
+          String(item.short_code) === candidateId ||
+          String(item.voting_code) === candidateId
+        )
 
         setEvent(payload.event)
         setCandidate(
