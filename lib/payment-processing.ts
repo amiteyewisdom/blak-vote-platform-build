@@ -4,6 +4,7 @@ import { resolveEventVotePrice } from '@/lib/event-pricing'
 import { isVotingOpenStatus } from '@/lib/event-status'
 import { getSupabaseAdminClient } from '@/lib/server-security'
 import { logPaymentVerificationFailure, logVoteCreationFailure } from '@/lib/audit-logging'
+import { sendTicketConfirmationEmail, sendVoteConfirmationEmail } from '@/lib/email'
 
 const CANONICAL_PAID_PAYMENT_STATUS = 'paid'
 const CONFIRMED_PAYMENT_STATUSES = ['success', 'successful', 'succeeded', 'paid', 'completed', 'processed']
@@ -1794,15 +1795,44 @@ export async function processConfirmedPayment(verification: PaymentVerificationP
       })
       .eq('reference', verification.reference)
 
+    const ticketAmountPaid = Number(payment.amount || verification.amount || 0)
     await recordPaymentSplit({
       supabase,
       payment,
       verificationReference: verification.reference,
       paymentContext: 'ticket',
       voteId: null,
-      amountPaid: Number(payment.amount || verification.amount || 0),
+      amountPaid: ticketAmountPaid,
       processedAtIso: new Date().toISOString(),
     })
+
+    const issuedTicketCodes = finalIssuedTickets.map((t: { ticket_code: string }) => t.ticket_code)
+    const issuedTicketName = (finalIssuedTickets[0] as { ticket_code: string; name?: string | null }).name ?? null
+    const ticketBuyerEmail =
+      normalizeEmail((metadata?.buyerEmail ?? rawStoredMeta.buyerEmail) as string | undefined) ??
+      normalizeEmail(payment.voter_email) ??
+      null
+    const ticketBuyerName =
+      (metadata?.buyerName ?? rawStoredMeta.buyerName as string | undefined) ??
+      payment.voter_name ??
+      'Valued Customer'
+
+    if (ticketBuyerEmail) {
+      const { data: ticketEventRow } = await supabase
+        .from('events')
+        .select('title')
+        .eq('id', effectiveEventId)
+        .maybeSingle()
+      sendTicketConfirmationEmail({
+        to: ticketBuyerEmail,
+        buyerName: String(ticketBuyerName),
+        eventTitle: String(ticketEventRow?.title || 'Event'),
+        ticketName: issuedTicketName,
+        ticketCodes: issuedTicketCodes,
+        reference: verification.reference,
+        amount: ticketAmountPaid,
+      }).catch((e) => console.error('[email] ticket confirmation failed:', e))
+    }
 
     return {
       ok: true as const,
@@ -1812,7 +1842,8 @@ export async function processConfirmedPayment(verification: PaymentVerificationP
         resource: 'ticket',
         ticketId: finalIssuedTickets[0].ticket_id,
         ticketCode: finalIssuedTickets[0].ticket_code,
-        ticketCodes: finalIssuedTickets.map((issuedTicket: { ticket_code: string }) => issuedTicket.ticket_code),
+        ticketCodes: issuedTicketCodes,
+        ticketName: issuedTicketName,
         paymentId: payment.id,
         eventId: effectiveEventId,
       },
@@ -1924,6 +1955,32 @@ export async function processConfirmedPayment(verification: PaymentVerificationP
       amountPaid,
       processedAtIso,
     })
+
+    const voteEmail =
+      normalizeEmail(payment.voter_email) ??
+      normalizeEmail((metadata?.email ?? rawStoredMeta.email) as string | undefined) ??
+      null
+
+    if (voteEmail) {
+      const { data: voteEventRow } = await supabase
+        .from('events')
+        .select('title')
+        .eq('id', effectiveEventId)
+        .maybeSingle()
+      const { data: voteCandidateRow } = await supabase
+        .from('nominations')
+        .select('nominee_name')
+        .eq('id', effectiveCandidateId)
+        .maybeSingle()
+      sendVoteConfirmationEmail({
+        to: voteEmail,
+        eventTitle: String(voteEventRow?.title || 'Event'),
+        candidateName: String(voteCandidateRow?.nominee_name || 'your candidate'),
+        quantity: effectiveQuantity,
+        amount: amountPaid,
+        reference: verification.reference,
+      }).catch((e) => console.error('[email] vote confirmation failed:', e))
+    }
 
     return {
       ok: true as const,

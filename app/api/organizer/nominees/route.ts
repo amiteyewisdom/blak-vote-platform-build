@@ -115,7 +115,7 @@ export async function GET(request: Request) {
     if (ownershipError) return ownershipError
   }
 
-  const [{ data: categories, error: categoriesError }, { data: nominees, error: nomineesError }] = await Promise.all([
+  const [{ data: categories, error: categoriesError }, { data: nominees, error: nomineesError }, { data: eventRow }] = await Promise.all([
     adminSupabase
       .from('categories')
       .select('*')
@@ -126,18 +126,27 @@ export async function GET(request: Request) {
       .select('*')
       .eq('event_id', eventId)
       .order('created_at', { ascending: false }),
+    adminSupabase
+      .from('events')
+      .select('image_url, banner_url')
+      .eq('id', eventId)
+      .maybeSingle(),
   ])
 
   if (categoriesError || nomineesError) {
     return NextResponse.json({ error: categoriesError?.message || nomineesError?.message || 'Failed to load nominees' }, { status: 500 })
   }
 
+  const eventFallbackImage = (eventRow as Record<string, unknown> | null)?.image_url as string | null
+    ?? (eventRow as Record<string, unknown> | null)?.banner_url as string | null
+    ?? null
+
   const normalizedNominees = (nominees ?? []).map((nominee: Record<string, any>) => ({
     ...nominee,
     photo_url: resolveNomineePhotoUrl(nominee),
   }))
 
-  return NextResponse.json({ categories: categories ?? [], nominees: normalizedNominees })
+  return NextResponse.json({ categories: categories ?? [], nominees: normalizedNominees, eventFallbackImage })
 }
 
 export async function POST(request: Request) {

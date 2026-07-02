@@ -117,7 +117,7 @@ export default function PublicEventTicketsPage() {
 
     const timer = window.setInterval(() => {
       void loadTickets(eventId)
-    }, 45000)
+    }, 10000)
 
     return () => window.clearInterval(timer)
   }, [eventId])

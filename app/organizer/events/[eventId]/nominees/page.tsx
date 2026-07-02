@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
+import { compressImage } from '@/lib/image-compress'
 import { ArrowLeft, Eye, Pencil, Plus, Trash2, Upload, X } from 'lucide-react'
 import {
   Dialog,
@@ -21,6 +22,10 @@ export default function NomineesPage() {
 
   const [categories, setCategories] = useState<any[]>([])
   const [nominees, setNominees] = useState<any[]>([])
+  const [eventFallbackImage, setEventFallbackImage] = useState<string | null>(null)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
+  const [nomineeSearch, setNomineeSearch] = useState('')
   const [name, setName] = useState('')
   const [bio, setBio] = useState('')
   const [categoryId, setCategoryId] = useState('')
@@ -66,6 +71,7 @@ export default function NomineesPage() {
 
     setCategories(payload.categories || [])
     setNominees(payload.nominees || [])
+    setEventFallbackImage(payload.eventFallbackImage || null)
 
     setLoading(false)
   }
@@ -201,11 +207,14 @@ export default function NomineesPage() {
   }
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Delete this nominee?')) return
+    setConfirmDeleteId(null)
+    setDeletingId(id)
 
     const res = await fetch(`/api/organizer/nominees?id=${id}`, {
       method: 'DELETE',
     })
+
+    setDeletingId(null)
 
     if (res.ok) {
       setNominees(nominees.filter((n) => n.id !== id))
@@ -275,18 +284,28 @@ export default function NomineesPage() {
         formData.append('eventId', eventId)
         formData.append('image', editForm.imageFile)
 
-        const uploadRes = await fetch('/api/organizer/upload-nominee-image', {
-          method: 'POST',
-          body: formData,
-        })
+        const uploadController = new AbortController()
+        const uploadTimeoutId = setTimeout(() => uploadController.abort(), 60000)
 
-        const uploadPayload = await uploadRes.json().catch(() => ({}))
-
-        if (!uploadRes.ok || !uploadPayload?.imageUrl) {
-          throw new Error(uploadPayload?.error || 'Could not upload nominee image')
+        try {
+          const uploadRes = await fetch('/api/organizer/upload-nominee-image', {
+            method: 'POST',
+            body: formData,
+            signal: uploadController.signal,
+          })
+          clearTimeout(uploadTimeoutId)
+          const uploadPayload = await uploadRes.json().catch(() => ({}))
+          if (!uploadRes.ok || !uploadPayload?.imageUrl) {
+            throw new Error(uploadPayload?.error || 'Could not upload nominee image')
+          }
+          photoUrl = String(uploadPayload.imageUrl)
+        } catch (uploadErr: any) {
+          clearTimeout(uploadTimeoutId)
+          if (uploadErr.name === 'AbortError') {
+            throw new Error('Upload timed out. Please try again with a smaller image or better connection.')
+          }
+          throw uploadErr
         }
-
-        photoUrl = String(uploadPayload.imageUrl)
       }
 
       const res = await fetch('/api/organizer/nominees', {
@@ -327,11 +346,14 @@ export default function NomineesPage() {
       </div>
     )
 
+  const searchLower = nomineeSearch.trim().toLowerCase()
   const pendingPublicNominations = nominees.filter(
-    (nominee) => nominee.status === 'pending'
+    (nominee) => nominee.status === 'pending' &&
+      (!searchLower || (nominee.nominee_name || '').toLowerCase().includes(searchLower))
   )
   const activeNominees = nominees.filter(
-    (nominee) => nominee.status !== 'pending'
+    (nominee) => nominee.status !== 'pending' &&
+      (!searchLower || (nominee.nominee_name || '').toLowerCase().includes(searchLower))
   )
 
   return (
@@ -348,8 +370,18 @@ export default function NomineesPage() {
         </button>
 
         <h1 className="text-3xl md:text-4xl font-semibold">
-          Nominees
+          Nominees <span className="text-lg font-normal text-muted-foreground">({nominees.length})</span>
         </h1>
+        {nominees.length > 0 && (
+          <div className="mt-4">
+            <DSInput
+              placeholder="Search nominees by name…"
+              value={nomineeSearch}
+              onChange={(e: any) => setNomineeSearch(e.target.value)}
+              className="max-w-xs"
+            />
+          </div>
+        )}
       </div>
 
       {/* Create Card */}
@@ -402,10 +434,11 @@ export default function NomineesPage() {
               type="file"
               hidden
               accept="image/*"
-              onChange={(e) => {
+              onChange={async (e) => {
                 if (e.target.files?.[0]) {
-                  setImageFile(e.target.files[0])
-                  setPreview(URL.createObjectURL(e.target.files[0]))
+                  const compressed = await compressImage(e.target.files[0])
+                  setImageFile(compressed)
+                  setPreview(URL.createObjectURL(compressed))
                 }
               }}
             />
@@ -434,13 +467,17 @@ export default function NomineesPage() {
                 className="p-6 border-yellow-500/30 bg-yellow-500/5"
               >
                 <div className="flex items-center gap-4 mb-6">
-                  <div className="w-16 h-16 rounded-full overflow-hidden bg-surface">
-                    {nominee.photo_url ? (
+                  <div className="w-16 h-16 rounded-full overflow-hidden bg-surface flex-shrink-0">
+                    {nominee.photo_url || eventFallbackImage ? (
                       <img
-                        src={nominee.photo_url}
+                        src={nominee.photo_url || eventFallbackImage!}
                         className="w-full h-full object-cover"
                       />
-                    ) : null}
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-xl font-bold text-muted-foreground">
+                        {(nominee.nominee_name || '?').charAt(0).toUpperCase()}
+                      </div>
+                    )}
                   </div>
 
                   <div>
@@ -480,12 +517,30 @@ export default function NomineesPage() {
                     Decline
                   </button>
 
-                  <button
-                    onClick={() => handleDelete(nominee.id)}
-                    className="text-red-500 hover:text-red-400 ml-auto"
-                  >
-                    <Trash2 size={16} />
-                  </button>
+                  {confirmDeleteId === nominee.id ? (
+                    <div className="ml-auto flex items-center gap-1">
+                      <button
+                        onClick={() => handleDelete(nominee.id)}
+                        className="text-xs text-red-500 border border-red-500/40 px-2 py-1 rounded-lg"
+                      >
+                        Confirm
+                      </button>
+                      <button
+                        onClick={() => setConfirmDeleteId(null)}
+                        className="text-xs text-muted-foreground border border-border px-2 py-1 rounded-lg"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => setConfirmDeleteId(nominee.id)}
+                      disabled={deletingId === nominee.id}
+                      className="text-red-500 hover:text-red-400 ml-auto disabled:opacity-40"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  )}
                 </div>
               </DSCard>
             ))}
@@ -501,13 +556,17 @@ export default function NomineesPage() {
             className="p-6 hover:border-gold/30 transition"
           >
             <div className="flex items-center gap-4 mb-6">
-              <div className="w-16 h-16 rounded-full overflow-hidden bg-surface">
-                {nominee.photo_url ? (
+              <div className="w-16 h-16 rounded-full overflow-hidden bg-surface flex-shrink-0">
+                {nominee.photo_url || eventFallbackImage ? (
                   <img
-                    src={nominee.photo_url}
+                    src={nominee.photo_url || eventFallbackImage!}
                     className="w-full h-full object-cover"
                   />
-                ) : null}
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center text-xl font-bold text-muted-foreground">
+                    {(nominee.nominee_name || '?').charAt(0).toUpperCase()}
+                  </div>
+                )}
               </div>
 
               <div>
@@ -533,12 +592,30 @@ export default function NomineesPage() {
               >
                 <Pencil size={14} className="inline mr-1" /> Edit
               </button>
-              <button
-                onClick={() => handleDelete(nominee.id)}
-                className="text-red-500 hover:text-red-400 ml-auto"
-              >
-                <Trash2 size={16} />
-              </button>
+              {confirmDeleteId === nominee.id ? (
+                <div className="ml-auto flex items-center gap-1">
+                  <button
+                    onClick={() => handleDelete(nominee.id)}
+                    className="text-xs text-red-500 border border-red-500/40 px-2 py-1 rounded-lg"
+                  >
+                    Confirm
+                  </button>
+                  <button
+                    onClick={() => setConfirmDeleteId(null)}
+                    className="text-xs text-muted-foreground border border-border px-2 py-1 rounded-lg"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setConfirmDeleteId(nominee.id)}
+                  disabled={deletingId === nominee.id}
+                  className="text-red-500 hover:text-red-400 ml-auto disabled:opacity-40"
+                >
+                  {deletingId === nominee.id ? <span className="text-xs">Deleting…</span> : <Trash2 size={16} />}
+                </button>
+              )}
             </div>
           </DSCard>
         ))}
@@ -632,12 +709,13 @@ export default function NomineesPage() {
                     type="file"
                     hidden
                     accept="image/*"
-                    onChange={(e) => {
+                    onChange={async (e) => {
                       if (e.target.files?.[0]) {
+                        const compressed = await compressImage(e.target.files[0])
                         setEditForm({
                           ...editForm,
-                          imageFile: e.target.files[0],
-                          preview: URL.createObjectURL(e.target.files[0]),
+                          imageFile: compressed,
+                          preview: URL.createObjectURL(compressed),
                         })
                       }
                     }}

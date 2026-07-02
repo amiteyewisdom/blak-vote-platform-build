@@ -10,6 +10,7 @@ type ScanStatus = 'idle' | 'scanning' | 'loading' | 'valid' | 'used' | 'invalid'
 type ScanResult = {
   status: ScanStatus
   code?: string
+  ticketName?: string | null
   buyerName?: string | null
   buyerEmail?: string | null
   usedAt?: string | null
@@ -98,6 +99,7 @@ export default function TicketScanPage() {
         setResult({
           status: 'used',
           code,
+          ticketName: getPayload.ticket?.name ?? null,
           buyerName: getPayload.ticket?.buyer_name ?? null,
           buyerEmail: getPayload.ticket?.buyer_email ?? null,
           usedAt: getPayload.ticket?.used_at ?? null,
@@ -119,6 +121,7 @@ export default function TicketScanPage() {
       setResult({
         status: 'valid',
         code,
+        ticketName: payload.ticket?.name ?? null,
         buyerName: payload.ticket?.buyer_name ?? null,
         buyerEmail: payload.ticket?.buyer_email ?? null,
         message: 'Ticket validated and marked as used.',
@@ -334,6 +337,10 @@ export default function TicketScanPage() {
 
                 {result.code && (
                   <p className="font-mono text-sm tracking-wider">{result.code}</p>
+                )}
+
+                {result.ticketName && (
+                  <p className="text-sm">Category: <span className="font-semibold">{result.ticketName}</span></p>
                 )}
 
                 {result.message && (

@@ -6,6 +6,7 @@ import { supabase } from '@/lib/supabaseClient'
 import { resolveEventVotePrice } from '@/lib/event-pricing'
 import { isVotingOpenStatus } from '@/lib/event-status'
 import { getPublicUssdShortcode } from '@/lib/ussd-shortcode'
+import { compressImage } from '@/lib/image-compress'
 import { Vote, Users, Trophy, Heart, Calendar, Clock, Sparkles, ArrowLeft, ChevronDown, ChevronRight } from 'lucide-react'
 import Link from 'next/link'
 import { useToast } from '@/hooks/use-toast'
@@ -64,6 +65,32 @@ export default function EventPage() {
       fetchEventData()
     }
   }, [eventCode])
+
+  useEffect(() => {
+    if (!event?.id || !votingOpen) return
+    const pollVoteCounts = async () => {
+      try {
+        const res = await fetch(`/api/events/public?code=${eventCode}`, { cache: 'no-store' })
+        if (!res.ok) return
+        const data = await res.json()
+        if (data.candidates) {
+          setCandidates(
+            data.candidates.map((c: any) => ({
+              id: c.id,
+              nominee_name: c.nominee_name || c.name,
+              bio: c.bio,
+              photo_url: c.photo_url || null,
+              vote_count: c.vote_count || 0,
+              category_id: c.category_id || null,
+            }))
+          )
+        }
+      } catch {
+      }
+    }
+    const timer = window.setInterval(pollVoteCounts, 15000)
+    return () => window.clearInterval(timer)
+  }, [event?.id, votingOpen, eventCode])
 
   // Redirect ticketing events to their ticket purchase page
   useEffect(() => {
@@ -380,10 +407,31 @@ export default function EventPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-[hsl(var(--legacy-bg-base))] via-[hsl(var(--legacy-bg-surface))] to-[hsl(var(--legacy-bg-base))] flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-16 h-16 border-4 border-[hsl(var(--gold))]/30 border-t-[hsl(var(--gold))] rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-muted-foreground">Loading event details...</p>
+      <div className="min-h-screen bg-gradient-to-br from-[hsl(var(--legacy-bg-base))] via-[hsl(var(--legacy-bg-surface))] to-[hsl(var(--legacy-bg-base))] p-4 md:p-8">
+        <div className="max-w-4xl mx-auto space-y-6 animate-pulse">
+          {/* Banner skeleton */}
+          <div className="w-full h-52 md:h-72 rounded-2xl bg-white/8" />
+          {/* Title + meta skeleton */}
+          <div className="space-y-3 px-1">
+            <div className="h-8 w-2/3 rounded-lg bg-white/8" />
+            <div className="h-4 w-1/3 rounded-lg bg-white/5" />
+            <div className="flex gap-3 mt-2">
+              <div className="h-6 w-20 rounded-full bg-white/8" />
+              <div className="h-6 w-24 rounded-full bg-white/8" />
+            </div>
+          </div>
+          {/* Candidate card skeletons */}
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4">
+            {Array.from({ length: 8 }).map((_, i) => (
+              <div key={i} className="rounded-2xl bg-white/5 border border-white/8 overflow-hidden">
+                <div className="aspect-square bg-white/8" />
+                <div className="p-3 space-y-2">
+                  <div className="h-4 w-3/4 rounded bg-white/8" />
+                  <div className="h-3 w-1/2 rounded bg-white/5" />
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     )
@@ -804,10 +852,16 @@ export default function EventPage() {
                   type="file"
                   accept="image/*"
                   className="hidden"
-                  onChange={(e) => {
-                    const file = e.target.files?.[0] || null
-                    setNomineeImageFile(file)
-                    setNomineeImagePreview(file ? URL.createObjectURL(file) : null)
+                  onChange={async (e) => {
+                    const raw = e.target.files?.[0] || null
+                    if (raw) {
+                      const file = await compressImage(raw)
+                      setNomineeImageFile(file)
+                      setNomineeImagePreview(URL.createObjectURL(file))
+                    } else {
+                      setNomineeImageFile(null)
+                      setNomineeImagePreview(null)
+                    }
                   }}
                 />
               </label>

@@ -35,11 +35,22 @@ export async function GET() {
 
     const { data, error } = await adminSupabase
       .from('platform_settings')
-      .select('platform_name, max_events_per_organizer, platform_fee_percent, ticketing_commission_percent, enable_fraud_detection, require_email_verification, maintenance_mode')
+      .select('*')
       .limit(1)
       .maybeSingle()
 
     if (error) {
+      const msg = String(error.message || '').toLowerCase()
+      // If the table itself is missing or a column doesn't exist, return defaults rather than 500
+      if (
+        msg.includes('does not exist') ||
+        msg.includes('relation') ||
+        msg.includes('column') ||
+        msg.includes('undefined')
+      ) {
+        console.warn('[admin/settings] platform_settings schema issue, returning defaults:', error.message)
+        return NextResponse.json(DEFAULT_SETTINGS)
+      }
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
@@ -48,23 +59,23 @@ export async function GET() {
     }
 
     return NextResponse.json({
-      platformName: data.platform_name ?? DEFAULT_SETTINGS.platformName,
+      platformName: (data as any).platform_name ?? DEFAULT_SETTINGS.platformName,
       maxEventsPerOrganizer:
-        data.max_events_per_organizer != null
-          ? Number(data.max_events_per_organizer)
+        (data as any).max_events_per_organizer != null
+          ? Number((data as any).max_events_per_organizer)
           : DEFAULT_SETTINGS.maxEventsPerOrganizer,
       platformFeePercent:
-        data.platform_fee_percent != null
-          ? Number(data.platform_fee_percent)
+        (data as any).platform_fee_percent != null
+          ? Number((data as any).platform_fee_percent)
           : DEFAULT_SETTINGS.platformFeePercent,
       ticketingCommissionPercent:
-        data.ticketing_commission_percent != null
-          ? Number(data.ticketing_commission_percent)
+        (data as any).ticketing_commission_percent != null
+          ? Number((data as any).ticketing_commission_percent)
           : DEFAULT_SETTINGS.ticketingCommissionPercent,
-      enableFraudDetection: data.enable_fraud_detection ?? DEFAULT_SETTINGS.enableFraudDetection,
+      enableFraudDetection: (data as any).enable_fraud_detection ?? DEFAULT_SETTINGS.enableFraudDetection,
       requireEmailVerification:
-        data.require_email_verification ?? DEFAULT_SETTINGS.requireEmailVerification,
-      maintenanceMode: data.maintenance_mode ?? DEFAULT_SETTINGS.maintenanceMode,
+        (data as any).require_email_verification ?? DEFAULT_SETTINGS.requireEmailVerification,
+      maintenanceMode: (data as any).maintenance_mode ?? DEFAULT_SETTINGS.maintenanceMode,
     })
   } catch (error) {
     console.error('Admin settings GET error:', error)
@@ -132,9 +143,20 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: existingError.message }, { status: 500 })
     }
 
-    const result = existing
+    let result = existing
       ? await adminSupabase.from('platform_settings').update(payload).eq('id', existing.id)
       : await adminSupabase.from('platform_settings').insert(payload)
+
+    // If column doesn't exist yet in DB schema, retry without ticketing_commission_percent
+    if (result.error) {
+      const errMsg = String(result.error.message || '').toLowerCase()
+      if (errMsg.includes('ticketing_commission_percent') || errMsg.includes('column') || errMsg.includes('does not exist')) {
+        const { ticketing_commission_percent: _dropped, ...fallbackPayload } = payload
+        result = existing
+          ? await adminSupabase.from('platform_settings').update(fallbackPayload).eq('id', existing.id)
+          : await adminSupabase.from('platform_settings').insert(fallbackPayload)
+      }
+    }
 
     if (result.error) {
       return NextResponse.json({ error: result.error.message }, { status: 500 })

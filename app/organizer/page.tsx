@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { isLiveEventStatus } from '@/lib/event-status'
 import { Settings, Edit, Clock, Ticket } from 'lucide-react'
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts'
 
 interface VotingEvent {
   id: string
@@ -21,6 +22,8 @@ interface VotingEvent {
   end_date: string
   image_url?: string
   is_active?: boolean
+  nominee_count?: number
+  total_votes?: number
 }
 
 export default function OrganizerDashboard() {
@@ -116,6 +119,34 @@ export default function OrganizerDashboard() {
         <MetricCard title="Live Events" value={events.filter((e) => isLiveEventStatus(e.status)).length.toString()} />
       </div>
 
+      {/* Revenue Chart */}
+      {events.length > 0 && (
+        <div className="rounded-2xl border border-border/60 bg-surface-card p-5 sm:p-6">
+          <h2 className="text-sm font-semibold uppercase tracking-wider text-foreground/50 mb-4">Revenue by Event</h2>
+          <div className="w-full" style={{ height: 220 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart
+                data={events.map((e) => ({ name: e.title.length > 16 ? e.title.slice(0, 14) + '…' : e.title, revenue: Number(e.total_revenue || 0) }))}
+                margin={{ top: 4, right: 8, left: 0, bottom: 4 }}
+              >
+                <XAxis dataKey="name" tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} axisLine={false} tickLine={false} tickFormatter={(v) => `₵${v}`} width={52} />
+                <Tooltip
+                  contentStyle={{ background: 'hsl(var(--popover))', border: '1px solid hsl(var(--border))', borderRadius: 10, fontSize: 12 }}
+                  formatter={(value: number) => [`GHS ${Number(value).toFixed(2)}`, 'Revenue']}
+                  labelStyle={{ color: 'hsl(var(--foreground))' }}
+                />
+                <Bar dataKey="revenue" radius={[6, 6, 0, 0]}>
+                  {events.map((_, i) => (
+                    <Cell key={i} fill={`hsl(var(--gold))`} opacity={0.75 + (i % 4) * 0.06} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      )}
+
       {/* Empty State */}
       {events.length === 0 && (
         <div className="rounded-2xl border-2 border-dashed border-border bg-white/2 p-8 text-center sm:p-12 md:p-16">
@@ -204,6 +235,12 @@ export default function OrganizerDashboard() {
                     GHS {Number(event.cashed_out_amount || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </div>
                 </div>
+                {(event.event_type === 'voting' || !event.event_type) && (
+                  <div className="flex gap-4 pt-1 text-xs text-foreground/50">
+                    <span><span className="font-semibold text-foreground/70">{event.nominee_count ?? 0}</span> nominees</span>
+                    <span><span className="font-semibold text-foreground/70">{(event.total_votes ?? 0).toLocaleString()}</span> votes</span>
+                  </div>
+                )}
                 {event.platform_fee_percent > 0 && (
                   <div className="flex flex-wrap gap-1.5 pt-1">
                     {event.event_type === 'ticketing' ? (

@@ -26,6 +26,27 @@ export async function GET() {
     ])
 
     const { data: eventRows, error } = eventRowsResult
+    const eventIds = (eventRows || []).map((e: Record<string, unknown>) => String(e.id || ''))
+
+    const [nomineeCountRows, voteCountRows] = await Promise.all([
+      eventIds.length > 0
+        ? adminSupabase.from('nominations').select('event_id').in('event_id', eventIds)
+        : Promise.resolve({ data: [] }),
+      eventIds.length > 0
+        ? adminSupabase.from('votes').select('event_id, quantity').in('event_id', eventIds)
+        : Promise.resolve({ data: [] }),
+    ])
+
+    const nomineeCountMap = new Map<string, number>()
+    for (const row of nomineeCountRows.data || []) {
+      const key = String((row as any).event_id)
+      nomineeCountMap.set(key, (nomineeCountMap.get(key) || 0) + 1)
+    }
+    const voteCountMap = new Map<string, number>()
+    for (const row of voteCountRows.data || []) {
+      const key = String((row as any).event_id)
+      voteCountMap.set(key, (voteCountMap.get(key) || 0) + Number((row as any).quantity || 1))
+    }
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 })
@@ -60,6 +81,8 @@ export async function GET() {
         platform_fee_percent: feePercent,
         vote_platform_fee_deducted: Number(earning?.vote_platform_fee_deducted || 0),
         ticket_platform_fee_deducted: Number(earning?.ticket_platform_fee_deducted || 0),
+        nominee_count: nomineeCountMap.get(eventId) || 0,
+        total_votes: voteCountMap.get(eventId) || 0,
       }
     })
 

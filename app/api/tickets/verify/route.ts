@@ -73,7 +73,7 @@ export async function POST(req: NextRequest) {
 
     const { data: ticket, error: fetchError } = await supabase
       .from('tickets')
-      .select('id, ticket_kind, ticket_code, status, usage_status, payment_reference, used_at')
+      .select('id, ticket_kind, ticket_code, status, usage_status, payment_reference, used_at, name, buyer_name, buyer_email')
       .eq('ticket_code', code)
       .maybeSingle()
 
@@ -116,7 +116,12 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      ticket: updated,
+      ticket: {
+        ...updated,
+        name: ticket.name ?? null,
+        buyer_name: ticket.buyer_name ?? null,
+        buyer_email: ticket.buyer_email ?? null,
+      },
     })
   } catch {
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })

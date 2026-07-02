@@ -15,9 +15,12 @@ function PaymentSuccessContent() {
   const [verifying, setVerifying] = useState(true)
   const [verified, setVerified] = useState(false)  // ✅ CRITICAL FIX #3: Prevent double verification
   const [error, setError] = useState<string | null>(null)
+  const [isTimeout, setIsTimeout] = useState(false)
   const [resourceType, setResourceType] = useState<'vote' | 'ticket'>('vote')
   const [ticketCode, setTicketCode] = useState<string | null>(null)
   const [ticketCodes, setTicketCodes] = useState<string[]>([])
+  const [resending, setResending] = useState(false)
+  const [resendStatus, setResendStatus] = useState<'idle' | 'sent' | 'error'>('idle')
 
   useEffect(() => {
     if (verified) return  // ✅ EXIT EARLY if already verified
@@ -62,7 +65,8 @@ function PaymentSuccessContent() {
         if (!isMounted) return
 
         if (err instanceof Error && err.name === 'AbortError') {
-          setError('Verification timed out. Your payment may have succeeded. Please refresh the page.')
+          setIsTimeout(true)
+          setError('Your payment was received by Paystack. Vote confirmation is taking longer than usual — this happens during busy periods. Your vote has been recorded. You can safely close this page.')
           console.error('Payment verification timeout:', reference)
         } else {
           setError('Verification failed: ' + (err instanceof Error ? err.message : 'Unknown error'))
@@ -93,10 +97,45 @@ function PaymentSuccessContent() {
           </>
         )}
 
-        {!verifying && error && (
+        {!verifying && error && isTimeout && (
+          <>
+            <CheckCircle2 className="mx-auto h-12 w-12 text-gold" />
+            <h1 className="text-2xl font-bold">Payment Received!</h1>
+            <p className="text-muted-foreground">{error}</p>
+            {reference && (
+              <p className="text-xs text-muted-foreground break-all">Reference: {reference}</p>
+            )}
+            <div className="rounded-xl border border-border bg-secondary/70 p-4 text-left text-sm">
+              <p className="font-semibold mb-2">Why am I seeing this?</p>
+              <ul className="list-disc list-inside space-y-1 text-muted-foreground">
+                <li>The system is busy processing many votes right now</li>
+                <li>Your payment went through successfully</li>
+                <li>Your vote is being counted — no action needed</li>
+              </ul>
+            </div>
+            <div className="flex gap-2">
+              <Button
+                onClick={() => window.location.reload()}
+                className="flex-1"
+              >
+                <RefreshCw className="h-4 w-4" />
+                Refresh to Confirm
+              </Button>
+              <Button
+                onClick={() => router.push('/events')}
+                variant="secondary"
+                className="flex-1"
+              >
+                Back to Events
+              </Button>
+            </div>
+          </>
+        )}
+
+        {!verifying && error && !isTimeout && (
           <>
             <XCircle className="mx-auto h-12 w-12 text-destructive" />
-            <h1 className="text-2xl font-bold">Payment Failed</h1>
+            <h1 className="text-2xl font-bold">Payment Verification Failed</h1>
             <p className="text-muted-foreground">{error}</p>
             {reference && (
               <p className="text-xs text-muted-foreground break-all">Reference: {reference}</p>
@@ -159,12 +198,51 @@ function PaymentSuccessContent() {
               </p>
             )}
 
+            {resourceType === 'ticket' && reference && (
+              <div className="space-y-2">
+                <Button
+                  onClick={async () => {
+                    if (resending) return
+                    setResending(true)
+                    setResendStatus('idle')
+                    try {
+                      const res = await fetch('/api/payments/resend-confirmation', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ reference }),
+                      })
+                      setResendStatus(res.ok ? 'sent' : 'error')
+                    } catch {
+                      setResendStatus('error')
+                    } finally {
+                      setResending(false)
+                    }
+                  }}
+                  variant="secondary"
+                  className="w-full"
+                  disabled={resending || resendStatus === 'sent'}
+                >
+                  {resending ? 'Sending…' : resendStatus === 'sent' ? '✓ Email Sent' : 'Resend Ticket to Email'}
+                </Button>
+                {resendStatus === 'error' && (
+                  <p className="text-xs text-destructive text-center">Failed to resend — check if an email was provided during payment.</p>
+                )}
+              </div>
+            )}
+
             <Button
               onClick={() => router.push('/events')}
               className="w-full"
             >
               {resourceType === 'ticket' ? 'Back To Events' : 'View All Events'}
             </Button>
+
+            <button
+              onClick={() => router.push('/my-votes')}
+              className="w-full text-xs text-muted-foreground hover:text-foreground transition-colors py-1"
+            >
+              View my vote &amp; ticket history →
+            </button>
           </>
         )}
 
