@@ -329,26 +329,48 @@ async function verifyEventAndCandidate(
 ) {
   const supabase = getSupabaseAdminClient()
 
-  const { data: strictEvent, error: strictEventError } = await supabase
-    .from('events')
-    .select('id, organizer_id, title, status, start_date, end_date, vote_price, cost_per_vote, voting_fee')
-    .eq('id', eventId)
-    .maybeSingle()
+  // Defensive casting: eventId may be UUID (from code) or bigint (from DB schema)
+  // Try direct lookup first, then fallback to short_code if UUID fails
+  let event, eventError
+  const isEventUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(eventId)
 
-  let event = strictEvent
-  let eventError = strictEventError
-
-  // Some deployments still run older event schemas; retry with a broad select.
-  if (!event && eventError) {
+  if (isEventUuid) {
+    // UUID passed but DB uses bigint - try to find by short_code
     const { data: fallbackEvent, error: fallbackError } = await supabase
       .from('events')
-      .select('*')
-      .eq('id', eventId)
+      .select('id, organizer_id, title, status, start_date, end_date, vote_price, cost_per_vote, voting_fee')
+      .eq('short_code', eventId)
       .maybeSingle()
 
     if (!fallbackError && fallbackEvent) {
       event = fallbackEvent
       eventError = null
+    } else {
+      eventError = fallbackError || new Error('Event not found')
+    }
+  } else {
+    // Direct bigint lookup - strict select first
+    const { data: strictEvent, error: strictEventError } = await supabase
+      .from('events')
+      .select('id, organizer_id, title, status, start_date, end_date, vote_price, cost_per_vote, voting_fee')
+      .eq('id', eventId)
+      .maybeSingle()
+
+    event = strictEvent
+    eventError = strictEventError
+
+    // Some deployments still run older event schemas; retry with a broad select.
+    if (!event && eventError) {
+      const { data: fallbackEvent, error: fallbackError } = await supabase
+        .from('events')
+        .select('*')
+        .eq('id', eventId)
+        .maybeSingle()
+
+      if (!fallbackError && fallbackEvent) {
+        event = fallbackEvent
+        eventError = null
+      }
     }
   }
 
@@ -368,12 +390,38 @@ async function verifyEventAndCandidate(
     throw new Error('Voting has ended')
   }
 
-  const { data: candidate, error: candidateError } = await supabase
-    .from('nominations')
-    .select('id, nominee_name')
-    .eq('id', candidateId)
-    .eq('event_id', eventId)
-    .single()
+  // Defensive casting: candidateId may be UUID (from code) or bigint (from DB schema)
+  // Try direct lookup first, then fallback to short_code/voting_code if UUID fails
+  let candidate, candidateError
+  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(candidateId)
+
+  if (isUuid) {
+    // UUID passed but DB uses bigint - try to find by short_code or voting_code
+    const { data: fallbackCandidate, error: fallbackError } = await supabase
+      .from('nominations')
+      .select('id, nominee_name')
+      .eq('event_id', eventId)
+      .or(`short_code.eq.${candidateId},voting_code.eq.${candidateId}`)
+      .maybeSingle()
+
+    if (!fallbackError && fallbackCandidate) {
+      candidate = fallbackCandidate
+      candidateError = null
+    } else {
+      candidateError = fallbackError || new Error('Candidate not found')
+    }
+  } else {
+    // Direct bigint lookup
+    const { data: directCandidate, error: directError } = await supabase
+      .from('nominations')
+      .select('id, nominee_name')
+      .eq('id', candidateId)
+      .eq('event_id', eventId)
+      .maybeSingle()
+
+    candidate = directCandidate
+    candidateError = directError
+  }
 
   if (candidateError || !candidate) {
     throw new Error('Candidate not found for this event')
