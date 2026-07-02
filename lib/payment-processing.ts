@@ -670,15 +670,24 @@ async function createVoteFallback(params: {
   const candidateIdForCount = payment.candidate_id
   if (candidateIdForCount) {
     try {
-      const { data: voteSum } = await supabase
-        .from('votes').select('quantity').eq('candidate_id', candidateIdForCount)
-      const dbTotal = (voteSum ?? []).reduce(
-        (s: number, r: { quantity: number }) => s + Number(r.quantity || 1), 0
-      )
       const { data: nom } = await supabase
-        .from('nominations').select('id, vote_count').eq('id', candidateIdForCount).maybeSingle()
-      if (nom && dbTotal !== Number(nom.vote_count || 0)) {
-        await supabase.from('nominations').update({ vote_count: dbTotal }).eq('id', candidateIdForCount)
+        .from('nominations')
+        .select('id, uuid_ref, vote_count')
+        .or(`id.eq.${candidateIdForCount},uuid_ref.eq.${candidateIdForCount}`)
+        .maybeSingle()
+      if (nom) {
+        const nomId = String(nom.id)
+        const nomUuidRef = nom.uuid_ref ? String(nom.uuid_ref) : null
+        const { data: votesByIdArr } = await supabase.from('votes').select('quantity').eq('candidate_id', nomId)
+        const { data: votesByRefArr } = nomUuidRef
+          ? await supabase.from('votes').select('quantity').eq('candidate_id', nomUuidRef)
+          : { data: [] }
+        const dbTotal = [...(votesByIdArr ?? []), ...(votesByRefArr ?? [])].reduce(
+          (s: number, r: { quantity: number }) => s + Number(r.quantity || 1), 0
+        )
+        if (dbTotal !== Number(nom.vote_count || 0)) {
+          await supabase.from('nominations').update({ vote_count: dbTotal }).eq('id', nomId)
+        }
       }
     } catch { /* best-effort */ }
   }
