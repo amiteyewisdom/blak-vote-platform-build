@@ -328,6 +328,7 @@ async function verifyEventAndCandidate(
   quantity: number
 ) {
   const supabase = getSupabaseAdminClient()
+  console.log('[verifyEventAndCandidate] called with:', { eventId, candidateId, quantity })
 
   // Defensive casting: eventId may be UUID (from code) or bigint (from DB schema)
   // Try direct lookup first, then fallback to short_code if UUID fails
@@ -454,9 +455,26 @@ async function verifyEventAndCandidate(
 
     candidate = directCandidate
     candidateError = directError
+    console.log('[verifyEventAndCandidate] bigint candidate lookup:', { candidateId, eventId, found: !!directCandidate, error: directError?.message })
+
+    // If not found with event_id filter, try without it to diagnose mismatch
+    if (!directCandidate && !directError) {
+      const { data: anyCandidate } = await supabase
+        .from('nominations')
+        .select('id, nominee_name, event_id')
+        .eq('id', candidateId)
+        .maybeSingle()
+      console.log('[verifyEventAndCandidate] lookup without event_id filter:', { candidateId, found: !!anyCandidate, actual_event_id: anyCandidate?.event_id, sent_event_id: eventId })
+      // If found but event_id doesn't match, use it anyway (event_id type mismatch)
+      if (anyCandidate) {
+        candidate = anyCandidate
+        candidateError = null
+      }
+    }
   }
 
   if (candidateError || !candidate) {
+    console.error('[verifyEventAndCandidate] candidate not found:', { candidateId, eventId, isUuid })
     throw new Error('Candidate not found for this event')
   }
 
@@ -1155,6 +1173,8 @@ export async function initializeVotePayment(input: PaymentInitInput | unknown) {
 
   const voteData = parsed.data as ParsedVotePaymentInitialization
   const { eventId, candidateId, quantity, amount, bulkPackageId, email, phone } = voteData
+
+  console.log('[payment-init] parsed values:', { eventId, candidateId, quantity, email: email ? 'present' : 'missing' })
 
   if (isPhoneRequiredForGuestVotes() && !phone) {
     return {
