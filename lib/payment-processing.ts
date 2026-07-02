@@ -581,55 +581,84 @@ async function createVoteFallback(params: {
   const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
   const rawEventId = String(payment.event_id || '')
   const rawCandidateId = String(payment.candidate_id || '')
-  // votes table columns are uuid type — only pass value if it looks like a UUID
-  const voteEventId = UUID_RE.test(rawEventId) ? rawEventId : undefined
-  const voteCandidateId = UUID_RE.test(rawCandidateId) ? rawCandidateId : undefined
+  const voteEventId = UUID_RE.test(rawEventId) ? rawEventId : null
+  const voteCandidateId = UUID_RE.test(rawCandidateId) ? rawCandidateId : null
 
-  const basePayload = {
-    ...(voteEventId !== undefined ? { event_id: voteEventId } : {}),
-    quantity: Number(payment.quantity || 1),
-    voter_id: payment.user_id ?? null,
-    voter_phone: voterIdentifier,
-    transaction_id: verificationReference,
-    amount_paid: amountPaid,
-    created_at: new Date().toISOString(),
+  let insertedVoteId: string | null = null
+  let insertError: { message?: string } | null = null
+
+  // Try process_vote RPC first — accepts UUID params directly, avoids column type mismatch
+  if (voteEventId && voteCandidateId) {
+    const { error: rpcError } = await supabase.rpc('process_vote', {
+      p_event_id: voteEventId,
+      p_candidate_id: voteCandidateId,
+      p_quantity: Number(payment.quantity || 1),
+      p_voter_id: payment.user_id ?? null,
+      p_voter_phone: voterIdentifier ?? null,
+      p_vote_source: voteSource,
+      p_payment_method: paymentMethod,
+      p_transaction_id: verificationReference,
+      p_amount_paid: amountPaid,
+    })
+
+    if (!rpcError) {
+      // RPC succeeded — fetch the inserted vote id
+      const { data: inserted } = await supabase
+        .from('votes')
+        .select('id')
+        .eq('transaction_id', verificationReference)
+        .maybeSingle()
+      insertedVoteId = inserted?.id ?? `rpc-ok-${verificationReference}`
+      insertError = null
+    } else {
+      insertError = rpcError
+    }
   }
 
-  const candidatePayloads = [
-    {
-      ...basePayload,
-      ...(voteCandidateId !== undefined ? { candidate_id: voteCandidateId } : {}),
-      vote_source: voteSource,
-      payment_method: paymentMethod,
-      vote_type: amountPaid > 0 ? 'paid' : 'free',
-      is_manual: false,
-    },
-    {
-      ...basePayload,
-      ...(voteCandidateId !== undefined ? { candidate_id: voteCandidateId } : {}),
-    },
-  ]
-
-  let insertError: { message?: string } | null = null
-  let insertedVoteId: string | null = null
-
-  for (const payload of candidatePayloads) {
-    const insertAttempt = await supabase
-      .from('votes')
-      .insert(payload)
-      .select('id')
-      .maybeSingle()
-
-    if (!insertAttempt.error && insertAttempt.data?.id) {
-      insertedVoteId = insertAttempt.data.id
-      insertError = null
-      break
+  // Fallback: direct insert if RPC failed or IDs were not UUIDs
+  if (!insertedVoteId) {
+    const basePayload = {
+      ...(voteEventId ? { event_id: voteEventId } : {}),
+      quantity: Number(payment.quantity || 1),
+      voter_id: payment.user_id ?? null,
+      voter_phone: voterIdentifier,
+      transaction_id: verificationReference,
+      amount_paid: amountPaid,
+      created_at: new Date().toISOString(),
     }
 
-    insertError = insertAttempt.error
+    const candidatePayloads = [
+      {
+        ...basePayload,
+        ...(voteCandidateId ? { candidate_id: voteCandidateId } : {}),
+        vote_source: voteSource,
+        payment_method: paymentMethod,
+        vote_type: amountPaid > 0 ? 'paid' : 'free',
+        is_manual: false,
+      },
+      {
+        ...basePayload,
+        ...(voteCandidateId ? { candidate_id: voteCandidateId } : {}),
+      },
+    ]
+
+    for (const payload of candidatePayloads) {
+      const insertAttempt = await supabase
+        .from('votes')
+        .insert(payload)
+        .select('id')
+        .maybeSingle()
+
+      if (!insertAttempt.error && insertAttempt.data?.id) {
+        insertedVoteId = insertAttempt.data.id
+        insertError = null
+        break
+      }
+      insertError = insertAttempt.error
+    }
   }
 
-  if (insertError || !insertedVoteId) {
+  if (!insertedVoteId) {
     return {
       ok: false as const,
       error: insertError?.message || 'Unable to create vote record',
