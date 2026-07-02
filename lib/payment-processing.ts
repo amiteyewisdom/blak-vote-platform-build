@@ -440,7 +440,20 @@ async function verifyEventAndCandidate(
           candidate = matched
           candidateError = null
         } else {
-          candidateError = new Error('Candidate not found')
+          // UUID doesn't match any candidate — try direct id lookup (DB id IS a UUID)
+          const { data: byDirectId } = await supabase
+            .from('nominations')
+            .select('id, nominee_name')
+            .eq('id', candidateId)
+            .maybeSingle()
+
+          if (byDirectId) {
+            candidate = byDirectId
+            candidateError = null
+          } else {
+            console.error('[verifyEventAndCandidate] UUID not found anywhere, candidateId:', candidateId)
+            candidateError = new Error('Candidate not found')
+          }
         }
       }
     }
