@@ -396,12 +396,12 @@ async function verifyEventAndCandidate(
   const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(candidateId)
 
   if (isUuid) {
-    // UUID passed but DB uses bigint - try to find by short_code or voting_code
+    // UUID passed but DB uses bigint - try to find by uuid_ref, short_code, or voting_code
     const { data: fallbackCandidate, error: fallbackError } = await supabase
       .from('nominations')
       .select('id, nominee_name')
       .eq('event_id', eventId)
-      .or(`short_code.eq.${candidateId},voting_code.eq.${candidateId}`)
+      .or(`uuid_ref.eq.${candidateId},short_code.eq.${candidateId},voting_code.eq.${candidateId}`)
       .maybeSingle()
 
     if (!fallbackError && fallbackCandidate) {

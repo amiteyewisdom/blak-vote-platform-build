@@ -154,6 +154,7 @@ export async function POST(req: NextRequest) {
     }
 
     const nominatedByUserId = String(event.organizer_id || '').trim() || null
+    const uuidRef = crypto.randomUUID()
 
     const payloadVariants: Array<Record<string, unknown>> = [
       {
@@ -167,6 +168,7 @@ export async function POST(req: NextRequest) {
         nominated_by_user_id: nominatedByUserId,
         status: 'pending',
         vote_count: 0,
+        uuid_ref: uuidRef,
       },
       {
         event_id: event.id,
@@ -178,6 +180,7 @@ export async function POST(req: NextRequest) {
         photo_url: photoUrl,
         nominated_by_user_id: nominatedByUserId,
         status: 'pending',
+        uuid_ref: uuidRef,
       },
       {
         event_id: event.id,
@@ -190,6 +193,7 @@ export async function POST(req: NextRequest) {
         nominated_by_user_id: nominatedByUserId,
         status: 'pending',
         vote_count: 0,
+        uuid_ref: uuidRef,
       },
       {
         event_id: event.id,
@@ -201,6 +205,7 @@ export async function POST(req: NextRequest) {
         image_url: photoUrl,
         nominated_by_user_id: nominatedByUserId,
         status: 'pending',
+        uuid_ref: uuidRef,
       },
       {
         event_id: event.id,
@@ -213,6 +218,7 @@ export async function POST(req: NextRequest) {
         nominated_by_user_id: nominatedByUserId,
         status: 'pending',
         vote_count: 0,
+        uuid_ref: uuidRef,
       },
       {
         event_id: event.id,
@@ -224,6 +230,7 @@ export async function POST(req: NextRequest) {
         nominee_photo_url: photoUrl,
         nominated_by_user_id: nominatedByUserId,
         status: 'pending',
+        uuid_ref: uuidRef,
       },
       {
         event_id: event.id,
@@ -233,6 +240,7 @@ export async function POST(req: NextRequest) {
         nominee_photo_url: photoUrl,
         nominated_by_user_id: nominatedByUserId,
         status: 'pending',
+        uuid_ref: uuidRef,
       },
       {
         event_id: event.id,
@@ -242,6 +250,7 @@ export async function POST(req: NextRequest) {
         image_url: photoUrl,
         nominated_by_user_id: nominatedByUserId,
         status: 'pending',
+        uuid_ref: uuidRef,
       },
       {
         event_id: event.id,
@@ -251,17 +260,20 @@ export async function POST(req: NextRequest) {
         photo_url: photoUrl,
         nominated_by_user_id: nominatedByUserId,
         status: 'pending',
+        uuid_ref: uuidRef,
       },
       {
         event_id: event.id,
         nominee_name: nomineeName,
         category_id: categoryId,
         status: 'pending',
+        uuid_ref: uuidRef,
       },
       {
         event_id: event.id,
         nominee_name: nomineeName,
         status: 'pending',
+        uuid_ref: uuidRef,
       },
     ]
 
@@ -312,6 +324,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       success: true,
       code: insertCode,
+      uuidRef,
     })
   } catch (error: any) {
     return NextResponse.json(

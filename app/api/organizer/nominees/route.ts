@@ -184,6 +184,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Invalid category for event' }, { status: 400 })
   }
 
+  const uuidRef = crypto.randomUUID()
+
   const payloadVariants: Array<Record<string, unknown>> = [
     {
       event_id: eventId,
@@ -196,6 +198,7 @@ export async function POST(request: Request) {
       vote_count: 0,
       nominated_by_user_id: auth.userId,
       status: 'pending',
+      uuid_ref: uuidRef,
     },
     {
       event_id: eventId,
@@ -208,6 +211,7 @@ export async function POST(request: Request) {
       vote_count: 0,
       nominated_by_user_id: auth.userId,
       status: 'approved',
+      uuid_ref: uuidRef,
     },
     {
       event_id: eventId,
@@ -220,6 +224,7 @@ export async function POST(request: Request) {
       vote_count: 0,
       nominated_by_user_id: auth.userId,
       status: 'candidate',
+      uuid_ref: uuidRef,
     },
     {
       event_id: eventId,
@@ -232,6 +237,7 @@ export async function POST(request: Request) {
       vote_count: 0,
       nominated_by_user_id: auth.userId,
       status: 'approved',
+      uuid_ref: uuidRef,
     },
     {
       event_id: eventId,
@@ -244,6 +250,7 @@ export async function POST(request: Request) {
       vote_count: 0,
       nominated_by_user_id: auth.userId,
       status: 'pending',
+      uuid_ref: uuidRef,
     },
     {
       event_id: eventId,
@@ -256,6 +263,7 @@ export async function POST(request: Request) {
       vote_count: 0,
       nominated_by_user_id: auth.userId,
       status: 'candidate',
+      uuid_ref: uuidRef,
     },
     {
       event_id: eventId,
@@ -268,6 +276,7 @@ export async function POST(request: Request) {
       vote_count: 0,
       nominated_by_user_id: auth.userId,
       status: 'approved',
+      uuid_ref: uuidRef,
     },
     {
       event_id: eventId,
@@ -277,6 +286,7 @@ export async function POST(request: Request) {
       nominee_photo_url: photoUrl,
       nominated_by_user_id: auth.userId,
       status: 'pending',
+      uuid_ref: uuidRef,
     },
     {
       event_id: eventId,
@@ -286,6 +296,7 @@ export async function POST(request: Request) {
       nominee_photo_url: photoUrl,
       nominated_by_user_id: auth.userId,
       status: 'candidate',
+      uuid_ref: uuidRef,
     },
     {
       event_id: eventId,
@@ -295,6 +306,7 @@ export async function POST(request: Request) {
       nominee_photo_url: photoUrl,
       nominated_by_user_id: auth.userId,
       status: 'approved',
+      uuid_ref: uuidRef,
     },
     {
       event_id: eventId,
@@ -307,6 +319,7 @@ export async function POST(request: Request) {
       vote_count: 0,
       nominated_by_user_id: auth.userId,
       status: 'pending',
+      uuid_ref: uuidRef,
     },
     {
       event_id: eventId,
@@ -319,6 +332,7 @@ export async function POST(request: Request) {
       vote_count: 0,
       nominated_by_user_id: auth.userId,
       status: 'candidate',
+      uuid_ref: uuidRef,
     },
     {
       event_id: eventId,
@@ -331,6 +345,7 @@ export async function POST(request: Request) {
       vote_count: 0,
       nominated_by_user_id: auth.userId,
       status: 'approved',
+      uuid_ref: uuidRef,
     },
     {
       event_id: eventId,
@@ -340,6 +355,7 @@ export async function POST(request: Request) {
       image_url: photoUrl,
       nominated_by_user_id: auth.userId,
       status: 'pending',
+      uuid_ref: uuidRef,
     },
     {
       event_id: eventId,
@@ -349,6 +365,7 @@ export async function POST(request: Request) {
       image_url: photoUrl,
       nominated_by_user_id: auth.userId,
       status: 'candidate',
+      uuid_ref: uuidRef,
     },
     {
       event_id: eventId,
@@ -358,6 +375,7 @@ export async function POST(request: Request) {
       image_url: photoUrl,
       nominated_by_user_id: auth.userId,
       status: 'approved',
+      uuid_ref: uuidRef,
     },
     {
       event_id: eventId,
@@ -367,6 +385,7 @@ export async function POST(request: Request) {
       photo_url: photoUrl,
       nominated_by_user_id: auth.userId,
       status: 'pending',
+      uuid_ref: uuidRef,
     },
     {
       event_id: eventId,
@@ -376,6 +395,7 @@ export async function POST(request: Request) {
       photo_url: photoUrl,
       nominated_by_user_id: auth.userId,
       status: 'candidate',
+      uuid_ref: uuidRef,
     },
     {
       event_id: eventId,
@@ -385,24 +405,28 @@ export async function POST(request: Request) {
       photo_url: photoUrl,
       nominated_by_user_id: auth.userId,
       status: 'approved',
+      uuid_ref: uuidRef,
     },
     {
       event_id: eventId,
       nominee_name: nomineeName,
       category_id: categoryId,
       status: 'pending',
+      uuid_ref: uuidRef,
     },
     {
       event_id: eventId,
       nominee_name: nomineeName,
       category_id: categoryId,
       status: 'candidate',
+      uuid_ref: uuidRef,
     },
     {
       event_id: eventId,
       nominee_name: nomineeName,
       category_id: categoryId,
       status: 'approved',
+      uuid_ref: uuidRef,
     },
     {
       event_id: eventId,
@@ -410,6 +434,7 @@ export async function POST(request: Request) {
       category_id: categoryId,
       nominated_by_user_id: auth.userId,
       status: 'pending',
+      uuid_ref: uuidRef,
     },
     {
       event_id: eventId,
@@ -417,6 +442,7 @@ export async function POST(request: Request) {
       category_id: categoryId,
       nominated_by_user_id: auth.userId,
       status: 'candidate',
+      uuid_ref: uuidRef,
     },
     {
       event_id: eventId,
@@ -424,11 +450,13 @@ export async function POST(request: Request) {
       category_id: categoryId,
       nominated_by_user_id: auth.userId,
       status: 'approved',
+      uuid_ref: uuidRef,
     },
     {
       event_id: eventId,
       nominee_name: nomineeName,
       category_id: categoryId,
+      uuid_ref: uuidRef,
     },
   ]
 

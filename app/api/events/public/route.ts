@@ -118,7 +118,7 @@ export async function GET(request: NextRequest) {
         },
         categories: categoriesData ?? [],
         candidates: (candidates ?? []).map((candidate: PublicCandidate) => ({
-          id: candidate.id,
+          id: (candidate as any).uuid_ref || candidate.id,
           name: candidate.nominee_name,
           nominee_name: candidate.nominee_name,
           bio: candidate.bio,
@@ -187,7 +187,7 @@ export async function GET(request: NextRequest) {
           public_results_enabled: publicResultsEnabled,
         },
         nominees: (nominees ?? []).map((nominee: PublicCandidate) => ({
-          id: nominee.id,
+          id: (nominee as any).uuid_ref || nominee.id,
           name: nominee.nominee_name,
           bio: nominee.bio,
           photo_url: nominee.photo_url,
