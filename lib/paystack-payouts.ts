@@ -1,3 +1,5 @@
+import { getSupabaseAdminClient } from '@/lib/server-security'
+
 type SupabaseLike = {
   from: (table: string) => {
     update: (values: Record<string, unknown>) => {
@@ -334,22 +336,54 @@ export async function attemptPaystackOrganizerWithdrawalPayout(params: {
       }),
     })
 
-    await updateOrganizerWithdrawal(supabase, withdrawal.id, {
-      status: 'approved',
-      processed_at: null,
-      payout_failure_reason: null,
-      payout_metadata: {
-        trigger,
-        key_mode: keyMode,
-        payout_currency: payoutCurrency,
-        transfer_code: transferPayload.data?.transfer_code || null,
-        transfer_status: transferPayload.data?.status || null,
-      },
+    const transferCode = transferPayload.data?.transfer_code || null
+    const transferStatus = transferPayload.data?.status || null
+
+    // Mark withdrawal as processed atomically via RPC, which also updates the wallet.
+    const adminSupabase = getSupabaseAdminClient()
+    const { error: rpcError } = await adminSupabase.rpc('mark_organizer_withdrawal_processed', {
+      p_withdrawal_id: withdrawal.id,
+      p_payout_ref: payoutReference,
     })
 
+    if (rpcError) {
+      const msg = String(rpcError.message || '').toLowerCase()
+      const isMissing = msg.includes('function') || msg.includes('does not exist')
+
+      if (!isMissing) {
+        throw new Error(rpcError.message)
+      }
+
+      // RPC not available — fallback to direct update.
+      await updateOrganizerWithdrawal(adminSupabase, withdrawal.id, {
+        status: 'processed',
+        processed_at: new Date().toISOString(),
+        payout_failure_reason: null,
+        payout_metadata: {
+          trigger,
+          key_mode: keyMode,
+          payout_currency: payoutCurrency,
+          transfer_code: transferCode,
+          transfer_status: transferStatus,
+        },
+      })
+    } else {
+      // RPC succeeded; store the Paystack transfer metadata.
+      await updateOrganizerWithdrawal(adminSupabase, withdrawal.id, {
+        payout_failure_reason: null,
+        payout_metadata: {
+          trigger,
+          key_mode: keyMode,
+          payout_currency: payoutCurrency,
+          transfer_code: transferCode,
+          transfer_status: transferStatus,
+        },
+      })
+    }
+
     return {
-      status: 'approved',
-      message: 'Payout submitted to Paystack. Keep as processing until funds are received, then mark processed.',
+      status: 'processed',
+      message: 'Payout submitted to Paystack and marked as processed.',
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Paystack payout failed'

@@ -249,12 +249,6 @@ export default function VotesPage() {
     setValidationError(detailParts.join(' | ') || 'Failed to record manual vote.')
   }
 
-  const getVoteQuantity = (vote: any) => {
-    const rawQuantity = vote?.quantity ?? vote?.votes_count ?? vote?.count ?? 1
-    const normalized = Number(rawQuantity)
-    return Number.isFinite(normalized) && normalized > 0 ? normalized : 1
-  }
-
   const paidVotes = votes.filter((vote) => String(vote.vote_type || '').toLowerCase() === 'paid')
   const paidAuditEntries = auditLogs.filter((log) => String(log.vote_type || '').toLowerCase() === 'paid')
 
@@ -265,10 +259,6 @@ export default function VotesPage() {
   const totalRevenue = Math.max(totalRevenueFromVotes, Number(eventRevenue || 0))
 
   const paidTransactions = Math.max(paidVotes.length, paidAuditEntries.length)
-
-  const totalVotesFromRows = votes.reduce((sum, vote) => sum + getVoteQuantity(vote), 0)
-  const totalVotesFromAudit = auditLogs.reduce((sum, log) => sum + Number(log.quantity ?? 1), 0)
-  const totalVotes = Math.max(totalVotesFromRows, totalVotesFromAudit)
 
   if (loading)
     return (
@@ -293,17 +283,12 @@ export default function VotesPage() {
           Votes &amp; Revenue
         </h1>
         <p className="text-sm text-muted-foreground mt-2">
-          Vote totals include paid + manual votes. Revenue includes paid votes only.
+          Revenue includes paid votes only.
         </p>
       </div>
 
       {/* Metrics */}
-      <div className="grid md:grid-cols-3 gap-6">
-
-        <MetricCard
-          title="Total Votes (Paid + Manual)"
-          value={totalVotes.toString()}
-        />
+      <div className="grid md:grid-cols-2 gap-6">
 
         <MetricCard
           title="Revenue (Paid Only)"
@@ -340,7 +325,6 @@ export default function VotesPage() {
           <thead className="text-muted-foreground text-sm border-b border-border/70">
             <tr>
               <th className="p-4">Nominee</th>
-              <th className="p-4">Votes</th>
               <th className="p-4">Amount</th>
               <th className="p-4">Status</th>
               <th className="p-4">Date</th>
@@ -355,9 +339,6 @@ export default function VotesPage() {
               >
                 <td className="p-4">
                   {vote.nominations?.nominee_name}
-                </td>
-                <td className="p-4">
-                  {getVoteQuantity(vote)}
                 </td>
                 <td className="p-4">
                   GHS {Number(vote.amount_paid || 0).toFixed(2)}
