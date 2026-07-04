@@ -3,7 +3,7 @@ type SupabaseLike = {
   rpc: (name: string, args?: Record<string, unknown>) => Promise<{ data: any; error: any }>
 }
 
-const PAID_PAYMENT_STATUSES = ['processed', 'success', 'paid']
+const PAID_PAYMENT_STATUSES = ['processed', 'success', 'paid', 'completed']
 const REVENUE_PAYMENT_CONTEXTS = ['vote', 'ticket']
 
 function toNumber(value: unknown) {

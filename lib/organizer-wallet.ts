@@ -83,7 +83,7 @@ type OrganizerWithdrawalRow = {
 }
 
 const WITHDRAWAL_PENDING_STATUSES = ['pending', 'approved', 'pending_funds']
-const PAID_PAYMENT_STATUSES = ['processed', 'success', 'paid']
+const PAID_PAYMENT_STATUSES = ['processed', 'success', 'paid', 'completed']
 
 function toNumber(value: unknown) {
   const numericValue = Number(value)
