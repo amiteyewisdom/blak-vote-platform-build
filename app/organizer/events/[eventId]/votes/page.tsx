@@ -75,8 +75,6 @@ export default function VotesPage() {
     return label && String(label).trim().length > 0 ? label : `Nominee ${nominee.nominee_id.slice(0, 8)}`
   }
 
-  const paidVotes = votes.filter((vote) => String(vote.vote_type || '').toLowerCase() === 'paid')
-
   const categories = useMemo(() => {
     const map = new Map<string, string>()
     for (const n of nominees) {
@@ -386,14 +384,6 @@ export default function VotesPage() {
   }
 
   const paidTransactions = filteredPaidVotes.length
-  const totalPaidVotes = filteredPaidVotes.reduce(
-    (sum, v) => sum + (Number(v.quantity) || 1),
-    0
-  )
-  const totalManualVotes = filteredAuditLogs
-    .filter((log) => String(log.vote_type || '').toLowerCase() === 'manual')
-    .reduce((sum, log) => sum + (Number(log.quantity) || 1), 0)
-  const totalVotes = totalPaidVotes + totalManualVotes
 
   if (loading)
     return (
@@ -428,11 +418,6 @@ export default function VotesPage() {
         <MetricCard
           title="Paid Transactions"
           value={paidTransactions.toString()}
-        />
-
-        <MetricCard
-          title="Total Votes"
-          value={totalVotes.toString()}
         />
 
       </div>
