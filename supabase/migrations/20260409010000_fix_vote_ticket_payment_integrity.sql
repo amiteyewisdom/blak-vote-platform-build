@@ -338,7 +338,7 @@ BEGIN
       e.organizer_id,
       t.event_id::TEXT AS event_id,
       COUNT(*)::BIGINT AS paid_ticket_count,
-      COALESCE(SUM(CASE WHEN p.status IN ('processed', 'success') THEN p.amount ELSE 0 END), 0) AS ticket_revenue
+      COALESCE(SUM(CASE WHEN p.status IN ('processed', 'success', 'completed', 'paid') THEN p.amount ELSE 0 END), 0) AS ticket_revenue
     FROM tickets t
     JOIN events e ON e.id::TEXT = t.event_id::TEXT
     LEFT JOIN payments p ON p.reference = t.payment_reference AND p.payment_context = 'ticket'
@@ -573,11 +573,11 @@ RETURNS TRIGGER
 LANGUAGE plpgsql
 AS $$
 BEGIN
-  IF NEW.status NOT IN ('processed', 'success') THEN
+  IF NEW.status NOT IN ('processed', 'success', 'completed', 'paid') THEN
     RETURN NEW;
   END IF;
 
-  IF COALESCE(OLD.status, '') IN ('processed', 'success')
+  IF COALESCE(OLD.status, '') IN ('processed', 'success', 'completed', 'paid')
      AND COALESCE(OLD.vote_id, '') = COALESCE(NEW.vote_id, '')
      AND COALESCE(OLD.ticket_id, '') = COALESCE(NEW.ticket_id, '') THEN
     RETURN NEW;

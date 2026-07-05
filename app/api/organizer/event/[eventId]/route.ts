@@ -37,5 +37,18 @@ export async function GET(
     return NextResponse.json({ error: 'Event not found' }, { status: 404 })
   }
 
-  return NextResponse.json({ event: data })
+  const { data: earnings } = await adminSupabase
+    .from('organizer_event_earnings')
+    .select('net_earnings, total_revenue, platform_fee_deducted')
+    .eq('event_id', eventId)
+    .maybeSingle()
+
+  const event = {
+    ...data,
+    total_revenue: earnings?.net_earnings ?? data.total_revenue ?? 0,
+    gross_revenue: earnings?.total_revenue ?? data.total_revenue ?? 0,
+    platform_fee_deducted: earnings?.platform_fee_deducted ?? 0,
+  }
+
+  return NextResponse.json({ event })
 }
