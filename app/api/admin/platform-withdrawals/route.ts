@@ -178,21 +178,37 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Amount must be greater than zero' }, { status: 400 })
     }
 
-    const { data, error } = await adminSupabase.rpc('request_admin_platform_withdrawal', {
-      p_admin_user_id: auth.userId,
-      p_amount: amount,
-      p_method: method,
-      p_account_details: accountDetails,
-    })
+    const { data: availableBalance, error: balanceError } = await adminSupabase.rpc('get_admin_available_platform_balance')
+    console.log('[platform-withdrawal POST] amount:', amount, 'availableBalance:', availableBalance, 'balanceError:', balanceError?.message)
+
+    if (!balanceError && amount > Number(availableBalance ?? 0)) {
+      return NextResponse.json({
+        error: `Insufficient available platform balance. Available: GHS ${Number(availableBalance ?? 0).toFixed(2)}, Requested: GHS ${amount.toFixed(2)}`,
+      }, { status: 400 })
+    }
+
+    const { data, error } = await adminSupabase
+      .from('admin_platform_withdrawals')
+      .insert({
+        requested_by_user_id: auth.userId,
+        amount_requested: amount,
+        method: method || 'bank_transfer',
+        account_details: accountDetails,
+        status: 'pending',
+        requested_at: new Date().toISOString(),
+      })
+      .select('id, amount_requested, status, requested_at')
+      .single()
 
     if (error) {
+      console.error('[platform-withdrawal POST] insert error:', error.message)
       return NextResponse.json({ error: error.message }, { status: 400 })
     }
 
     return NextResponse.json(
       {
         success: true,
-        withdrawal: Array.isArray(data) && data.length > 0 ? data[0] : null,
+        withdrawal: data,
       },
       { status: 200 }
     )
