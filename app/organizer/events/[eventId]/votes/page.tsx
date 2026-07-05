@@ -76,6 +76,9 @@ export default function VotesPage() {
     return label && String(label).trim().length > 0 ? label : `Nominee ${nominee.nominee_id.slice(0, 8)}`
   }
 
+  const paidVotes = votes.filter((vote) => String(vote.vote_type || '').toLowerCase() === 'paid')
+  const paidAuditEntries = auditLogs.filter((log) => String(log.vote_type || '').toLowerCase() === 'paid')
+
   const categories = useMemo(() => {
     const map = new Map<string, string>()
     for (const n of nominees) {
@@ -117,16 +120,18 @@ export default function VotesPage() {
   }
 
   const filteredPaidVotes = useMemo(() => {
-    return paidVotes.filter((vote) => {
-      if (!matchesDateFilter(vote.created_at)) return false
-      if (filterNomineeId && vote.candidate_id !== filterNomineeId) return false
-      if (filterCategory) {
-        const nominee = getNomineeRow(vote.candidate_id)
-        if (nominee?.category_name !== filterCategory) return false
-      }
-      return true
-    })
-  }, [paidVotes, startDate, endDate, selectedYear, selectedMonth, filterNomineeId, filterCategory, nominees])
+    return votes
+      .filter((vote) => String(vote.vote_type || '').toLowerCase() === 'paid')
+      .filter((vote) => {
+        if (!matchesDateFilter(vote.created_at)) return false
+        if (filterNomineeId && vote.candidate_id !== filterNomineeId) return false
+        if (filterCategory) {
+          const nominee = getNomineeRow(vote.candidate_id)
+          if (nominee?.category_name !== filterCategory) return false
+        }
+        return true
+      })
+  }, [votes, startDate, endDate, selectedYear, selectedMonth, filterNomineeId, filterCategory, nominees])
 
   const filteredAuditLogs = useMemo(() => {
     return auditLogs.filter((log) => {
@@ -209,9 +214,6 @@ export default function VotesPage() {
     setFilterNomineeId('')
     setFilterCategory('')
   }
-
-  const paidVotes = votes.filter((vote) => String(vote.vote_type || '').toLowerCase() === 'paid')
-  const paidAuditEntries = auditLogs.filter((log) => String(log.vote_type || '').toLowerCase() === 'paid')
 
   const selectedNominee = nominees.find((nominee) => nominee.nominee_id === recordNomineeId)
   const isSubmitDisabled =
