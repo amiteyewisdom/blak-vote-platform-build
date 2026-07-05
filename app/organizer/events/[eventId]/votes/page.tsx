@@ -149,12 +149,14 @@ export default function VotesPage() {
   }
 
   const fetchVotes = async () => {
-    const votesRes = await fetch(`/api/organizer/event/${encodeURIComponent(eventId)}/votes`, {
+    const votesRes = await fetch(`/api/organizer/votes?eventId=${encodeURIComponent(eventId)}`, {
       cache: 'no-store',
     })
     if (votesRes.ok) {
       const payload = await votesRes.json().catch(() => ({}))
       setVotes(payload.votes || [])
+    } else {
+      console.error('[VotesPage] votes API error:', votesRes.status, await votesRes.text().catch(() => ''))
     }
     await loadNominees()
 
@@ -332,25 +334,29 @@ export default function VotesPage() {
           </thead>
 
           <tbody>
-            {paidVotes.map((vote) => (
-              <tr
-                key={vote.id}
-                className="border-b border-border/70 hover:bg-surface/70"
-              >
-                <td className="p-4">
-                  {vote.nominations?.nominee_name}
-                </td>
-                <td className="p-4">
-                  GHS {Number(vote.amount_paid || 0).toFixed(2)}
-                </td>
-                <td className="p-4">
-                  {vote.payment_status || vote.vote_type || 'paid'}
-                </td>
-                <td className="p-4 text-muted-foreground">
-                  {new Date(vote.created_at).toLocaleDateString()}
-                </td>
-              </tr>
-            ))}
+            {paidVotes.map((vote) => {
+              const nomineeRow = nominees.find((n) => n.nominee_id === vote.candidate_id)
+              const nomineeName = nomineeRow ? nomineeLabel(nomineeRow) : vote.candidate_id
+              return (
+                <tr
+                  key={vote.id}
+                  className="border-b border-border/70 hover:bg-surface/70"
+                >
+                  <td className="p-4">
+                    {nomineeName}
+                  </td>
+                  <td className="p-4">
+                    GHS {Number(vote.amount_paid || 0).toFixed(2)}
+                  </td>
+                  <td className="p-4">
+                    {vote.payment_status || vote.vote_type || 'paid'}
+                  </td>
+                  <td className="p-4 text-muted-foreground">
+                    {new Date(vote.created_at).toLocaleDateString()}
+                  </td>
+                </tr>
+              )
+            })}
           </tbody>
         </table>
 
