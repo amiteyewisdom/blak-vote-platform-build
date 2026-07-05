@@ -22,31 +22,42 @@ export async function GET(
 
   const adminSupabase = getSupabaseAdminClient()
 
-  const ownershipError = await ensureEventOwnedByOrganizer(adminSupabase, eventId, auth.userId)
-  if (ownershipError) {
-    return ownershipError
-  }
-
-  const { data, error } = await adminSupabase
+  let { data: eventData, error } = await adminSupabase
     .from('events')
     .select('*')
     .eq('id', eventId)
     .single()
 
-  if (error || !data) {
+  if (!eventData && !error) {
+    const { data: byCode } = await adminSupabase
+      .from('events')
+      .select('*')
+      .or(`short_code.eq.${eventId},event_code.eq.${eventId}`)
+      .single()
+    eventData = byCode || null
+  }
+
+  if (error || !eventData) {
     return NextResponse.json({ error: 'Event not found' }, { status: 404 })
+  }
+
+  const resolvedEventId = String(eventData.id || '')
+
+  const ownershipError = await ensureEventOwnedByOrganizer(adminSupabase, resolvedEventId, auth.userId)
+  if (ownershipError) {
+    return ownershipError
   }
 
   const { data: earnings } = await adminSupabase
     .from('organizer_event_earnings')
     .select('net_earnings, total_revenue, platform_fee_deducted')
-    .eq('event_id', eventId)
+    .eq('event_id', resolvedEventId)
     .maybeSingle()
 
   const event = {
-    ...data,
-    total_revenue: earnings?.net_earnings ?? data.total_revenue ?? 0,
-    gross_revenue: earnings?.total_revenue ?? data.total_revenue ?? 0,
+    ...eventData,
+    total_revenue: earnings?.net_earnings ?? eventData.total_revenue ?? 0,
+    gross_revenue: earnings?.total_revenue ?? eventData.total_revenue ?? 0,
     platform_fee_deducted: earnings?.platform_fee_deducted ?? 0,
   }
 
