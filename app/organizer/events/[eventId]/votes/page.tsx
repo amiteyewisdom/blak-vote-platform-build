@@ -548,7 +548,7 @@ export default function VotesPage() {
           <tbody>
             {filteredPaidVotes.map((vote) => {
               const nomineeRow = nominees.find((n) => n.nominee_id === vote.candidate_id)
-              const nomineeName = nomineeRow ? nomineeLabel(nomineeRow) : vote.candidate_id
+              const nomineeName = nomineeRow ? nomineeLabel(nomineeRow) : 'Unknown Nominee'
               return (
                 <tr
                   key={vote.id}
@@ -735,7 +735,7 @@ export default function VotesPage() {
               <tbody>
                 {filteredAuditLogs.map((row) => {
                   const nomineeRow = nominees.find((n) => n.nominee_id === row.candidate_id)
-                  const nomineeName = nomineeRow ? nomineeLabel(nomineeRow) : row.candidate_id
+                  const nomineeName = nomineeRow ? nomineeLabel(nomineeRow) : 'Unknown Nominee'
                   const actorLabel = row.added_by_name || row.added_by_email || row.added_by_user_id || 'System'
                   const voterLabel = row.voter_id || row.voter_phone || 'Guest / unknown'
                   return (
