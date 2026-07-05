@@ -76,7 +76,6 @@ export default function VotesPage() {
   }
 
   const paidVotes = votes.filter((vote) => String(vote.vote_type || '').toLowerCase() === 'paid')
-  const paidAuditEntries = auditLogs.filter((log) => String(log.vote_type || '').toLowerCase() === 'paid')
 
   const categories = useMemo(() => {
     const map = new Map<string, string>()
@@ -386,7 +385,15 @@ export default function VotesPage() {
     setValidationError(detailParts.join(' | ') || 'Failed to record manual vote.')
   }
 
-  const paidTransactions = Math.max(paidVotes.length, paidAuditEntries.length)
+  const paidTransactions = filteredPaidVotes.length
+  const totalPaidVotes = filteredPaidVotes.reduce(
+    (sum, v) => sum + (Number(v.quantity) || 1),
+    0
+  )
+  const totalManualVotes = filteredAuditLogs
+    .filter((log) => String(log.vote_type || '').toLowerCase() === 'manual')
+    .reduce((sum, log) => sum + (Number(log.quantity) || 1), 0)
+  const totalVotes = totalPaidVotes + totalManualVotes
 
   if (loading)
     return (
@@ -425,7 +432,7 @@ export default function VotesPage() {
 
         <MetricCard
           title="Total Votes"
-          value={filteredPaidVotes.length.toString()}
+          value={totalVotes.toString()}
         />
 
       </div>
