@@ -46,7 +46,6 @@ export default function VotesPage() {
 
   const [votes, setVotes] = useState<any[]>([])
   const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>([])
-  const [eventRevenue, setEventRevenue] = useState(0)
   const [nominees, setNominees] = useState<NomineeItem[]>([])
   const [loading, setLoading] = useState(true)
   const [tab, setTab] = useState<'transactions' | 'record'>('transactions')
@@ -177,7 +176,6 @@ export default function VotesPage() {
       return {
         nominee: nominee ? nomineeLabel(nominee) : vote.candidate_id || '',
         category: nominee?.category_name || '',
-        amount: Number(vote.amount_paid || 0).toFixed(2),
         status: vote.payment_status || vote.vote_type || 'paid',
         date: vote.created_at ? new Date(vote.created_at).toLocaleString() : '',
         quantity: vote.quantity ?? 1,
@@ -315,16 +313,6 @@ export default function VotesPage() {
       setAuditLogs(payload.logs || [])
     }
 
-    const eventRes = await fetch(`/api/organizer/event/${encodeURIComponent(eventId)}`, {
-      cache: 'no-store',
-    })
-    if (eventRes.ok) {
-      const payload = await eventRes.json().catch(() => ({}))
-      setEventRevenue(Number(payload?.event?.total_revenue || 0))
-    } else {
-      setEventRevenue(0)
-    }
-
     setLoading(false)
   }
 
@@ -398,12 +386,6 @@ export default function VotesPage() {
     setValidationError(detailParts.join(' | ') || 'Failed to record manual vote.')
   }
 
-  const totalRevenueFromVotes = paidVotes.reduce(
-    (sum, v) => sum + Number(v.amount_paid || 0),
-    0
-  )
-  const totalRevenue = Math.max(totalRevenueFromVotes, Number(eventRevenue || 0))
-
   const paidTransactions = Math.max(paidVotes.length, paidAuditEntries.length)
 
   if (loading)
@@ -426,10 +408,10 @@ export default function VotesPage() {
         </button>
 
         <h1 className="text-3xl font-semibold">
-          Votes &amp; Revenue
+          Votes &amp; Transactions
         </h1>
         <p className="text-sm text-muted-foreground mt-2">
-          Revenue includes paid votes only.
+          Track and manage votes and transactions.
         </p>
       </div>
 
@@ -437,13 +419,13 @@ export default function VotesPage() {
       <div className="grid md:grid-cols-2 gap-6">
 
         <MetricCard
-          title="Revenue (Paid Only)"
-          value={`GHS ${totalRevenue.toFixed(2)}`}
+          title="Paid Transactions"
+          value={paidTransactions.toString()}
         />
 
         <MetricCard
-          title="Paid Transactions"
-          value={paidTransactions.toString()}
+          title="Total Votes"
+          value={filteredPaidVotes.length.toString()}
         />
 
       </div>
@@ -566,7 +548,6 @@ export default function VotesPage() {
           <thead className="text-muted-foreground text-sm border-b border-border/70">
             <tr>
               <th className="p-4">Nominee</th>
-              <th className="p-4">Amount</th>
               <th className="p-4">Status</th>
               <th className="p-4">Date</th>
             </tr>
@@ -585,9 +566,6 @@ export default function VotesPage() {
                     {nomineeName}
                   </td>
                   <td className="p-4">
-                    GHS {Number(vote.amount_paid || 0).toFixed(2)}
-                  </td>
-                  <td className="p-4">
                     {vote.payment_status || vote.vote_type || 'paid'}
                   </td>
                   <td className="p-4 text-muted-foreground">
@@ -598,7 +576,7 @@ export default function VotesPage() {
             })}
             {filteredPaidVotes.length === 0 && (
               <tr>
-                <td colSpan={4} className="p-8 text-center text-muted-foreground">
+                <td colSpan={3} className="p-8 text-center text-muted-foreground">
                   No matching paid votes
                 </td>
               </tr>
@@ -614,7 +592,7 @@ export default function VotesPage() {
           <DSCard className="p-5 md:p-6">
             <h3 className="text-lg font-semibold mb-2">Manual Votes & Audit</h3>
             <p className="text-sm text-muted-foreground mb-4">
-              Add verified manual votes to nominee totals. Category is auto-linked from nominee when available. Revenue remains paid-votes only.
+              Add verified manual votes to nominee totals. Category is auto-linked from nominee when available.
             </p>
             <DSPrimaryButton
               onClick={() => {
