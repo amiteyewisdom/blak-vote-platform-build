@@ -22,18 +22,20 @@ export async function GET(
 
   const adminSupabase = getSupabaseAdminClient()
 
-  let { data: eventData, error: eventError } = await adminSupabase
+  const { data: eventById } = await adminSupabase
     .from('events')
     .select('id, organizer_id')
     .eq('id', eventId)
-    .single()
+    .maybeSingle()
 
-  if (!eventData && !eventError) {
+  let eventData = eventById
+
+  if (!eventData) {
     const { data: byCode } = await adminSupabase
       .from('events')
       .select('id, organizer_id')
       .or(`short_code.eq.${eventId},event_code.eq.${eventId}`)
-      .single()
+      .maybeSingle()
     eventData = byCode || null
   }
 
