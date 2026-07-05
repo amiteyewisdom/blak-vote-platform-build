@@ -161,7 +161,11 @@ export async function POST(request: NextRequest) {
       return auth.response
     }
 
-    await syncMissingAdminRevenueTransactions(adminSupabase)
+    try {
+      await syncMissingAdminRevenueTransactions(adminSupabase)
+    } catch (syncError) {
+      console.warn('Admin platform withdrawals POST sync warning:', syncError)
+    }
 
     const body = await request.json().catch(() => ({}))
     const amount = Number(body.amount)
