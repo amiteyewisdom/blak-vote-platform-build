@@ -1,8 +1,8 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { ArrowLeft, AlertTriangle, Check, ChevronsUpDown, Loader2 } from 'lucide-react'
+import { ArrowLeft, AlertTriangle, Check, ChevronsUpDown, Download, Loader2, X } from 'lucide-react'
 import { DSCard, DSInput, DSPrimaryButton, DSSecondaryButton } from '@/components/ui/design-system'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
@@ -63,10 +63,155 @@ export default function VotesPage() {
   const [validationError, setValidationError] = useState<string | null>(null)
   const [categoryUpdatePulse, setCategoryUpdatePulse] = useState(false)
 
+  // Filters
+  const [startDate, setStartDate] = useState('')
+  const [endDate, setEndDate] = useState('')
+  const [selectedYear, setSelectedYear] = useState('')
+  const [selectedMonth, setSelectedMonth] = useState('')
+  const [filterNomineeId, setFilterNomineeId] = useState('')
+  const [filterCategory, setFilterCategory] = useState('')
+
   const nomineeLabel = (nominee: NomineeItem) => {
     const label = nominee.nominee_name
     return label && String(label).trim().length > 0 ? label : `Nominee ${nominee.nominee_id.slice(0, 8)}`
   }
+
+  const categories = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const n of nominees) {
+      if (n.category_name) {
+        map.set(n.category_name, n.category_name)
+      }
+    }
+    return Array.from(map.values()).sort()
+  }, [nominees])
+
+  const years = useMemo(() => {
+    const set = new Set<string>()
+    for (const v of votes) {
+      const d = v.created_at || v.occurred_at
+      if (d) set.add(new Date(d).getFullYear().toString())
+    }
+    for (const l of auditLogs) {
+      if (l.occurred_at) set.add(new Date(l.occurred_at).getFullYear().toString())
+    }
+    return Array.from(set).sort((a, b) => Number(b) - Number(a))
+  }, [votes, auditLogs])
+
+  const matchesDateFilter = (dateString: string | null | undefined) => {
+    if (!dateString) return false
+    const d = new Date(dateString)
+    if (isNaN(d.getTime())) return false
+    const dateOnly = d.toISOString().split('T')[0]
+
+    if (startDate && dateOnly < startDate) return false
+    if (endDate && dateOnly > endDate) return false
+    if (selectedYear && d.getFullYear().toString() !== selectedYear) return false
+    if (selectedMonth && (d.getMonth() + 1).toString().padStart(2, '0') !== selectedMonth) return false
+    return true
+  }
+
+  const getNomineeRow = (candidateId: string | null | undefined) => {
+    if (!candidateId) return null
+    return nominees.find((n) => n.nominee_id === candidateId) || null
+  }
+
+  const filteredPaidVotes = useMemo(() => {
+    return paidVotes.filter((vote) => {
+      if (!matchesDateFilter(vote.created_at)) return false
+      if (filterNomineeId && vote.candidate_id !== filterNomineeId) return false
+      if (filterCategory) {
+        const nominee = getNomineeRow(vote.candidate_id)
+        if (nominee?.category_name !== filterCategory) return false
+      }
+      return true
+    })
+  }, [paidVotes, startDate, endDate, selectedYear, selectedMonth, filterNomineeId, filterCategory, nominees])
+
+  const filteredAuditLogs = useMemo(() => {
+    return auditLogs.filter((log) => {
+      if (!matchesDateFilter(log.occurred_at)) return false
+      if (filterNomineeId && log.candidate_id !== filterNomineeId) return false
+      if (filterCategory) {
+        const nominee = getNomineeRow(log.candidate_id)
+        if (nominee?.category_name !== filterCategory) return false
+      }
+      return true
+    })
+  }, [auditLogs, startDate, endDate, selectedYear, selectedMonth, filterNomineeId, filterCategory, nominees])
+
+  const exportCSV = (rows: any[], filename: string) => {
+    const headers = Object.keys(rows[0] || {})
+    const csv = [
+      headers.join(','),
+      ...rows.map((row) =>
+        headers
+          .map((h) => {
+            const val = row[h]
+            const str = val === null || val === undefined ? '' : String(val)
+            return `"${str.replace(/"/g, '""')}"`
+          })
+          .join(',')
+      ),
+    ].join('\n')
+
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = filename
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+  }
+
+  const exportPaidVotes = () => {
+    const rows = filteredPaidVotes.map((vote) => {
+      const nominee = getNomineeRow(vote.candidate_id)
+      return {
+        nominee: nominee ? nomineeLabel(nominee) : vote.candidate_id || '',
+        category: nominee?.category_name || '',
+        amount: Number(vote.amount_paid || 0).toFixed(2),
+        status: vote.payment_status || vote.vote_type || 'paid',
+        date: vote.created_at ? new Date(vote.created_at).toLocaleString() : '',
+        quantity: vote.quantity ?? 1,
+        voter_id: vote.voter_id || '',
+        voter_phone: vote.voter_phone || '',
+      }
+    })
+    exportCSV(rows, `paid-votes-${eventId}-${new Date().toISOString().split('T')[0]}.csv`)
+  }
+
+  const exportAuditLogs = () => {
+    const rows = filteredAuditLogs.map((log) => {
+      const nominee = getNomineeRow(log.candidate_id)
+      const actor = log.added_by_name || log.added_by_email || log.added_by_user_id || 'System'
+      return {
+        nominee: nominee ? nomineeLabel(nominee) : log.candidate_id || '',
+        category: nominee?.category_name || '',
+        quantity: log.quantity ?? 1,
+        type: log.vote_type,
+        voter: log.voter_id || log.voter_phone || 'Guest / unknown',
+        added_by: actor,
+        manual_mode: log.manual_entry_mode || '',
+        logged_at: log.occurred_at ? new Date(log.occurred_at).toLocaleString() : '',
+      }
+    })
+    exportCSV(rows, `audit-logs-${eventId}-${new Date().toISOString().split('T')[0]}.csv`)
+  }
+
+  const clearFilters = () => {
+    setStartDate('')
+    setEndDate('')
+    setSelectedYear('')
+    setSelectedMonth('')
+    setFilterNomineeId('')
+    setFilterCategory('')
+  }
+
+  const paidVotes = votes.filter((vote) => String(vote.vote_type || '').toLowerCase() === 'paid')
+  const paidAuditEntries = auditLogs.filter((log) => String(log.vote_type || '').toLowerCase() === 'paid')
 
   const selectedNominee = nominees.find((nominee) => nominee.nominee_id === recordNomineeId)
   const isSubmitDisabled =
@@ -251,9 +396,6 @@ export default function VotesPage() {
     setValidationError(detailParts.join(' | ') || 'Failed to record manual vote.')
   }
 
-  const paidVotes = votes.filter((vote) => String(vote.vote_type || '').toLowerCase() === 'paid')
-  const paidAuditEntries = auditLogs.filter((log) => String(log.vote_type || '').toLowerCase() === 'paid')
-
   const totalRevenueFromVotes = paidVotes.reduce(
     (sum, v) => sum + Number(v.amount_paid || 0),
     0
@@ -320,6 +462,101 @@ export default function VotesPage() {
         </button>
       </div>
 
+      {/* Filters */}
+      <DSCard className="p-4 md:p-5">
+        <div className="flex flex-col md:flex-row gap-4 flex-wrap items-end">
+          <div className="space-y-1">
+            <label className="text-xs text-muted-foreground">Start Date</label>
+            <input
+              type="date"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+              className="h-10 rounded-xl border border-input bg-card px-3 text-sm"
+            />
+          </div>
+          <div className="space-y-1">
+            <label className="text-xs text-muted-foreground">End Date</label>
+            <input
+              type="date"
+              value={endDate}
+              onChange={(e) => setEndDate(e.target.value)}
+              className="h-10 rounded-xl border border-input bg-card px-3 text-sm"
+            />
+          </div>
+          <div className="space-y-1">
+            <label className="text-xs text-muted-foreground">Year</label>
+            <select
+              value={selectedYear}
+              onChange={(e) => setSelectedYear(e.target.value)}
+              className="h-10 rounded-xl border border-input bg-card px-3 text-sm min-w-[100px]"
+            >
+              <option value="">All years</option>
+              {years.map((y) => (
+                <option key={y} value={y}>{y}</option>
+              ))}
+            </select>
+          </div>
+          <div className="space-y-1">
+            <label className="text-xs text-muted-foreground">Month</label>
+            <select
+              value={selectedMonth}
+              onChange={(e) => setSelectedMonth(e.target.value)}
+              className="h-10 rounded-xl border border-input bg-card px-3 text-sm min-w-[120px]"
+            >
+              <option value="">All months</option>
+              {Array.from({ length: 12 }, (_, i) => (i + 1).toString().padStart(2, '0')).map((m) => (
+                <option key={m} value={m}>
+                  {new Date(2024, Number(m) - 1, 1).toLocaleString('default', { month: 'long' })}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="space-y-1">
+            <label className="text-xs text-muted-foreground">Nominee</label>
+            <select
+              value={filterNomineeId}
+              onChange={(e) => setFilterNomineeId(e.target.value)}
+              className="h-10 rounded-xl border border-input bg-card px-3 text-sm min-w-[160px]"
+            >
+              <option value="">All nominees</option>
+              {nominees.map((n) => (
+                <option key={n.nominee_id} value={n.nominee_id}>{nomineeLabel(n)}</option>
+              ))}
+            </select>
+          </div>
+          <div className="space-y-1">
+            <label className="text-xs text-muted-foreground">Category</label>
+            <select
+              value={filterCategory}
+              onChange={(e) => setFilterCategory(e.target.value)}
+              className="h-10 rounded-xl border border-input bg-card px-3 text-sm min-w-[140px]"
+            >
+              <option value="">All categories</option>
+              {categories.map((c) => (
+                <option key={c} value={c}>{c}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="flex gap-2 ml-auto">
+            <DSSecondaryButton
+              onClick={clearFilters}
+              className="px-3 py-2 text-sm h-10"
+            >
+              <X size={16} className="mr-1" />
+              Clear
+            </DSSecondaryButton>
+            <DSPrimaryButton
+              onClick={tab === 'transactions' ? exportPaidVotes : exportAuditLogs}
+              className="px-3 py-2 text-sm h-10"
+            >
+              <Download size={16} className="mr-1" />
+              Export
+            </DSPrimaryButton>
+          </div>
+        </div>
+      </DSCard>
+
       {tab === 'transactions' && (
       <div className="overflow-x-auto bg-surface-card rounded-3xl border border-border/70">
 
@@ -334,7 +571,7 @@ export default function VotesPage() {
           </thead>
 
           <tbody>
-            {paidVotes.map((vote) => {
+            {filteredPaidVotes.map((vote) => {
               const nomineeRow = nominees.find((n) => n.nominee_id === vote.candidate_id)
               const nomineeName = nomineeRow ? nomineeLabel(nomineeRow) : vote.candidate_id
               return (
@@ -357,6 +594,13 @@ export default function VotesPage() {
                 </tr>
               )
             })}
+            {filteredPaidVotes.length === 0 && (
+              <tr>
+                <td colSpan={4} className="p-8 text-center text-muted-foreground">
+                  No matching paid votes
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
 
@@ -517,7 +761,7 @@ export default function VotesPage() {
                 </tr>
               </thead>
               <tbody>
-                {auditLogs.map((row) => {
+                {filteredAuditLogs.map((row) => {
                   const nomineeRow = nominees.find((n) => n.nominee_id === row.candidate_id)
                   const nomineeName = nomineeRow ? nomineeLabel(nomineeRow) : row.candidate_id
                   const actorLabel = row.added_by_name || row.added_by_email || row.added_by_user_id || 'System'
@@ -544,6 +788,13 @@ export default function VotesPage() {
                     </tr>
                   )
                 })}
+                {filteredAuditLogs.length === 0 && (
+                  <tr>
+                    <td colSpan={6} className="p-8 text-center text-muted-foreground">
+                      No matching audit logs
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>
