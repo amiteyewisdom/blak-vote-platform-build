@@ -190,6 +190,7 @@ export async function POST(request: NextRequest) {
     const { data, error } = await adminSupabase
       .from('admin_platform_withdrawals')
       .insert({
+        requested_by_admin_id: auth.userId,
         requested_by_user_id: auth.userId,
         amount_requested: amount,
         method: method || 'bank_transfer',
