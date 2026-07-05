@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { supabase } from '@/lib/supabaseClient'
 import { ArrowLeft, AlertTriangle, Check, ChevronsUpDown, Loader2 } from 'lucide-react'
 import { DSCard, DSInput, DSPrimaryButton, DSSecondaryButton } from '@/components/ui/design-system'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -150,25 +149,26 @@ export default function VotesPage() {
   }
 
   const fetchVotes = async () => {
-    const { data } = await supabase
-      .from('votes')
-      .select(`
-        *,
-        nominations(nominee_name)
-      `)
-      .eq('event_id', eventId)
-      .order('created_at', { ascending: false })
-
-    if (data) setVotes(data)
+    const votesRes = await fetch(`/api/organizer/event/${encodeURIComponent(eventId)}/votes`, {
+      cache: 'no-store',
+    })
+    if (votesRes.ok) {
+      const payload = await votesRes.json().catch(() => ({}))
+      setVotes(payload.votes || [])
+    }
     await loadNominees()
 
-    const auditRes = await fetch(`/api/votes/audit?eventId=${encodeURIComponent(eventId)}&limit=250`)
+    const auditRes = await fetch(`/api/votes/audit?eventId=${encodeURIComponent(eventId)}&limit=250`, {
+      cache: 'no-store',
+    })
     if (auditRes.ok) {
       const payload = await auditRes.json()
       setAuditLogs(payload.logs || [])
     }
 
-    const eventRes = await fetch(`/api/organizer/event/${encodeURIComponent(eventId)}`)
+    const eventRes = await fetch(`/api/organizer/event/${encodeURIComponent(eventId)}`, {
+      cache: 'no-store',
+    })
     if (eventRes.ok) {
       const payload = await eventRes.json().catch(() => ({}))
       setEventRevenue(Number(payload?.event?.total_revenue || 0))
