@@ -360,6 +360,13 @@ export default function AdminWithdrawalsPage() {
         description: "The payout request has been added to the platform withdrawal queue.",
       })
 
+      if (Number.isFinite(Number(payload?.availableBalance))) {
+        setPlatformSummary((current) => ({
+          ...current,
+          availableBalance: Number(payload.availableBalance),
+          pendingAmount: current.pendingAmount + amount,
+        }))
+      }
       setPlatformAmount("")
       setPlatformAccountDetails("")
       await fetchWithdrawals()

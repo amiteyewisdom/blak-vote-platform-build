@@ -20,6 +20,7 @@ export default function AdminUsersPage() {
   const [filteredUsers, setFilteredUsers] = useState<User[]>([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
+  const [roleFilter, setRoleFilter] = useState<'all' | 'organizer' | 'voter' | 'admin'>('all')
   const [processingId, setProcessingId] = useState<string | null>(null)
   const [voteFeeInputs, setVoteFeeInputs] = useState<Record<string, string>>({})
   const [ticketingFeeInputs, setTicketingFeeInputs] = useState<Record<string, string>>({})
@@ -39,7 +40,6 @@ export default function AdminUsersPage() {
 
     if (res.ok && Array.isArray(payload?.users)) {
       setUsers(payload.users)
-      setFilteredUsers(payload.users)
       setIsSuperAdmin(Boolean(payload?.isSuperAdmin))
     }
 
@@ -80,17 +80,18 @@ export default function AdminUsersPage() {
     setTicketingFeeInputs(nextTicketingInputs)
   }
 
-  const handleSearch = (term: string) => {
-    setSearchTerm(term)
+  useEffect(() => {
+    const normalizedSearch = searchTerm.trim().toLowerCase()
+    setFilteredUsers(users.filter((user) => {
+      const matchesRole = roleFilter === 'all' || user.role === roleFilter
+      const matchesSearch = !normalizedSearch ||
+        user.email.toLowerCase().includes(normalizedSearch) ||
+        user.first_name?.toLowerCase().includes(normalizedSearch) ||
+        user.last_name?.toLowerCase().includes(normalizedSearch)
 
-    const filtered = users.filter((user) =>
-      user.email.toLowerCase().includes(term.toLowerCase()) ||
-      user.first_name?.toLowerCase().includes(term.toLowerCase()) ||
-      user.last_name?.toLowerCase().includes(term.toLowerCase())
-    )
-
-    setFilteredUsers(filtered)
-  }
+      return matchesRole && Boolean(matchesSearch)
+    }))
+  }, [users, searchTerm, roleFilter])
 
   const updateRole = async (id: string, newRole: string) => {
     await fetch('/api/admin/users', {
@@ -305,15 +306,26 @@ export default function AdminUsersPage() {
 
       <DSCard className="p-6 space-y-6">
 
-        {/* Search */}
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <DSInput
-            placeholder="Search by email or name..."
-            value={searchTerm}
-            onChange={(e) => handleSearch(e.target.value)}
-            className="h-12 pl-10 rounded-2xl"
-          />
+        <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_180px]">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <DSInput
+              placeholder="Search by email or name..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="h-12 pl-10 rounded-2xl"
+            />
+          </div>
+          <DSSelect
+            value={roleFilter}
+            onChange={(e) => setRoleFilter(e.target.value as typeof roleFilter)}
+            className="h-12 rounded-2xl"
+          >
+            <option value="all">All roles</option>
+            <option value="organizer">Organizers</option>
+            <option value="voter">Voters</option>
+            <option value="admin">Admins / Super Admins</option>
+          </DSSelect>
         </div>
 
         {filteredUsers.length === 0 && (

@@ -210,6 +210,7 @@ export async function POST(request: NextRequest) {
       {
         success: true,
         withdrawal: data,
+        availableBalance: Math.max(Number(availableBalance ?? 0) - amount, 0),
       },
       { status: 200 }
     )

@@ -8,11 +8,13 @@ interface EventOption {
   title: string
   status: string | null
   created_at: string
+  organizer_name: string
 }
 
 interface NomineeOption {
   nominee_id: string
   nominee_name: string
+  category_name?: string | null
 }
 
 interface AuditLogEntry {
@@ -41,12 +43,25 @@ export default function AdminAuditPage() {
   const [logs, setLogs] = useState<AuditLogEntry[]>([])
   const [loading, setLoading] = useState(true)
   const [logsLoading, setLogsLoading] = useState(false)
+  const [selectedOrganizer, setSelectedOrganizer] = useState('')
   const [selectedEventId, setSelectedEventId] = useState('')
+  const [selectedCategory, setSelectedCategory] = useState('')
+  const [selectedNomineeId, setSelectedNomineeId] = useState('')
+  const [startDate, setStartDate] = useState('')
+  const [endDate, setEndDate] = useState('')
+  const [startTime, setStartTime] = useState('')
+  const [endTime, setEndTime] = useState('')
   const [selectedType, setSelectedType] = useState<'all' | 'free' | 'paid' | 'manual'>('all')
 
   useEffect(() => {
     void loadEvents()
   }, [])
+
+  useEffect(() => {
+    setSelectedEventId('')
+    setSelectedCategory('')
+    setSelectedNomineeId('')
+  }, [selectedOrganizer])
 
   useEffect(() => {
     if (!selectedEventId) {
@@ -71,12 +86,18 @@ export default function AdminAuditPage() {
         return
       }
 
-      const eventRows: EventOption[] = (payload.events ?? []).map((e: any) => ({
-        id: String(e.id),
-        title: String(e.title ?? e.id),
-        status: e.status ?? null,
-        created_at: e.created_at ?? '',
-      }))
+      const eventRows: EventOption[] = (payload.events ?? []).map((e: any) => {
+        const organizerName = `${e.profiles?.first_name || ''} ${e.profiles?.last_name || ''}`.trim()
+          || e.profiles?.email
+          || 'Unknown organizer'
+        return {
+          id: String(e.id),
+          title: String(e.title ?? e.id),
+          status: e.status ?? null,
+          created_at: e.created_at ?? '',
+          organizer_name: organizerName,
+        }
+      })
 
       setEvents(eventRows)
 
@@ -101,6 +122,8 @@ export default function AdminAuditPage() {
       }
 
       setNominees(payload.nominees ?? [])
+      setSelectedCategory('')
+      setSelectedNomineeId('')
     } catch (err) {
       console.error('Failed to load nominees', err)
     }
@@ -123,9 +146,32 @@ export default function AdminAuditPage() {
     setLogsLoading(false)
   }
 
-  const filteredLogs = selectedType === 'all'
-    ? logs
-    : logs.filter((log) => log.vote_type === selectedType)
+  const organizers = Array.from(new Set(events.map((event) => event.organizer_name))).sort()
+  const availableEvents = selectedOrganizer
+    ? events.filter((event) => event.organizer_name === selectedOrganizer)
+    : events
+  const categories = Array.from(new Set(nominees.map((nominee) => nominee.category_name).filter((name): name is string => Boolean(name)))).sort()
+  const filteredNominees = selectedCategory
+    ? nominees.filter((nominee) => nominee.category_name === selectedCategory)
+    : nominees
+
+  const filteredLogs = logs.filter((log) => {
+    if (selectedType !== 'all' && log.vote_type !== selectedType) return false
+    if (selectedNomineeId && log.candidate_id !== selectedNomineeId) return false
+
+    const nominee = nominees.find((item) => item.nominee_id === log.candidate_id)
+    if (selectedCategory && nominee?.category_name !== selectedCategory) return false
+
+    const occurredAt = new Date(log.occurred_at)
+    if (Number.isNaN(occurredAt.getTime())) return false
+    const dateOnly = occurredAt.toISOString().slice(0, 10)
+    const timeOnly = occurredAt.toTimeString().slice(0, 5)
+    if (startDate && dateOnly < startDate) return false
+    if (endDate && dateOnly > endDate) return false
+    if (startTime && timeOnly < startTime) return false
+    if (endTime && timeOnly > endTime) return false
+    return true
+  })
 
   const totalVotes = filteredLogs.reduce((sum, log) => sum + Number(log.quantity ?? 1), 0)
   const manualVotes = filteredLogs
@@ -162,19 +208,53 @@ export default function AdminAuditPage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-[2fr,1fr] gap-4">
         <div className="space-y-4 rounded-2xl border border-border bg-card p-5">
-          <div>
-            <label className="mb-2 block text-xs uppercase tracking-[0.2em] text-muted-foreground">Event</label>
-            <DSSelect
-              value={selectedEventId}
-              onChange={(event) => setSelectedEventId(event.target.value)}
-              className="w-full"
-            >
-              {events.map((event) => (
-                <option key={event.id} value={event.id}>
-                  {event.title} {event.status ? `(${event.status})` : ''}
-                </option>
-              ))}
-            </DSSelect>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <label className="mb-2 block text-xs uppercase tracking-[0.2em] text-muted-foreground">Organizer</label>
+              <DSSelect value={selectedOrganizer} onChange={(event) => setSelectedOrganizer(event.target.value)} className="w-full">
+                <option value="">All organizers</option>
+                {organizers.map((organizer) => <option key={organizer} value={organizer}>{organizer}</option>)}
+              </DSSelect>
+            </div>
+            <div>
+              <label className="mb-2 block text-xs uppercase tracking-[0.2em] text-muted-foreground">Event</label>
+              <DSSelect value={selectedEventId} onChange={(event) => setSelectedEventId(event.target.value)} className="w-full">
+                <option value="">Select an event</option>
+                {availableEvents.map((event) => (
+                  <option key={event.id} value={event.id}>{event.title} {event.status ? `(${event.status})` : ''}</option>
+                ))}
+              </DSSelect>
+            </div>
+            <div>
+              <label className="mb-2 block text-xs uppercase tracking-[0.2em] text-muted-foreground">Category</label>
+              <DSSelect value={selectedCategory} onChange={(event) => setSelectedCategory(event.target.value)} className="w-full" disabled={!selectedEventId}>
+                <option value="">All categories</option>
+                {categories.map((category) => <option key={category} value={category}>{category}</option>)}
+              </DSSelect>
+            </div>
+            <div>
+              <label className="mb-2 block text-xs uppercase tracking-[0.2em] text-muted-foreground">Nominee</label>
+              <DSSelect value={selectedNomineeId} onChange={(event) => setSelectedNomineeId(event.target.value)} className="w-full" disabled={!selectedEventId}>
+                <option value="">All nominees</option>
+                {filteredNominees.map((nominee) => <option key={nominee.nominee_id} value={nominee.nominee_id}>{nominee.nominee_name}</option>)}
+              </DSSelect>
+            </div>
+            <div>
+              <label className="mb-2 block text-xs uppercase tracking-[0.2em] text-muted-foreground">From date</label>
+              <input type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} className="h-11 w-full rounded-xl border border-input bg-card px-4 text-sm" disabled={!selectedEventId} />
+            </div>
+            <div>
+              <label className="mb-2 block text-xs uppercase tracking-[0.2em] text-muted-foreground">To date</label>
+              <input type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} className="h-11 w-full rounded-xl border border-input bg-card px-4 text-sm" disabled={!selectedEventId} />
+            </div>
+            <div>
+              <label className="mb-2 block text-xs uppercase tracking-[0.2em] text-muted-foreground">From time</label>
+              <input type="time" value={startTime} onChange={(event) => setStartTime(event.target.value)} className="h-11 w-full rounded-xl border border-input bg-card px-4 text-sm" disabled={!selectedEventId} />
+            </div>
+            <div>
+              <label className="mb-2 block text-xs uppercase tracking-[0.2em] text-muted-foreground">To time</label>
+              <input type="time" value={endTime} onChange={(event) => setEndTime(event.target.value)} className="h-11 w-full rounded-xl border border-input bg-card px-4 text-sm" disabled={!selectedEventId} />
+            </div>
           </div>
 
           <div>

@@ -21,6 +21,19 @@ type OrganizerRow = {
   user_id?: string | null
 }
 
+type EventEarningsRow = {
+  event_id: string
+  total_revenue?: number | string | null
+  net_earnings?: number | string | null
+  withdrawn_vote_revenue?: number | string | null
+  withdrawn_ticket_revenue?: number | string | null
+}
+
+function toNumber(value: unknown) {
+  const numberValue = Number(value)
+  return Number.isFinite(numberValue) ? numberValue : 0
+}
+
 function getAdminSupabase() {
   const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SECRET_KEY
@@ -68,7 +81,22 @@ export async function GET() {
   }
 
   const events = (eventRows || []) as EventRow[]
+  const eventIds = events.map((event) => event.id).filter(Boolean)
   const organizerRefs = Array.from(new Set(events.map((event) => event.organizer_id).filter((id): id is string => Boolean(id))))
+
+  const eventEarningsByEventId = new Map<string, EventEarningsRow>()
+  if (eventIds.length > 0) {
+    const { data: earningsRows, error: earningsError } = await adminSupabase
+      .from('organizer_event_earnings')
+      .select('event_id,total_revenue,net_earnings,withdrawn_vote_revenue,withdrawn_ticket_revenue')
+      .in('event_id', eventIds)
+
+    if (!earningsError) {
+      for (const row of (earningsRows || []) as EventEarningsRow[]) {
+        eventEarningsByEventId.set(String(row.event_id), row)
+      }
+    }
+  }
 
   const userMap = new Map<string, UserRow>()
   const organizerToUserMap = new Map<string, string>()
@@ -134,8 +162,16 @@ export async function GET() {
     const profile = (organizerRef && userMap.get(organizerRef)) || (mappedUserId ? userMap.get(mappedUserId) : undefined)
     const fallbackNames = splitFullName(profile?.full_name)
 
+    const earnings = eventEarningsByEventId.get(String(event.id))
+    const totalRevenue = toNumber(earnings?.total_revenue ?? event.total_revenue)
+    const totalWithdrawn = toNumber(earnings?.withdrawn_vote_revenue) + toNumber(earnings?.withdrawn_ticket_revenue)
+    const availableWithdrawalBalance = Math.max(toNumber(earnings?.net_earnings) - totalWithdrawn, 0)
+
     return {
       ...event,
+      total_revenue: totalRevenue,
+      total_withdrawn: totalWithdrawn,
+      available_withdrawal_balance: availableWithdrawalBalance,
       profiles: profile
         ? {
             first_name: profile.first_name ?? fallbackNames.first_name,
