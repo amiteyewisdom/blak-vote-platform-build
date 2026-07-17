@@ -440,31 +440,31 @@ export default function VotesPage() {
 
       {/* Filters */}
       <DSCard className="p-4 md:p-5">
-        <div className="flex flex-col md:flex-row gap-4 flex-wrap items-end">
-          <div className="space-y-1">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+          <div className="min-w-0 space-y-1">
             <label className="text-xs text-muted-foreground">Start Date</label>
             <input
               type="date"
               value={startDate}
               onChange={(e) => setStartDate(e.target.value)}
-              className="h-10 rounded-xl border border-input bg-card px-3 text-sm"
+              className="h-10 w-full min-w-0 rounded-xl border border-input bg-card px-3 text-sm"
             />
           </div>
-          <div className="space-y-1">
+          <div className="min-w-0 space-y-1">
             <label className="text-xs text-muted-foreground">End Date</label>
             <input
               type="date"
               value={endDate}
               onChange={(e) => setEndDate(e.target.value)}
-              className="h-10 rounded-xl border border-input bg-card px-3 text-sm"
+              className="h-10 w-full min-w-0 rounded-xl border border-input bg-card px-3 text-sm"
             />
           </div>
-          <div className="space-y-1">
+          <div className="min-w-0 space-y-1">
             <label className="text-xs text-muted-foreground">Year</label>
             <select
               value={selectedYear}
               onChange={(e) => setSelectedYear(e.target.value)}
-              className="h-10 rounded-xl border border-input bg-card px-3 text-sm min-w-[100px]"
+              className="h-10 w-full min-w-0 rounded-xl border border-input bg-card px-3 text-sm"
             >
               <option value="">All years</option>
               {years.map((y) => (
@@ -472,12 +472,12 @@ export default function VotesPage() {
               ))}
             </select>
           </div>
-          <div className="space-y-1">
+          <div className="min-w-0 space-y-1">
             <label className="text-xs text-muted-foreground">Month</label>
             <select
               value={selectedMonth}
               onChange={(e) => setSelectedMonth(e.target.value)}
-              className="h-10 rounded-xl border border-input bg-card px-3 text-sm min-w-[120px]"
+              className="h-10 w-full min-w-0 rounded-xl border border-input bg-card px-3 text-sm"
             >
               <option value="">All months</option>
               {Array.from({ length: 12 }, (_, i) => (i + 1).toString().padStart(2, '0')).map((m) => (
@@ -487,12 +487,12 @@ export default function VotesPage() {
               ))}
             </select>
           </div>
-          <div className="space-y-1">
+          <div className="min-w-0 space-y-1">
             <label className="text-xs text-muted-foreground">Nominee</label>
             <select
               value={filterNomineeId}
               onChange={(e) => setFilterNomineeId(e.target.value)}
-              className="h-10 rounded-xl border border-input bg-card px-3 text-sm min-w-[160px]"
+              className="h-10 w-full min-w-0 rounded-xl border border-input bg-card px-3 text-sm"
             >
               <option value="">All nominees</option>
               {nominees.map((n) => (
@@ -500,12 +500,12 @@ export default function VotesPage() {
               ))}
             </select>
           </div>
-          <div className="space-y-1">
+          <div className="min-w-0 space-y-1">
             <label className="text-xs text-muted-foreground">Category</label>
             <select
               value={filterCategory}
               onChange={(e) => setFilterCategory(e.target.value)}
-              className="h-10 rounded-xl border border-input bg-card px-3 text-sm min-w-[140px]"
+              className="h-10 w-full min-w-0 rounded-xl border border-input bg-card px-3 text-sm"
             >
               <option value="">All categories</option>
               {categories.map((c) => (
@@ -514,17 +514,17 @@ export default function VotesPage() {
             </select>
           </div>
 
-          <div className="flex gap-2 ml-auto">
+          <div className="flex w-full gap-2 sm:col-span-2 lg:col-span-3 xl:col-span-6 xl:justify-end">
             <DSSecondaryButton
               onClick={clearFilters}
-              className="px-3 py-2 text-sm h-10"
+              className="h-10 flex-1 px-3 py-2 text-sm xl:flex-none"
             >
               <X size={16} className="mr-1" />
               Clear
             </DSSecondaryButton>
             <DSPrimaryButton
               onClick={tab === 'transactions' ? exportPaidVotes : exportAuditLogs}
-              className="px-3 py-2 text-sm h-10"
+              className="h-10 flex-1 px-3 py-2 text-sm xl:flex-none"
             >
               <Download size={16} className="mr-1" />
               Export
