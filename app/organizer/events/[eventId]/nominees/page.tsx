@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { compressImage } from '@/lib/image-compress'
-import { ArrowLeft, Eye, Pencil, Plus, Trash2, Upload, X } from 'lucide-react'
+import { ArrowLeft, Download, Eye, Pencil, Plus, Trash2, Upload, X } from 'lucide-react'
 import {
   Dialog,
   DialogContent,
@@ -252,6 +252,53 @@ export default function NomineesPage() {
     return categories.find((c) => c.id === catId)?.name || catId
   }
 
+  const exportNominees = () => {
+    const escapeCSV = (value: unknown) => `"${String(value ?? '').replace(/"/g, '""')}"`
+    const headers = [
+      'Category',
+      'Nominee Name',
+      'Voting Code',
+      'Short Code',
+      'Vote Total',
+      'Status',
+      'Email',
+      'Phone',
+      'Bio',
+      'Photo URL',
+      'Nominee ID',
+      'Created At',
+    ]
+    const rows = [...nominees]
+      .sort((a, b) => {
+        const categoryComparison = getCategoryName(a.category_id).localeCompare(getCategoryName(b.category_id))
+        return categoryComparison || String(a.nominee_name || '').localeCompare(String(b.nominee_name || ''))
+      })
+      .map((nominee) => [
+        getCategoryName(nominee.category_id),
+        nominee.nominee_name,
+        nominee.voting_code,
+        nominee.short_code,
+        nominee.vote_count ?? 0,
+        nominee.status,
+        nominee.nominee_email,
+        nominee.nominee_phone,
+        nominee.bio,
+        nominee.photo_url,
+        nominee.uuid_ref || nominee.id,
+        nominee.created_at ? new Date(nominee.created_at).toLocaleString() : '',
+      ].map(escapeCSV).join(','))
+
+    const blob = new Blob([[headers.map(escapeCSV).join(','), ...rows].join('\n')], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `nominees-${eventId}-${new Date().toISOString().slice(0, 10)}.csv`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+  }
+
   const openViewModal = (nominee: any) => {
     setViewNominee(nominee)
   }
@@ -373,13 +420,17 @@ export default function NomineesPage() {
           Nominees <span className="text-lg font-normal text-muted-foreground">({nominees.length})</span>
         </h1>
         {nominees.length > 0 && (
-          <div className="mt-4">
+          <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center">
             <DSInput
               placeholder="Search nominees by name…"
               value={nomineeSearch}
               onChange={(e: any) => setNomineeSearch(e.target.value)}
-              className="max-w-xs"
+              className="w-full sm:max-w-xs"
             />
+            <DSPrimaryButton onClick={exportNominees} className="w-full sm:w-auto">
+              <Download size={16} className="mr-2" />
+              Export Nominees
+            </DSPrimaryButton>
           </div>
         )}
       </div>
