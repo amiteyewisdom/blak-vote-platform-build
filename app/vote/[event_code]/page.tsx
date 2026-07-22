@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { resolveEventVotePrice } from '@/lib/event-pricing'
 import { getPublicUssdShortcode } from '@/lib/ussd-shortcode'
+import { openPaymentTab, goToPaymentCheckout, closePaymentTab } from '@/lib/open-payment'
 import PublicNav from '@/components/PublicNav'
 
 interface EventData {
@@ -149,6 +150,7 @@ export default function PublicVotePage() {
       return
     }
 
+    const paymentTab = openPaymentTab()
     setSubmittingCandidateId(candidateId)
 
     try {
@@ -173,6 +175,7 @@ export default function PublicVotePage() {
       }
 
       if (!res) {
+        closePaymentTab(paymentTab)
         toast({
           title: 'Payment Error',
           description: 'Payment initialization failed',
@@ -184,6 +187,7 @@ export default function PublicVotePage() {
       const data = await res.json()
 
       if (!res.ok) {
+        closePaymentTab(paymentTab)
         toast({
           title: 'Payment Error',
           description: data.error || 'Payment initialization failed',
@@ -201,6 +205,7 @@ export default function PublicVotePage() {
             : null
 
       if (!authorizationUrl) {
+        closePaymentTab(paymentTab)
         toast({
           title: 'Payment Error',
           description: 'Unable to start Paystack checkout. Please try again.',
@@ -224,8 +229,9 @@ export default function PublicVotePage() {
           throw new Error('Payment URL must use HTTPS')
         }
 
-        window.location.href = authorizationUrl
+        goToPaymentCheckout(authorizationUrl, paymentTab)
       } catch (urlError) {
+        closePaymentTab(paymentTab)
         console.error('Invalid payment URL:', authorizationUrl, urlError)
         toast({
           title: 'Security Error',
@@ -234,6 +240,7 @@ export default function PublicVotePage() {
         })
       }
     } catch (error) {
+      closePaymentTab(paymentTab)
       toast({
         title: 'Error',
         description: 'Something went wrong',

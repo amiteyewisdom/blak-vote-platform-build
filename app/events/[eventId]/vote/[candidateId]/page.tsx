@@ -7,6 +7,7 @@ import { ArrowLeft, Vote } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import { resolveEventVotePrice } from '@/lib/event-pricing'
 import { isVotingOpenStatus } from '@/lib/event-status'
+import { openPaymentTab, goToPaymentCheckout, closePaymentTab } from '@/lib/open-payment'
 
 interface BulkVotePackage {
   id: string
@@ -102,6 +103,7 @@ export default function CandidateVotePage() {
       return
     }
 
+    const paymentTab = openPaymentTab()
     setVoting(true)
 
     try {
@@ -134,6 +136,7 @@ export default function CandidateVotePage() {
       const payload = await res.json()
 
       if (!res.ok) {
+        closePaymentTab(paymentTab)
         toast({ title: 'Payment Error', description: payload.error || 'Payment initialization failed', variant: 'destructive' })
         setVoting(false)
         return
@@ -148,6 +151,7 @@ export default function CandidateVotePage() {
             : null
 
       if (!authorizationUrl) {
+        closePaymentTab(paymentTab)
         toast({ title: 'Payment Error', description: 'Unable to start Paystack checkout. Please try again.', variant: 'destructive' })
         setVoting(false)
         return
@@ -159,13 +163,16 @@ export default function CandidateVotePage() {
         redirectUrl.hostname.endsWith('.paystack.com')
 
       if (!isTrustedPaystackHost || !redirectUrl.protocol.startsWith('https')) {
+        closePaymentTab(paymentTab)
         toast({ title: 'Security Error', description: 'Received invalid payment URL from server', variant: 'destructive' })
         setVoting(false)
         return
       }
 
-      window.location.href = authorizationUrl
+      goToPaymentCheckout(authorizationUrl, paymentTab)
+      setVoting(false)
     } catch {
+      closePaymentTab(paymentTab)
       toast({ title: 'Error', description: 'Something went wrong. Please try again.', variant: 'destructive' })
       setVoting(false)
     }

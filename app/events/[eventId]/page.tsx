@@ -6,6 +6,7 @@ import { supabase } from '@/lib/supabaseClient'
 import { resolveEventVotePrice } from '@/lib/event-pricing'
 import { isVotingOpenStatus } from '@/lib/event-status'
 import { getPublicUssdShortcode } from '@/lib/ussd-shortcode'
+import { openPaymentTab, goToPaymentCheckout, closePaymentTab } from '@/lib/open-payment'
 import { compressImage } from '@/lib/image-compress'
 import { Vote, Users, Trophy, Heart, Calendar, Clock, Sparkles, ArrowLeft, ChevronDown, ChevronRight } from 'lucide-react'
 import Link from 'next/link'
@@ -217,6 +218,7 @@ export default function EventPage() {
     const bulkPackageId = override?.bulkPackageId ?? selectedBulkPackageId
     const amount = override?.amount ?? selectedVoteAmount ?? null
 
+    const paymentTab = openPaymentTab()
     setVoting(true)
     try {
       const paymentPayload = {
@@ -248,6 +250,7 @@ export default function EventPage() {
       const data = await res.json()
 
       if (!res.ok) {
+        closePaymentTab(paymentTab)
         toast({
           title: 'Payment Error',
           description: data.error || 'Payment initialization failed',
@@ -270,6 +273,7 @@ export default function EventPage() {
             : null
 
       if (!authorizationUrl) {
+        closePaymentTab(paymentTab)
         toast({
           title: 'Payment Error',
           description: 'Unable to start Paystack checkout. Please try again.',
@@ -295,8 +299,10 @@ export default function EventPage() {
         }
         
         setShowVoteModal(false)
-        window.location.href = authorizationUrl
+        goToPaymentCheckout(authorizationUrl, paymentTab)
+        setVoting(false)
       } catch (urlError) {
+        closePaymentTab(paymentTab)
         console.error('Invalid payment URL:', authorizationUrl, urlError)
         toast({
           title: 'Security Error',
@@ -306,6 +312,7 @@ export default function EventPage() {
         setVoting(false)
       }
     } catch (error) {
+      closePaymentTab(paymentTab)
       console.error('Voting error:', error)
       toast({
         title: 'Error',
