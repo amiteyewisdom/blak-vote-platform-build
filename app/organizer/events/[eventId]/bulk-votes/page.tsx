@@ -25,6 +25,15 @@ const makeEmptyPackage = (eventId: string): BulkPackage => ({
   is_active: true,
 })
 
+const normalizePackage = (pkg: any, fallbackEventId: string): BulkPackage => ({
+  id: String(pkg.id || ''),
+  event_id: String(pkg.event_id || fallbackEventId),
+  votes_included: Number(pkg.votes_included || 0),
+  price_per_package: Number(pkg.price_per_package || 0),
+  description: pkg.description ?? '',
+  is_active: pkg.is_active !== false,
+})
+
 export default function BulkVoteManagementPage() {
   const params = useParams()
   const eventId = (params?.eventId as string) || ''
@@ -54,16 +63,7 @@ export default function BulkVoteManagementPage() {
         return
       }
       const data = await res.json()
-      setPackages(
-        (data.packages || []).map((pkg: any) => ({
-          id: String(pkg.id || ''),
-          event_id: String(pkg.event_id || eventId),
-          votes_included: Number(pkg.votes_included || 0),
-          price_per_package: Number(pkg.price_per_package || 0),
-          description: pkg.description ?? '',
-          is_active: pkg.is_active !== false,
-        }))
-      )
+      setPackages((data.packages || []).map((pkg: any) => normalizePackage(pkg, eventId)))
     } catch (error) {
       toast({
         title: 'Error',
@@ -133,6 +133,12 @@ export default function BulkVoteManagementPage() {
           return
         }
 
+        const data = await res.json()
+        setPackages((prev) => {
+          const next = [...prev]
+          next[index] = normalizePackage(data.package, eventId)
+          return next
+        })
         toast({ title: 'Package updated' })
       } else {
         const res = await fetch('/api/bulk-vote-packages', {
@@ -156,10 +162,15 @@ export default function BulkVoteManagementPage() {
           return
         }
 
+        const data = await res.json()
+        setPackages((prev) => {
+          const next = [...prev]
+          next[index] = normalizePackage(data.package, eventId)
+          next.push(makeEmptyPackage(eventId))
+          return next
+        })
         toast({ title: 'Package created' })
       }
-
-      await fetchPackages()
     } catch (error) {
       toast({
         title: 'Error',
@@ -198,7 +209,7 @@ export default function BulkVoteManagementPage() {
       }
 
       toast({ title: 'Package deleted' })
-      await fetchPackages()
+      setPackages((prev) => prev.filter((_, i) => i !== index))
     } catch (error) {
       toast({
         title: 'Error',
