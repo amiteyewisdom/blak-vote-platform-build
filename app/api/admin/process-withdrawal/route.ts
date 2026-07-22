@@ -30,8 +30,8 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Withdrawal not found' }, { status: 404 })
   }
 
-  if (withdrawal.status !== 'approved') {
-    return NextResponse.json({ error: 'Only approved withdrawals can be marked processed' }, { status: 400 })
+  if (!['approved', 'pending_funds'].includes(withdrawal.status)) {
+    return NextResponse.json({ error: 'Only approved or pending-funds withdrawals can be marked processed' }, { status: 400 })
   }
 
   if (withdrawal.processed_at) {
