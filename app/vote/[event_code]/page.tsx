@@ -485,10 +485,12 @@ export default function PublicVotePage() {
                             <button
                               key={pkg.id}
                               type='button'
-                              className='rounded-xl border px-3 py-3 text-left transition sm:px-4'
+                              className='min-h-[48px] w-full rounded-xl border px-3 py-3 text-left transition select-none active:scale-[0.98] sm:px-4 cursor-pointer touch-manipulation'
                               style={{
                                 borderColor: 'rgba(255,255,255,0.08)',
                                 backgroundColor: 'rgba(255,255,255,0.02)',
+                                touchAction: 'manipulation',
+                                WebkitTapHighlightColor: 'transparent',
                               }}
                               onClick={() =>
                                 handlePayment(candidate.id, {

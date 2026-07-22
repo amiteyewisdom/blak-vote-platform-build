@@ -413,7 +413,8 @@ export default function PublicVotePage() {
                                   })
                                 }
                                 disabled={submittingCandidateId === candidate.id}
-                                className="rounded-md border border-border/60 bg-foreground/[0.02] p-3 text-left hover:border-foreground/30 hover:bg-foreground/[0.05] transition-colors disabled:opacity-60"
+                                className="min-h-[48px] w-full rounded-md border border-border/60 bg-foreground/[0.02] p-3 text-left hover:border-foreground/30 hover:bg-foreground/[0.05] transition-colors disabled:opacity-60 cursor-pointer touch-manipulation select-none active:scale-[0.98]"
+                                style={{ touchAction: 'manipulation', WebkitTapHighlightColor: 'transparent' }}
                               >
                                 <div className="flex items-start justify-between gap-2">
                                   <div>
