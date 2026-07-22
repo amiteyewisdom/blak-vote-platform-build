@@ -120,7 +120,16 @@ export default function PublicVotePage() {
   ) => {
     const votes = override?.votes ?? selectedVotes[candidateId] ?? 1
     const amount = Number(override?.amount ?? selectedAmounts[candidateId] ?? votes * votePrice)
-    const bulkPackageId = override?.bulkPackageId ?? selectedPackageIds[candidateId] ?? null
+    const rawBulkPackageId = override?.bulkPackageId ?? selectedPackageIds[candidateId] ?? null
+    const bulkPackageId = rawBulkPackageId || null
+
+    // Sync the selected package into the input state so the UI reflects the choice.
+    if (override) {
+      setSelectedVotes((prev) => ({ ...prev, [candidateId]: override.votes }))
+      setSelectedVoteInputs((prev) => ({ ...prev, [candidateId]: String(override.votes) }))
+      setSelectedAmounts((prev) => ({ ...prev, [candidateId]: override.amount }))
+      setSelectedPackageIds((prev) => ({ ...prev, [candidateId]: override.bulkPackageId || '' }))
+    }
 
     if (!receiptEmail.trim()) {
       toast({
@@ -143,18 +152,34 @@ export default function PublicVotePage() {
     setSubmittingCandidateId(candidateId)
 
     try {
-      const res = await fetch('/api/payments/initialize', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          eventId: event.id,
-          candidateId,
-          quantity: votes,
-          amount,
-          bulkPackageId,
-          email: receiptEmail.trim(),
-        }),
-      })
+      const paymentPayload = {
+        eventId: event.id,
+        candidateId,
+        quantity: votes,
+        amount,
+        bulkPackageId,
+        email: receiptEmail.trim(),
+      }
+
+      let res: Response | null = null
+      const endpoints = ['/api/payments/initialize', '/api/payment-init']
+      for (const endpoint of endpoints) {
+        res = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(paymentPayload),
+        })
+        if (res.ok || res.status !== 404) break
+      }
+
+      if (!res) {
+        toast({
+          title: 'Payment Error',
+          description: 'Payment initialization failed',
+          variant: 'destructive',
+        })
+        return
+      }
 
       const data = await res.json()
 

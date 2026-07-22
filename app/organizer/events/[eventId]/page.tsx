@@ -19,6 +19,7 @@ import {
   Pause,
   Ticket,
   ScanLine,
+  Package,
 } from 'lucide-react'
 
 export default function EventDashboardPage() {
@@ -301,6 +302,7 @@ export default function EventDashboardPage() {
           <>
             <MenuCard title="Categories" icon={FolderPlus} path={`/organizer/events/${id}/categories`} />
             <MenuCard title="Nominees" icon={Trophy} path={`/organizer/events/${id}/nominees`} />
+            <MenuCard title="Bulk Votes" description="Manage discounted vote packages." icon={Package} path={`/organizer/events/${id}/bulk-votes`} />
             <MenuCard title="Votes" icon={BarChart3} path={`/organizer/events/${id}/votes`} />
             <MenuCard title="Results" icon={FileText} path={`/organizer/events/${id}/results`} />
             <MenuCard title="Withdraw" icon={CreditCard} path={`/organizer/events/${id}/withdraw`} />

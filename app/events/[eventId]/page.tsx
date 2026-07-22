@@ -57,7 +57,7 @@ export default function EventPage() {
   const votingOpen = isVotingOpenStatus(event?.status)
   const parsedCustomVoteQuantity = Number.parseInt(customVoteQuantity, 10)
   const isValidCustomVoteQuantity =
-    Number.isFinite(parsedCustomVoteQuantity) && parsedCustomVoteQuantity >= 1 && parsedCustomVoteQuantity <= 1000
+    Number.isFinite(parsedCustomVoteQuantity) && parsedCustomVoteQuantity >= 1 && parsedCustomVoteQuantity <= 10000
   const effectiveCustomVoteQuantity = isValidCustomVoteQuantity ? parsedCustomVoteQuantity : 1
 
   useEffect(() => {
@@ -146,17 +146,30 @@ export default function EventPage() {
     setLoading(false)
   }
 
-  const handleVote = async (options?: {
+  const MAX_PUBLIC_VOTE_QUANTITY = 10000
+
+  const isValidContactInfo = () => {
+    if (!voteEmail.trim()) return false
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    if (!emailRegex.test(voteEmail.trim())) return false
+    if (votePhone.trim()) {
+      const phoneRegex = /^[+]?[0-9]{9,15}$/
+      if (!phoneRegex.test(votePhone.trim())) return false
+    }
+    return true
+  }
+
+  const handleVote = (options?: {
     quantity?: number
     bulkPackageId?: string | null
     amount?: number | null
   }) => {
     if (!selectedCandidate || !votingOpen) return
     const requestedQuantity = options?.quantity ?? 1
-    if (requestedQuantity > 1000) {
+    if (requestedQuantity > MAX_PUBLIC_VOTE_QUANTITY) {
       toast({
         title: 'Vote limit exceeded',
-        description: 'You can purchase a maximum of 1000 votes per transaction.',
+        description: `You can purchase a maximum of ${MAX_PUBLIC_VOTE_QUANTITY} votes per transaction.`,
         variant: 'destructive',
       })
       return
@@ -165,16 +178,20 @@ export default function EventPage() {
     setSelectedBulkPackageId(options?.bulkPackageId ?? null)
     setSelectedVoteAmount(options?.amount ?? null)
     setVoteModalError('')
-    // Show vote modal instead of using deprecated prompt()
-    setShowVoteModal(true)
+
+    // If contact info is already valid, proceed straight to payment for bulk packages.
+    if (isValidContactInfo()) {
+      void handleVoteSubmit(options)
+    } else {
+      setShowVoteModal(true)
+    }
   }
 
-  const handleVoteSubmit = async () => {
-    // =========================================================================
-    // CRITICAL FIX #4: Phone/Email collection with validation
-    // HIGH FIX #1: Email validation on frontend
-    // =========================================================================
-    
+  const handleVoteSubmit = async (override?: {
+    quantity?: number
+    bulkPackageId?: string | null
+    amount?: number | null
+  }) => {
     // Validate email
     if (!voteEmail.trim()) {
       setVoteModalError('Email is required')
@@ -196,14 +213,18 @@ export default function EventPage() {
       }
     }
 
+    const quantity = override?.quantity ?? selectedVoteQuantity
+    const bulkPackageId = override?.bulkPackageId ?? selectedBulkPackageId
+    const amount = override?.amount ?? selectedVoteAmount ?? null
+
     setVoting(true)
     try {
       const paymentPayload = {
         eventId: event.id,
         candidateId: selectedCandidate,
-        quantity: selectedVoteQuantity,
-        bulkPackageId: selectedBulkPackageId || undefined,
-        amount: selectedVoteAmount ?? undefined,
+        quantity,
+        bulkPackageId: bulkPackageId || undefined,
+        amount: amount ?? undefined,
         email: voteEmail.trim(),
         phone: votePhone.trim() || undefined,
       }
@@ -669,14 +690,14 @@ export default function EventPage() {
                       <input
                         type="number"
                         min="1"
-                        max="1000"
+                        max="10000"
                         value={customVoteQuantity}
                         onChange={(e) => setCustomVoteQuantity(e.target.value || '1')}
                         className="w-full bg-[hsl(var(--legacy-bg-input))] border border-[hsl(var(--gold))]/40 rounded-xl px-4 py-3 text-foreground placeholder:text-muted-foreground/60 focus:border-[hsl(var(--gold))] focus:outline-none transition text-lg font-semibold"
                         placeholder="1"
                       />
                       {!isValidCustomVoteQuantity && customVoteQuantity.trim().length > 0 && (
-                        <p className="mt-2 text-xs text-red-400">Enter a value between 1 and 1000.</p>
+                        <p className="mt-2 text-xs text-red-400">Enter a value between 1 and 10000.</p>
                       )}
                       <div className="mt-3 p-3 bg-surface/70 rounded-lg border border-border/50">
                         <div className="flex items-center justify-between text-sm">

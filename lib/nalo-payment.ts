@@ -47,6 +47,7 @@ type CreateVotePendingTransactionInput = {
   candidateCode: string
   quantity: number
   amount: number
+  bulkPackageId?: string | null
 }
 
 type CreateTicketPendingTransactionInput = {
@@ -189,6 +190,7 @@ export async function createOrReuseUssdPendingTransaction(
             candidateCode: input.candidateCode,
             quantity: input.quantity,
             amount: Number(input.amount.toFixed(2)),
+            bulkPackageId: input.bulkPackageId ?? null,
             phone: input.phoneNumber,
             email: null,
           },

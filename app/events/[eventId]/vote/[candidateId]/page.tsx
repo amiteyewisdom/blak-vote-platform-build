@@ -41,7 +41,8 @@ export default function CandidateVotePage() {
   const votePrice = resolveEventVotePrice(event)
   const votingOpen = isVotingOpenStatus(event?.status)
   const parsedQty = quantity.trim() ? Number.parseInt(quantity, 10) : 0
-  const validQty = Number.isFinite(parsedQty) && parsedQty >= 1 && parsedQty <= 1000 ? parsedQty : 1
+  const MAX_PUBLIC_VOTE_QUANTITY = 10000
+  const validQty = Number.isFinite(parsedQty) && parsedQty >= 1 && parsedQty <= MAX_PUBLIC_VOTE_QUANTITY ? parsedQty : 1
 
   useEffect(() => {
     const loadData = async () => {
@@ -240,7 +241,7 @@ export default function CandidateVotePage() {
             <input
               type="number"
               min="1"
-              max="1000"
+              max="10000"
               value={quantity}
               onChange={(e) => setQuantity(e.target.value)}
               className="mt-2 w-full rounded-xl border border-border bg-[hsl(var(--legacy-bg-input))] px-4 py-3"

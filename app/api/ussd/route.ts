@@ -484,6 +484,184 @@ async function issueFreeTickets(params: {
   }
 }
 
+type UssdBulkVotePackage = {
+  id: string
+  votes_included: number
+  price_per_package: number
+  description?: string | null
+}
+
+async function getBulkVotePackagesForEvent(eventId: string): Promise<UssdBulkVotePackage[]> {
+  const supabase = getSupabaseAdminClient()
+
+  let data: any[] | null = null
+  let error: { message: string } | null = null
+
+  const primaryResult = await supabase
+    .from('bulk_vote_packages')
+    .select('id, votes_included, price_per_package, description, is_active')
+    .eq('event_id', eventId)
+    .eq('is_active', true)
+    .order('votes_included', { ascending: true })
+
+  data = primaryResult.data
+  error = primaryResult.error
+
+  if (error && /is_active/i.test(error.message)) {
+    const fallbackResult = await supabase
+      .from('bulk_vote_packages')
+      .select('id, votes_included, price_per_package, description')
+      .eq('event_id', eventId)
+      .order('votes_included', { ascending: true })
+
+    data = fallbackResult.data
+    error = fallbackResult.error
+  }
+
+  if (error) {
+    console.error('[USSD_BULK_PACKAGES_FAIL]', error.message)
+    return []
+  }
+
+  return (data || [])
+    .map((pkg: any) => ({
+      id: String(pkg.id),
+      votes_included: Math.max(1, Number(pkg.votes_included || 1)),
+      price_per_package: Number(pkg.price_per_package || 0),
+      description: pkg.description ?? null,
+    }))
+    .filter((pkg) => pkg.votes_included > 1 && pkg.price_per_package > 0)
+}
+
+async function processUssdVotePayment(params: {
+  sessionId: string
+  phoneNumber: string
+  event: EventRecord
+  candidate: CandidateRecord
+  candidateCode: string
+  quantity: number
+  amount: number
+  bulkPackageId?: string | null
+}) {
+  const { sessionId, phoneNumber, event, candidate, candidateCode, quantity, amount, bulkPackageId } = params
+
+  if (!phoneNumber) {
+    return end('Unable to read your phone number from network. Please try again.')
+  }
+
+  const {
+    buildUssdTransactionId,
+    createOrReuseUssdPendingTransaction,
+    initiateMoMoPayment,
+    updateUssdPendingTransaction,
+  } = await getNaloPaymentUtils()
+
+  const eventCode = toUpperCode(String(event?.short_code || event?.event_code || event?.id || ''))
+  const transactionId = buildUssdTransactionId(
+    `USSD:${sessionId}:${event.id}:${candidate.id}:${quantity}:${amount}:${trimToPhoneIdentifier(phoneNumber)}`
+  )
+
+  if (amount <= 0) {
+    const supabase = getSupabaseAdminClient()
+
+    const { data: existingVote } = await supabase
+      .from('votes')
+      .select('id')
+      .eq('transaction_id', transactionId)
+      .maybeSingle()
+
+    if (existingVote?.id) {
+      return end('Vote already recorded for this USSD session.')
+    }
+
+    const { error: rpcError } = await supabase.rpc('process_vote', {
+      p_event_id: event.id,
+      p_candidate_id: candidate.id,
+      p_quantity: quantity,
+      p_voter_id: null,
+      p_voter_phone: trimToPhoneIdentifier(phoneNumber),
+      p_vote_source: 'ussd',
+      p_payment_method: 'ussd',
+      p_transaction_id: transactionId,
+      p_ip_address: null,
+      p_amount_paid: 0,
+    })
+
+    if (rpcError) {
+      console.error('[USSD_VOTE_FAIL]', rpcError.message)
+      return end('Unable to record vote right now. Please try again.')
+    }
+
+    try {
+      const smsMsgFree =
+        `BlakVote: Vote confirmed! You cast ${quantity} vote${quantity === 1 ? '' : 's'} for ` +
+        `${candidate.nominee_name || candidateCode} in ${event.title || eventCode}. ` +
+        `Amount: GHS 0.00. Thank you!`
+      await sendNaloSms(formatPhoneForSms(phoneNumber), smsMsgFree)
+    } catch (smsErr: any) {
+      console.warn('[USSD_FREE_VOTE_SMS_FAIL]', smsErr?.message || smsErr)
+    }
+
+    return end('Vote recorded successfully. Thank you for voting!')
+  }
+
+  try {
+    const transaction = await createOrReuseUssdPendingTransaction({
+      id: transactionId,
+      phoneNumber,
+      eventId: event.id,
+      organizerId: event.organizer_id ?? null,
+      eventCode,
+      candidateId: candidate.id,
+      candidateCode,
+      quantity,
+      type: 'vote',
+      amount,
+      bulkPackageId: bulkPackageId ?? null,
+    })
+
+    if (transaction.status === 'paid') {
+      return end('Payment already confirmed for this request.')
+    }
+
+    if (transaction.status === 'pending' && transaction.gatewayStatus === 'payment_request_sent') {
+      return end('Payment request sent. Please confirm on your phone.')
+    }
+
+    if (transaction.status === 'failed') {
+      await updateUssdPendingTransaction(transaction.id, {
+        status: 'pending',
+        gatewayStatus: 'initialized',
+      })
+    }
+
+    await initiateMoMoPayment({
+      phone: phoneNumber,
+      amount,
+      reference: transaction.id,
+    })
+
+    await updateUssdPendingTransaction(transaction.id, {
+      gatewayStatus: 'payment_request_sent',
+    })
+
+    return end('Payment request sent. Please confirm on your phone.')
+  } catch (error: any) {
+    console.error('[USSD_VOTE_PAYMENT_FAIL]', error?.message || error)
+
+    try {
+      await updateUssdPendingTransaction(transactionId, {
+        status: 'failed',
+        gatewayStatus: 'payment_request_failed',
+      })
+    } catch (updateError: any) {
+      console.error('[USSD_VOTE_PAYMENT_STATUS_FAIL]', updateError?.message || updateError)
+    }
+
+    return end('Unable to start payment right now. Please try again.')
+  }
+}
+
 async function handleVoteFlow(params: {
   steps: string[]
   sessionId: string
@@ -524,151 +702,134 @@ async function handleVoteFlow(params: {
   }
 
   if (steps.length === 2) {
+    const bulkPackages = await getBulkVotePackagesForEvent(event.id)
+
+    if (bulkPackages.length === 0) {
+      return con(
+        `Candidate: ${candidate.nominee_name || candidateCode}\n` +
+          `Event: ${event.title || eventCode}\n` +
+          `Enter quantity (1-${MAX_VOTE_QUANTITY})`
+      )
+    }
+
     return con(
       `Candidate: ${candidate.nominee_name || candidateCode}\n` +
         `Event: ${event.title || eventCode}\n` +
-        `Enter quantity (1-${MAX_VOTE_QUANTITY})`
+        `1. Single vote purchase\n2. Bulk vote packages`
     )
   }
 
-  const quantity = Number(steps[2])
-  if (!Number.isInteger(quantity) || quantity < 1 || quantity > MAX_VOTE_QUANTITY) {
-    return end(`Invalid quantity. Use a number between 1 and ${MAX_VOTE_QUANTITY}.`)
-  }
+  const mode = steps[2]
 
-  const votePrice = resolveEventVotePrice(event)
-  const totalAmount = Number((votePrice * quantity).toFixed(2))
-
-  if (steps.length === 3) {
-    return con(
-      `Vote ${quantity} for ${candidate.nominee_name || 'candidate'}\n` +
-        `Event: ${event.title || eventCode}\n` +
-        `Amount: GHS ${totalAmount.toFixed(2)}\n` +
-        '1. Confirm\n2. Cancel'
-    )
-  }
-
-  if (steps[3] === '2') {
-    return end('Vote cancelled.')
-  }
-
-  if (steps[3] !== '1') {
-    return end('Invalid confirmation option.')
-  }
-
-  if (!phoneNumber) {
-    return end('Unable to read your phone number from network. Please try again.')
-  }
-
-  const {
-    buildUssdTransactionId,
-    createOrReuseUssdPendingTransaction,
-    initiateMoMoPayment,
-    updateUssdPendingTransaction,
-  } = await getNaloPaymentUtils()
-
-  const transactionId = buildUssdTransactionId(
-    `USSD:${sessionId}:${event.id}:${candidate.id}:${quantity}:${trimToPhoneIdentifier(phoneNumber)}`
-  )
-
-  if (totalAmount <= 0) {
-    const supabase = getSupabaseAdminClient()
-
-    const { data: existingVote } = await supabase
-      .from('votes')
-      .select('id')
-      .eq('transaction_id', transactionId)
-      .maybeSingle()
-
-    if (existingVote?.id) {
-      return end('Vote already recorded for this USSD session.')
+  if (mode === '1') {
+    if (steps.length === 3) {
+      return con(
+        `Candidate: ${candidate.nominee_name || candidateCode}\n` +
+          `Event: ${event.title || eventCode}\n` +
+          `Enter quantity (1-${MAX_VOTE_QUANTITY})`
+      )
     }
 
-    const { error: rpcError } = await supabase.rpc('process_vote', {
-      p_event_id: event.id,
-      p_candidate_id: candidate.id,
-      p_quantity: quantity,
-      p_voter_id: null,
-      p_voter_phone: trimToPhoneIdentifier(phoneNumber),
-      p_vote_source: 'ussd',
-      p_payment_method: 'ussd',
-      p_transaction_id: transactionId,
-      p_ip_address: null,
-      p_amount_paid: totalAmount,
-    })
-
-    if (rpcError) {
-      console.error('[USSD_VOTE_FAIL]', rpcError.message)
-      return end('Unable to record vote right now. Please try again.')
+    const quantity = Number(steps[3])
+    if (!Number.isInteger(quantity) || quantity < 1 || quantity > MAX_VOTE_QUANTITY) {
+      return end(`Invalid quantity. Use a number between 1 and ${MAX_VOTE_QUANTITY}.`)
     }
 
-    try {
-      const smsMsgFree =
-        `BlakVote: Vote confirmed! You cast ${quantity} vote${quantity === 1 ? '' : 's'} for ` +
-        `${candidate.nominee_name || candidateCode} in ${event.title || eventCode}. ` +
-        `Amount: GHS 0.00. Thank you!`
-      await sendNaloSms(formatPhoneForSms(phoneNumber), smsMsgFree)
-    } catch (smsErr: any) {
-      console.warn('[USSD_FREE_VOTE_SMS_FAIL]', smsErr?.message || smsErr)
+    const votePrice = resolveEventVotePrice(event)
+    const totalAmount = Number((votePrice * quantity).toFixed(2))
+
+    if (steps.length === 4) {
+      return con(
+        `Vote ${quantity} for ${candidate.nominee_name || 'candidate'}\n` +
+          `Event: ${event.title || eventCode}\n` +
+          `Amount: GHS ${totalAmount.toFixed(2)}\n` +
+          '1. Confirm\n2. Cancel'
+      )
     }
 
-    return end('Vote recorded successfully. Thank you for voting!')
-  }
+    if (steps[4] === '2') {
+      return end('Vote cancelled.')
+    }
 
-  try {
-    const transaction = await createOrReuseUssdPendingTransaction({
-      id: transactionId,
+    if (steps[4] !== '1') {
+      return end('Invalid confirmation option.')
+    }
+
+    return processUssdVotePayment({
+      sessionId,
       phoneNumber,
-      eventId: event.id,
-      organizerId: event.organizer_id ?? null,
-      eventCode,
-      candidateId: candidate.id,
+      event,
+      candidate,
       candidateCode,
       quantity,
-      type: 'vote',
       amount: totalAmount,
     })
-
-    if (transaction.status === 'paid') {
-      return end('Payment already confirmed for this request.')
-    }
-
-    if (transaction.status === 'pending' && transaction.gatewayStatus === 'payment_request_sent') {
-      return end('Payment request sent. Please confirm on your phone.')
-    }
-
-    if (transaction.status === 'failed') {
-      await updateUssdPendingTransaction(transaction.id, {
-        status: 'pending',
-        gatewayStatus: 'initialized',
-      })
-    }
-
-    await initiateMoMoPayment({
-      phone: phoneNumber,
-      amount: totalAmount,
-      reference: transaction.id,
-    })
-
-    await updateUssdPendingTransaction(transaction.id, {
-      gatewayStatus: 'payment_request_sent',
-    })
-
-    return end('Payment request sent. Please confirm on your phone.')
-  } catch (error: any) {
-    console.error('[USSD_VOTE_PAYMENT_FAIL]', error?.message || error)
-
-    try {
-      await updateUssdPendingTransaction(transactionId, {
-        status: 'failed',
-        gatewayStatus: 'payment_request_failed',
-      })
-    } catch (updateError: any) {
-      console.error('[USSD_VOTE_PAYMENT_STATUS_FAIL]', updateError?.message || updateError)
-    }
-
-    return end('Unable to start payment right now. Please try again.')
   }
+
+  if (mode === '2') {
+    const bulkPackages = await getBulkVotePackagesForEvent(event.id)
+
+    if (bulkPackages.length === 0) {
+      return end('No bulk vote packages are available for this event.')
+    }
+
+    if (steps.length === 3) {
+      const menu = bulkPackages
+        .slice(0, 8)
+        .map(
+          (pkg, index) =>
+            `${index + 1}. ${pkg.votes_included} votes - GHS ${pkg.price_per_package.toFixed(2)}`
+        )
+        .join('\n')
+
+      return con(
+        `Candidate: ${candidate.nominee_name || candidateCode}\n` +
+          `Select bulk package\n${menu}\n0. Cancel`
+      )
+    }
+
+    if (steps[3] === '0') {
+      return end('Bulk vote cancelled.')
+    }
+
+    const packageIndex = Number(steps[3]) - 1
+    if (!Number.isInteger(packageIndex) || packageIndex < 0 || packageIndex >= bulkPackages.length) {
+      return end('Invalid package option selected.')
+    }
+
+    const selectedPackage = bulkPackages[packageIndex]
+    const packageVotes = selectedPackage.votes_included
+    const packageAmount = Number(selectedPackage.price_per_package.toFixed(2))
+
+    if (steps.length === 4) {
+      return con(
+        `Bulk vote: ${packageVotes} votes for ${candidate.nominee_name || 'candidate'}\n` +
+          `Amount: GHS ${packageAmount.toFixed(2)}\n` +
+          '1. Confirm\n2. Cancel'
+      )
+    }
+
+    if (steps[4] === '2') {
+      return end('Bulk vote cancelled.')
+    }
+
+    if (steps[4] !== '1') {
+      return end('Invalid confirmation option.')
+    }
+
+    return processUssdVotePayment({
+      sessionId,
+      phoneNumber,
+      event,
+      candidate,
+      candidateCode,
+      quantity: packageVotes,
+      amount: packageAmount,
+      bulkPackageId: selectedPackage.id,
+    })
+  }
+
+  return end('Invalid option. Choose 1 for single votes or 2 for bulk vote packages.')
 }
 
 async function handleTicketFlow(params: {

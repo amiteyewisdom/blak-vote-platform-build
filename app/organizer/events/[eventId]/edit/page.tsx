@@ -11,12 +11,6 @@ import { DSInput, DSPrimaryButton, DSTextarea } from '@/components/ui/design-sys
 const SUPPORTED_EVENT_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp']
 const MAX_EVENT_IMAGE_SIZE_BYTES = 5 * 1024 * 1024
 
-type BulkPackageDraft = {
-  votes: string
-  price: string
-  description: string
-}
-
 export default function EventSettingsPage() {
   const params = useParams()
   const eventId =
@@ -42,11 +36,6 @@ export default function EventSettingsPage() {
 
   const [image, setImage] = useState<File | null>(null)
   const [preview, setPreview] = useState<string | null>(null)
-  const [bulkPackagesSaved, setBulkPackagesSaved] = useState(false)
-  const [bulkPackages, setBulkPackages] = useState<BulkPackageDraft[]>([
-    { votes: '10', price: '', description: 'Starter package' },
-  ])
-
   useEffect(() => {
     if (!eventId) return
     fetchEvent()
@@ -82,22 +71,6 @@ export default function EventSettingsPage() {
     })
 
     setPreview(data.image_url || null)
-
-    const packagesRes = await fetch(`/api/bulk-vote-packages?event_id=${encodeURIComponent(eventId)}`)
-    if (packagesRes.ok) {
-      const payload = await packagesRes.json()
-      const packages = (payload.packages || []).map((pkg: any) => ({
-        votes: String(pkg.votes_included ?? ''),
-        price: String(pkg.price_per_package ?? ''),
-        description: String(pkg.description ?? ''),
-      }))
-
-      if (packages.length > 0) {
-        setBulkPackages(packages)
-      }
-
-      setBulkPackagesSaved(true)
-    }
 
     setLoading(false)
   }
@@ -179,64 +152,10 @@ export default function EventSettingsPage() {
         variant: 'destructive',
       })
     } else {
-      const validPackages = bulkPackages
-        .map((pkg) => ({
-          votes_included: Number(pkg.votes),
-          price_per_package: Number(pkg.price),
-          description: pkg.description?.trim() || null,
-        }))
-        .filter(
-          (pkg) =>
-            Number.isFinite(pkg.votes_included) &&
-            pkg.votes_included > 0 &&
-            Number.isFinite(pkg.price_per_package) &&
-            pkg.price_per_package >= 0
-        )
-
-      const clearRes = await fetch(`/api/bulk-vote-packages?event_id=${encodeURIComponent(eventId)}`, {
-        method: 'DELETE',
-      })
-
-      if (!clearRes.ok) {
-        const clearPayload = await clearRes.json().catch(() => ({}))
-        toast({
-          title: 'Bulk package update failed',
-          description: clearPayload.error || 'Could not reset existing bulk packages.',
-          variant: 'destructive',
-        })
-        setSaving(false)
-        return
-      }
-
-      for (const pkg of validPackages) {
-        const savePkgRes = await fetch('/api/bulk-vote-packages', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            event_id: eventId,
-            votes_included: pkg.votes_included,
-            price_per_package: pkg.price_per_package,
-            description: pkg.description,
-          }),
-        })
-
-        if (!savePkgRes.ok) {
-          const pkgPayload = await savePkgRes.json().catch(() => ({}))
-          toast({
-            title: 'Bulk package update failed',
-            description: pkgPayload.error || 'Could not save one or more bulk packages.',
-            variant: 'destructive',
-          })
-          setSaving(false)
-          return
-        }
-      }
-
       toast({
         title: 'Event Updated',
-        description: 'Changes and bulk vote packages saved successfully.',
+        description: 'Event settings saved successfully.',
       })
-      setBulkPackagesSaved(true)
     }
 
     setSaving(false)
@@ -396,74 +315,17 @@ export default function EventSettingsPage() {
         <div className="space-y-3 rounded-2xl border border-border bg-surface p-4">
           <div>
             <h3 className="text-sm font-semibold">Bulk Vote Packages</h3>
-            <p className="text-xs text-muted-foreground">Configure discounted vote bundles for this event.</p>
-            {bulkPackagesSaved ? (
-              <p className="mt-2 inline-flex items-center rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-xs font-medium text-emerald-300">
-                Bulk Packages Saved
-              </p>
-            ) : null}
+            <p className="text-xs text-muted-foreground">
+              Manage discounted vote bundles on a dedicated page.
+            </p>
           </div>
-          {bulkPackages.map((pkg, index) => (
-            <div key={index} className="grid grid-cols-1 md:grid-cols-3 gap-2">
-              <DSInput
-                type="number"
-                min="1"
-                placeholder="Votes included"
-                value={pkg.votes}
-                onChange={(e) => {
-                  const next = [...bulkPackages]
-                  next[index] = { ...next[index], votes: e.target.value }
-                  setBulkPackages(next)
-                  setBulkPackagesSaved(false)
-                }}
-              />
-              <DSInput
-                type="number"
-                min="0"
-                step="0.01"
-                placeholder="Package price (GHS)"
-                value={pkg.price}
-                onChange={(e) => {
-                  const next = [...bulkPackages]
-                  next[index] = { ...next[index], price: e.target.value }
-                  setBulkPackages(next)
-                  setBulkPackagesSaved(false)
-                }}
-              />
-              <DSInput
-                placeholder="Description (optional)"
-                value={pkg.description}
-                onChange={(e) => {
-                  const next = [...bulkPackages]
-                  next[index] = { ...next[index], description: e.target.value }
-                  setBulkPackages(next)
-                  setBulkPackagesSaved(false)
-                }}
-              />
-            </div>
-          ))}
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={() => {
-                setBulkPackages((prev) => [...prev, { votes: '', price: '', description: '' }])
-                setBulkPackagesSaved(false)
-              }}
-              className="px-4 py-2 rounded-xl border border-border bg-card text-sm"
-            >
-              Add Package
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setBulkPackages((prev) => (prev.length > 1 ? prev.slice(0, -1) : prev))
-                setBulkPackagesSaved(false)
-              }}
-              className="px-4 py-2 rounded-xl border border-border bg-card text-sm"
-            >
-              Remove Last
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={() => router.push(`/organizer/events/${eventId}/bulk-votes`)}
+            className="px-4 py-3 rounded-xl border border-border bg-card text-sm hover:border-[hsl(var(--gold))]/40 transition"
+          >
+            Open Bulk Vote Management
+          </button>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
