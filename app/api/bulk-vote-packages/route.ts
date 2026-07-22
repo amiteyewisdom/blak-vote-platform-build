@@ -15,7 +15,7 @@ const bulkVotePackageSchema = z.object({
   event_id: z.string().uuid(),
   votes_included: z.coerce.number().int().min(1).max(10000),
   price_per_package: z.coerce.number().nonnegative(),
-  description: z.string().optional(),
+  description: z.string().optional().nullable(),
 })
 
 const bulkVotePackageUpdateSchema = z.object({
@@ -61,12 +61,24 @@ export async function GET(req: NextRequest) {
     }
 
     if (error) {
+      console.error('[bulk-vote-packages] GET error:', error.message)
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
-    return NextResponse.json({ packages: packages ?? [] })
+    return NextResponse.json(
+      { packages: packages ?? [] },
+      {
+        headers: {
+          'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+          Pragma: 'no-cache',
+          Expires: '0',
+        },
+      }
+    )
   } catch (error) {
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+    const message = error instanceof Error ? error.message : 'Internal server error'
+    console.error('[bulk-vote-packages] GET exception:', message)
+    return NextResponse.json({ error: message }, { status: 500 })
   }
 }
 
@@ -113,12 +125,15 @@ export async function POST(req: NextRequest) {
       .maybeSingle()
 
     if (error) {
+      console.error('[bulk-vote-packages] POST error:', error.message)
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
     return NextResponse.json({ package: newPackage }, { status: 201 })
   } catch (error) {
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+    const message = error instanceof Error ? error.message : 'Internal server error'
+    console.error('[bulk-vote-packages] POST exception:', message)
+    return NextResponse.json({ error: message }, { status: 500 })
   }
 }
 
@@ -167,6 +182,7 @@ export async function PUT(req: NextRequest) {
       .maybeSingle()
 
     if (error) {
+      console.error('[bulk-vote-packages] PUT error:', error.message)
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
@@ -176,7 +192,9 @@ export async function PUT(req: NextRequest) {
 
     return NextResponse.json({ package: updatedPackage })
   } catch (error) {
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+    const message = error instanceof Error ? error.message : 'Internal server error'
+    console.error('[bulk-vote-packages] PUT exception:', message)
+    return NextResponse.json({ error: message }, { status: 500 })
   }
 }
 
@@ -258,11 +276,14 @@ export async function DELETE(req: NextRequest) {
       .eq('event_id', eventId)
 
     if (error) {
+      console.error('[bulk-vote-packages] DELETE error:', error.message)
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
     return NextResponse.json({ success: true })
   } catch (error) {
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+    const message = error instanceof Error ? error.message : 'Internal server error'
+    console.error('[bulk-vote-packages] DELETE exception:', message)
+    return NextResponse.json({ error: message }, { status: 500 })
   }
 }

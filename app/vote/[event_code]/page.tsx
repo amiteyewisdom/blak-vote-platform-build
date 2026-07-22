@@ -77,7 +77,9 @@ export default function PublicVotePage() {
         setCandidates(data.candidates)
 
         if (data?.event?.id) {
-          const pkgRes = await fetch(`/api/bulk-vote-packages?event_id=${encodeURIComponent(data.event.id)}`)
+          const pkgRes = await fetch(`/api/bulk-vote-packages?event_id=${encodeURIComponent(data.event.id)}`, {
+            cache: 'no-store',
+          })
           if (pkgRes.ok) {
             const pkgPayload = await pkgRes.json()
             setBulkPackages(pkgPayload.packages || [])

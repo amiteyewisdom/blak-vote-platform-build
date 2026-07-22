@@ -332,6 +332,7 @@ export default function BulkVoteManagementPage() {
                 </div>
                 <div className="md:col-span-2 flex items-center gap-2">
                   <DSPrimaryButton
+                    type="button"
                     onClick={() => handleSave(index)}
                     disabled={saving}
                     className="flex-1 inline-flex items-center justify-center gap-2"
