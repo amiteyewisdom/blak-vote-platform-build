@@ -160,7 +160,7 @@ export default function EventPage() {
     return true
   }
 
-  const handleVote = async (options?: {
+  const handleVote = (options?: {
     quantity?: number
     bulkPackageId?: string | null
     amount?: number | null
@@ -182,7 +182,7 @@ export default function EventPage() {
 
     // If contact info is already valid, proceed straight to payment for bulk packages.
     if (isValidContactInfo()) {
-      await handleVoteSubmit(options)
+      void handleVoteSubmit(options)
     } else {
       setShowVoteModal(true)
     }
