@@ -782,29 +782,12 @@ async function handleVoteFlow(params: {
     }
 
     if (steps.length === 3) {
-      const votePrice = resolveEventVotePrice(event)
       const menu = bulkPackages
-        .slice(0, 8)
-        .map((pkg, index) => {
-          const retail = Number((pkg.votes_included * votePrice).toFixed(2))
-          const savings = Number((retail - pkg.price_per_package).toFixed(2))
-          const description = String(pkg.description || '').trim()
-          let line = `${index + 1}. ${pkg.votes_included} votes for GHS ${pkg.price_per_package.toFixed(2)}`
-          if (description) {
-            line += ` (${description.slice(0, 20).trim()}${description.length > 20 ? '..' : ''})`
-          }
-          if (savings > 0) {
-            line += ` Save GHS ${savings.toFixed(2)}`
-          }
-          return line
-        })
+        .slice(0, 6)
+        .map((pkg, index) => `${index + 1}. ${pkg.votes_included}v GHS${pkg.price_per_package.toFixed(0)}`)
         .join('\n')
 
-      return con(
-        `Candidate: ${candidate.nominee_name || candidateCode}\n` +
-          `Event: ${event.title || eventCode}\n` +
-          `Select bulk package\n${menu}\n0. Cancel`
-      )
+      return con(`Bulk votes\n${menu}\n0. Cancel`)
     }
 
     if (steps[3] === '0') {
