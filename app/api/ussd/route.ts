@@ -669,13 +669,14 @@ async function handleVoteFlow(params: {
   sessionId: string
   phoneNumber: string
 }) {
-  const { steps, sessionId, phoneNumber } = params
+  const { sessionId, phoneNumber } = params
+  const rawSteps = params.steps
 
-  if (steps.length === 1) {
+  if (rawSteps.length === 1) {
     return con('Enter nominee code')
   }
 
-  const candidateCode = toUpperCode(steps[1])
+  const candidateCode = toUpperCode(rawSteps[1])
   const candidateMatch = await findCandidateByCode(candidateCode)
 
   if (candidateMatch.ambiguous) {
@@ -703,10 +704,11 @@ async function handleVoteFlow(params: {
     return end('Voting is closed for this event.')
   }
 
-  if (steps.length === 2) {
-    const bulkPackages = await getBulkVotePackagesForEvent(event.id)
+  const bulkPackages = await getBulkVotePackagesForEvent(event.id)
+  const hasBulkPackages = bulkPackages.length > 0
 
-    if (bulkPackages.length === 0) {
+  if (rawSteps.length === 2) {
+    if (!hasBulkPackages) {
       return con(
         `Candidate: ${candidate.nominee_name || candidateCode}\n` +
           `Event: ${event.title || eventCode}\n` +
@@ -720,6 +722,12 @@ async function handleVoteFlow(params: {
         `1. Single vote purchase\n2. Bulk vote packages`
     )
   }
+
+  // When no bulk packages are configured, the prompt at rawSteps.length === 2 asked for quantity
+  // directly, so rawSteps[2] is the quantity. Normalize the path to match the single-vote branch.
+  const steps = hasBulkPackages
+    ? rawSteps
+    : ['1', candidateCode, '1', ...rawSteps.slice(2)]
 
   const mode = steps[2]
 
@@ -769,9 +777,7 @@ async function handleVoteFlow(params: {
   }
 
   if (mode === '2') {
-    const bulkPackages = await getBulkVotePackagesForEvent(event.id)
-
-    if (bulkPackages.length === 0) {
+    if (!hasBulkPackages) {
       return end('No bulk vote packages are available for this event.')
     }
 
@@ -786,6 +792,7 @@ async function handleVoteFlow(params: {
 
       return con(
         `Candidate: ${candidate.nominee_name || candidateCode}\n` +
+          `Event: ${event.title || eventCode}\n` +
           `Select bulk package\n${menu}\n0. Cancel`
       )
     }
@@ -805,7 +812,8 @@ async function handleVoteFlow(params: {
 
     if (steps.length === 4) {
       return con(
-        `Bulk vote: ${packageVotes} votes for ${candidate.nominee_name || 'candidate'}\n` +
+        `Bulk vote: ${packageVotes} votes for ${candidate.nominee_name || candidateCode}\n` +
+          `Event: ${event.title || eventCode}\n` +
           `Amount: GHS ${packageAmount.toFixed(2)}\n` +
           '1. Confirm\n2. Cancel'
       )
@@ -902,8 +910,9 @@ async function handleTicketFlow(params: {
   }
 
   if (steps.length === 5) {
+    const ticketLabel = quantity === 1 ? 'Ticket' : 'Tickets'
     return con(
-      `Ticket x${quantity}\n` +
+      `${ticketLabel} x${quantity}\n` +
         `Event: ${event.title || eventCode}\n` +
         `Ticket: ${plan.name || 'Ticket'}\n` +
         `Amount: GHS ${totalAmount.toFixed(2)}\n` +
