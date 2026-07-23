@@ -314,22 +314,12 @@ export async function POST(req: Request) {
       );
     }
 
-    let reconciliationWarning: string | null = null;
-    if (successCount > 0) {
-      try {
-        await reconcileNominationVoteCounts(supabase, normalizedVotes);
-      } catch (error) {
-        reconciliationWarning = error instanceof Error ? error.message : 'Failed to reconcile nomination totals.';
-      }
-    }
-
     if (failures.length > 0) {
       return NextResponse.json(
         {
           message: 'Some votes recorded with errors',
           successCount,
           failures,
-          ...(reconciliationWarning ? { warning: reconciliationWarning } : {}),
         },
         { status: 207 },
       );
@@ -338,7 +328,6 @@ export async function POST(req: Request) {
     return NextResponse.json({
       message: 'Votes recorded successfully',
       successCount,
-      ...(reconciliationWarning ? { warning: reconciliationWarning } : {}),
     });
   } catch (error) {
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
