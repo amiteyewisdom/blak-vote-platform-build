@@ -710,16 +710,16 @@ async function handleVoteFlow(params: {
   if (rawSteps.length === 2) {
     if (!hasBulkPackages) {
       return con(
-        `Candidate: ${candidate.nominee_name || candidateCode}\n` +
-          `Event: ${event.title || eventCode}\n` +
-          `Enter quantity (1-${MAX_VOTE_QUANTITY})`
+        `Enter quantity (1-${MAX_VOTE_QUANTITY})\n` +
+          `Candidate: ${candidate.nominee_name || candidateCode}\n` +
+          `Event: ${event.title || eventCode}`
       )
     }
 
     return con(
-      `Candidate: ${candidate.nominee_name || candidateCode}\n` +
-        `Event: ${event.title || eventCode}\n` +
-        `1. Single vote purchase\n2. Bulk vote packages`
+      `1. Single vote\n2. Bulk vote packages\n` +
+        `Candidate: ${candidate.nominee_name || candidateCode}\n` +
+        `Event: ${event.title || eventCode}`
     )
   }
 
@@ -782,12 +782,22 @@ async function handleVoteFlow(params: {
     }
 
     if (steps.length === 3) {
+      const votePrice = resolveEventVotePrice(event)
       const menu = bulkPackages
         .slice(0, 8)
-        .map(
-          (pkg, index) =>
-            `${index + 1}. ${pkg.votes_included} votes - GHS ${pkg.price_per_package.toFixed(2)}`
-        )
+        .map((pkg, index) => {
+          const retail = Number((pkg.votes_included * votePrice).toFixed(2))
+          const savings = Number((retail - pkg.price_per_package).toFixed(2))
+          const description = String(pkg.description || '').trim()
+          let line = `${index + 1}. ${pkg.votes_included} votes for GHS ${pkg.price_per_package.toFixed(2)}`
+          if (description) {
+            line += ` (${description.slice(0, 20).trim()}${description.length > 20 ? '..' : ''})`
+          }
+          if (savings > 0) {
+            line += ` Save GHS ${savings.toFixed(2)}`
+          }
+          return line
+        })
         .join('\n')
 
       return con(

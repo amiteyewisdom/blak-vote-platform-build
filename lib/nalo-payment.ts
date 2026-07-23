@@ -379,11 +379,11 @@ function inferNaloNetwork(msisdn: string) {
   }
 
   if (['20', '50'].includes(localPrefix)) {
-    return 'TELECEL'
+    return 'VODAFONE'
   }
 
   if (['26', '27', '56', '57'].includes(localPrefix)) {
-    return 'AT'
+    return 'AIRTELTIGO'
   }
 
   return null
