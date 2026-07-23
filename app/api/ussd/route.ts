@@ -717,9 +717,9 @@ async function handleVoteFlow(params: {
     }
 
     return con(
-      `1. Single vote\n2. Bulk vote packages\n` +
-        `Candidate: ${candidate.nominee_name || candidateCode}\n` +
-        `Event: ${event.title || eventCode}`
+      `Vote: ${candidate.nominee_name || candidateCode}\n` +
+        `Event: ${event.title || eventCode}\n` +
+        '1. Single vote\n2. Bulk packages'
     )
   }
 
@@ -784,10 +784,10 @@ async function handleVoteFlow(params: {
     if (steps.length === 3) {
       const menu = bulkPackages
         .slice(0, 6)
-        .map((pkg, index) => `${index + 1}. ${pkg.votes_included}v GHS${pkg.price_per_package.toFixed(0)}`)
+        .map((pkg, index) => `${index + 1}. ${pkg.votes_included} votes - GHS ${pkg.price_per_package.toFixed(2)}`)
         .join('\n')
 
-      return con(`Bulk votes\n${menu}\n0. Cancel`)
+      return con(`Select bulk package\n${menu}\n0. Cancel`)
     }
 
     if (steps[3] === '0') {
@@ -795,30 +795,13 @@ async function handleVoteFlow(params: {
     }
 
     const packageIndex = Number(steps[3]) - 1
-    if (!Number.isInteger(packageIndex) || packageIndex < 0 || packageIndex >= bulkPackages.length) {
+    if (!Number.isInteger(packageIndex) || packageIndex < 0 || packageIndex >= Math.min(bulkPackages.length, 6)) {
       return end('Invalid package option selected.')
     }
 
     const selectedPackage = bulkPackages[packageIndex]
     const packageVotes = selectedPackage.votes_included
     const packageAmount = Number(selectedPackage.price_per_package.toFixed(2))
-
-    if (steps.length === 4) {
-      return con(
-        `Bulk vote: ${packageVotes} votes for ${candidate.nominee_name || candidateCode}\n` +
-          `Event: ${event.title || eventCode}\n` +
-          `Amount: GHS ${packageAmount.toFixed(2)}\n` +
-          '1. Confirm\n2. Cancel'
-      )
-    }
-
-    if (steps[4] === '2') {
-      return end('Bulk vote cancelled.')
-    }
-
-    if (steps[4] !== '1') {
-      return end('Invalid confirmation option.')
-    }
 
     return processUssdVotePayment({
       sessionId,
