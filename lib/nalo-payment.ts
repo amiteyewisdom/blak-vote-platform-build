@@ -363,6 +363,10 @@ function normalizeMsisdn(phone: string) {
     return `233${digits.slice(1)}`
   }
 
+  if (digits.length === 9) {
+    return `233${digits}`
+  }
+
   return digits
 }
 

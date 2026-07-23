@@ -20,6 +20,8 @@ type EventRecord = {
   id: string
   organizer_id?: string | null
   title?: string | null
+  short_code?: string | null
+  event_code?: string | null
   status?: string | null
   vote_price?: number | string | null
   cost_per_vote?: number | string | null
@@ -740,7 +742,7 @@ async function handleVoteFlow(params: {
 
     if (steps.length === 4) {
       return con(
-        `Vote ${quantity} for ${candidate.nominee_name || 'candidate'}\n` +
+        `Vote ${quantity} for ${candidate.nominee_name || candidateCode}\n` +
           `Event: ${event.title || eventCode}\n` +
           `Amount: GHS ${totalAmount.toFixed(2)}\n` +
           '1. Confirm\n2. Cancel'
