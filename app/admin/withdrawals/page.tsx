@@ -514,11 +514,21 @@ export default function AdminWithdrawalsPage() {
                 {w.payout_provider && (
                   <p className="text-xs text-muted-foreground uppercase">Provider: {w.payout_provider}</p>
                 )}
-                {readAccountDetail(w.account_details, ['account_name', 'name']) && (
-                  <p className="text-xs text-muted-foreground">Recipient: {readAccountDetail(w.account_details, ['account_name', 'name'])}</p>
-                )}
-                {readAccountDetail(w.account_details, ['bank_code']) && (
-                  <p className="text-xs text-muted-foreground">Destination: {readAccountDetail(w.account_details, ['bank_code'])} / {maskValue(readAccountDetail(w.account_details, ['account_number'])) || 'N/A'}</p>
+                {w.method === 'mobile_money' ? (
+                  <div className="mt-2 space-y-1 rounded-lg border border-border/70 bg-background/30 px-3 py-2 text-xs text-muted-foreground">
+                    <p>MoMo recipient: {readAccountDetail(w.account_details, ['account_name', 'name']) || 'N/A'}</p>
+                    <p>MoMo number: {readAccountDetail(w.account_details, ['account_number', 'mobile_money_number', 'phone_number']) || 'N/A'}</p>
+                    <p>Network: {readAccountDetail(w.account_details, ['network', 'provider', 'bank_code']) || 'N/A'}</p>
+                  </div>
+                ) : (
+                  <div className="mt-2 space-y-1 rounded-lg border border-border/70 bg-background/30 px-3 py-2 text-xs text-muted-foreground">
+                    <p>Account holder: {readAccountDetail(w.account_details, ['account_name', 'name']) || 'N/A'}</p>
+                    <p>Bank: {readAccountDetail(w.account_details, ['bank_name', 'bank', 'bank_code']) || 'N/A'}</p>
+                    <p>Account number: {readAccountDetail(w.account_details, ['account_number']) || 'N/A'}</p>
+                    {readAccountDetail(w.account_details, ['branch', 'branch_name']) && (
+                      <p>Branch: {readAccountDetail(w.account_details, ['branch', 'branch_name'])}</p>
+                    )}
+                  </div>
                 )}
                 {w.payout_reference && (
                   <p className="text-xs text-muted-foreground break-all">Reference: {w.payout_reference}</p>
