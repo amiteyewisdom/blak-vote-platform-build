@@ -64,6 +64,9 @@ export type AdminPlatformWalletRow = {
   platform_voting_earnings: number
   platform_ticket_earnings: number
   total_platform_earnings: number
+  pending_admin_withdrawals: number
+  total_withdrawn: number
+  available_platform_balance: number
   last_updated: string
 }
 

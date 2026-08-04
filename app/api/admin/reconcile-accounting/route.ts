@@ -47,7 +47,7 @@ export async function POST(req: Request) {
   // 3. Fetch updated admin platform wallet totals for confirmation.
   const { data: platformWallet } = await adminSupabase
     .from('admin_platform_wallet')
-    .select('platform_voting_earnings,platform_ticket_earnings,total_platform_earnings,last_updated')
+    .select('platform_voting_earnings,platform_ticket_earnings,total_platform_earnings,pending_admin_withdrawals,total_withdrawn,available_platform_balance,last_updated')
     .eq('id', 1)
     .maybeSingle()
 
@@ -75,7 +75,7 @@ export async function GET(req: Request) {
 
   const { data: platformWallet, error } = await adminSupabase
     .from('admin_platform_wallet')
-    .select('platform_voting_earnings,platform_ticket_earnings,total_platform_earnings,last_updated')
+    .select('platform_voting_earnings,platform_ticket_earnings,total_platform_earnings,pending_admin_withdrawals,total_withdrawn,available_platform_balance,last_updated')
     .eq('id', 1)
     .maybeSingle()
 
