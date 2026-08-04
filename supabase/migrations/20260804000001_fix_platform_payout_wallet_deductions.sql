@@ -7,13 +7,16 @@
 --   fee earnings, so the wallet balance kept growing even after payouts.
 --
 -- Fix:
---   1. Add pending / withdrawn / available balance columns to
+--   1. Allow status = 'processed' on admin_platform_withdrawals and migrate
+--      rows that were already paid but stored as 'approved' because the old
+--      constraint rejected 'processed'.
+--   2. Add pending / withdrawn / available balance columns to
 --      admin_platform_wallet.
---   2. Replace sync_admin_platform_wallet_from_ledger() so it computes the
+--   3. Replace sync_admin_platform_wallet_from_ledger() so it computes the
 --      net available balance from the ledger and the withdrawal table.
---   3. Add a trigger on admin_platform_withdrawals that maintains the wallet
+--   4. Add a trigger on admin_platform_withdrawals that maintains the wallet
 --      buckets whenever a payout is requested, processed, or rejected.
---   4. Backfill the wallet so existing processed/pending withdrawals are
+--   5. Backfill the wallet so existing processed/pending withdrawals are
 --      reflected immediately.
 -- =============================================================================
 
@@ -29,7 +32,50 @@ ALTER TABLE admin_platform_wallet
 INSERT INTO admin_platform_wallet (id) VALUES (1) ON CONFLICT (id) DO NOTHING;
 
 -- -----------------------------------------------------------------------------
--- 2. Recompute admin platform wallet from the ledger
+-- 2. Fix the status constraint mismatch and migrate paid-out rows
+-- -----------------------------------------------------------------------------
+-- Production ran the first platform-withdrawals migration, whose CHECK only
+-- allowed ('pending','approved','rejected','cancelled'). The process route tried
+-- to set status='processed', failed the constraint, and fell back to 'approved'.
+-- That is why paid platform payouts did not show in the "Processed" bucket and
+-- were not debited from the wallet.
+ALTER TABLE admin_platform_withdrawals
+  DROP CONSTRAINT IF EXISTS admin_platform_withdrawals_status_valid;
+
+ALTER TABLE admin_platform_withdrawals
+  ADD CONSTRAINT admin_platform_withdrawals_status_valid
+  CHECK (status IN ('pending', 'approved', 'processed', 'rejected', 'cancelled'));
+
+-- Any payout that already has a processed_at timestamp is truly paid out.
+UPDATE admin_platform_withdrawals
+SET status = 'processed'
+WHERE processed_at IS NOT NULL
+  AND status <> 'processed';
+
+-- Normalize the available balance function so approved payouts are also reserved.
+DROP FUNCTION IF EXISTS get_admin_available_platform_balance();
+
+CREATE OR REPLACE FUNCTION get_admin_available_platform_balance()
+RETURNS NUMERIC
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  v_total_platform_revenue NUMERIC;
+  v_reserved_amount NUMERIC;
+BEGIN
+  SELECT COALESCE(SUM(platform_fee_amount), 0) INTO v_total_platform_revenue
+  FROM admin_revenue_transactions;
+
+  SELECT COALESCE(SUM(amount_requested), 0) INTO v_reserved_amount
+  FROM admin_platform_withdrawals
+  WHERE status IN ('pending', 'approved', 'processed');
+
+  RETURN GREATEST(v_total_platform_revenue - v_reserved_amount, 0);
+END;
+$$;
+
+-- -----------------------------------------------------------------------------
+-- 3. Recompute admin platform wallet from the ledger
 -- -----------------------------------------------------------------------------
 DROP FUNCTION IF EXISTS sync_admin_platform_wallet_from_ledger();
 
@@ -74,7 +120,7 @@ END;
 $$;
 
 -- -----------------------------------------------------------------------------
--- 3. Trigger to keep admin_platform_wallet in sync with withdrawal state
+-- 4. Trigger to keep admin_platform_wallet in sync with withdrawal state
 -- -----------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION admin_platform_wallet_withdrawal_sync()
 RETURNS TRIGGER
@@ -169,6 +215,6 @@ CREATE TRIGGER trg_admin_platform_wallet_withdrawal_sync
   EXECUTE FUNCTION admin_platform_wallet_withdrawal_sync();
 
 -- -----------------------------------------------------------------------------
--- 4. Backfill existing data
+-- 5. Backfill existing data
 -- -----------------------------------------------------------------------------
 SELECT sync_admin_platform_wallet_from_ledger();

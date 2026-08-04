@@ -35,7 +35,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Only pending withdrawals can be processed' }, { status: 400 })
     }
 
-    const processedAttempt = await adminSupabase
+    const { error: updateError } = await adminSupabase
       .from('admin_platform_withdrawals')
       .update({
         status: 'processed',
@@ -44,19 +44,8 @@ export async function POST(request: Request) {
       })
       .eq('id', withdrawalId)
 
-    if (processedAttempt.error) {
-      const approvedAttempt = await adminSupabase
-        .from('admin_platform_withdrawals')
-        .update({
-          status: 'approved',
-          admin_note: adminNote || null,
-          processed_at: new Date().toISOString(),
-        })
-        .eq('id', withdrawalId)
-
-      if (approvedAttempt.error) {
-        return NextResponse.json({ error: approvedAttempt.error.message || processedAttempt.error.message }, { status: 500 })
-      }
+    if (updateError) {
+      return NextResponse.json({ error: updateError.message }, { status: 500 })
     }
 
     return NextResponse.json({ success: true })
