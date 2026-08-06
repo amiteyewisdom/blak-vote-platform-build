@@ -578,22 +578,22 @@ export default function EventPage() {
                       onClick={() => toggleGroup(String(group.id))}
                       className="w-full flex items-center justify-between mb-4 pb-4 border-b border-border text-left"
                     >
-                      <h3 className="text-lg font-bold text-[hsl(var(--gold))] flex items-center gap-3">
+                      <h3 className="text-lg font-bold text-[hsl(var(--gold))] flex items-center gap-3 min-w-0 flex-1">
                         {expandedGroupIds.includes(String(group.id)) ? (
-                          <ChevronDown className="h-4 w-4" />
+                          <ChevronDown className="h-4 w-4 shrink-0" />
                         ) : (
-                          <ChevronRight className="h-4 w-4" />
+                          <ChevronRight className="h-4 w-4 shrink-0" />
                         )}
                         {event?.image_url ? (
                           <img
                             src={event.image_url}
                             alt={event.title || 'Event'}
-                            className="h-8 w-8 rounded-md object-cover border border-border"
+                            className="h-8 w-8 rounded-md object-cover border border-border shrink-0"
                           />
                         ) : (
-                          <div className="h-8 w-8 rounded-md bg-surface/70 border border-border" />
+                          <div className="h-8 w-8 rounded-md bg-surface/70 border border-border shrink-0" />
                         )}
-                        <span>{group.name}</span>
+                        <span className="truncate block">{group.name}</span>
                       </h3>
                       <span className="text-xs font-medium text-muted-foreground bg-surface/70 px-3 py-1 rounded-full">
                         {group.candidates.length} candidates
@@ -605,7 +605,7 @@ export default function EventPage() {
                         {group.candidates.map((candidate, index) => (
                         <div
                           key={candidate.id}
-                          className={`bg-[hsl(var(--legacy-bg-card))]/60 backdrop-blur-sm border rounded-xl p-4 sm:p-5 cursor-pointer transition-all duration-200 group/card ${
+                          className={`bg-[hsl(var(--legacy-bg-card))]/60 backdrop-blur-sm border rounded-xl p-4 sm:p-5 cursor-pointer transition-all duration-200 group/card overflow-hidden ${
                             selectedCandidate === candidate.id
                               ? 'border-[hsl(var(--gold))]/70 bg-[hsl(var(--gold))]/8 shadow-lg shadow-[hsl(var(--gold))]/15 scale-[1.01]'
                                 : 'border-border/70 hover:border-[hsl(var(--gold))]/40 hover:bg-[hsl(var(--gold))]/5'
@@ -619,7 +619,7 @@ export default function EventPage() {
                           }}
                           style={{ animationDelay: `${index * 30}ms` }}
                         >
-                          <div className="flex items-start justify-between gap-4">
+                          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-4">
                             <div className="flex items-start gap-4 flex-1 min-w-0">
                               <div className="w-14 h-14 rounded-lg overflow-hidden bg-[hsl(var(--legacy-bg-input))] border border-border shadow-md flex-shrink-0">
                                 {candidate.photo_url ? (
@@ -635,14 +635,14 @@ export default function EventPage() {
                                 )}
                               </div>
                               <div className="flex-1 min-w-0 pt-1">
-                                <h3 className="font-bold text-base text-foreground group-hover/card:text-[hsl(var(--gold))] transition-colors truncate">{candidate.nominee_name}</h3>
+                                <h3 className="font-bold text-base text-foreground group-hover/card:text-[hsl(var(--gold))] transition-colors break-words line-clamp-2">{candidate.nominee_name}</h3>
                                 {candidate.bio && (
                                   <p className="text-muted-foreground text-xs leading-relaxed line-clamp-1 mt-1">{candidate.bio}</p>
                                 )}
                               </div>
                             </div>
 
-                            <div className="px-3 py-2 bg-[hsl(var(--gold))]/12 border border-[hsl(var(--gold))]/25 rounded-lg flex flex-col items-center justify-center min-w-fit flex-shrink-0">
+                            <div className="px-3 py-2 bg-[hsl(var(--gold))]/12 border border-[hsl(var(--gold))]/25 rounded-lg flex flex-col items-center justify-center min-w-fit flex-shrink-0 self-end mt-3 sm:mt-0 sm:self-auto">
                               <div className="font-bold text-lg text-[hsl(var(--gold))]">
                                 {candidate.vote_count || 0}
                               </div>
