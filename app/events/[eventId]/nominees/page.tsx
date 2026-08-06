@@ -191,7 +191,7 @@ export default function PublicNomineesPage() {
                   {isOpen && (
                     <div className="px-5 pb-5 space-y-3 border-t border-border/60">
                       {group.candidates.map((candidate) => (
-                        <div key={candidate.id} className="rounded-xl border border-border/70 bg-background/30 p-4 flex items-start justify-between gap-3 overflow-hidden">
+                        <div key={candidate.id} className="rounded-xl border border-border/70 bg-background/30 p-4 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 overflow-hidden">
                           <div className="min-w-0 flex-1 flex items-start gap-3">
                             <div className="h-11 w-11 rounded-lg overflow-hidden bg-surface border border-border flex-shrink-0">
                               {candidate.photo_url ? (
@@ -206,12 +206,12 @@ export default function PublicNomineesPage() {
                                 </div>
                               )}
                             </div>
-                            <div className="min-w-0">
-                              <h3 className="font-semibold truncate">{candidate.nominee_name}</h3>
+                            <div className="min-w-0 pr-1">
+                              <h3 className="font-semibold break-words line-clamp-2 leading-tight">{candidate.nominee_name}</h3>
                               {candidate.bio && <p className="text-sm text-muted-foreground line-clamp-2 mt-1">{candidate.bio}</p>}
                             </div>
                           </div>
-                          <div className="text-sm font-semibold text-[hsl(var(--gold))] whitespace-nowrap shrink-0">
+                          <div className="text-sm font-semibold text-[hsl(var(--gold))] whitespace-nowrap shrink-0 min-w-[64px] self-end sm:self-auto text-right sm:text-left">
                             {candidate.vote_count || 0} votes
                           </div>
                         </div>
