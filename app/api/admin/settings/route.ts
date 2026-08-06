@@ -8,6 +8,8 @@ type AdminSettingsResponse = {
   maxEventsPerOrganizer: number
   platformFeePercent: number
   ticketingCommissionPercent: number
+  paystackFeePercent: number
+  naloFeePercent: number
   enableFraudDetection: boolean
   requireEmailVerification: boolean
   maintenanceMode: boolean
@@ -18,6 +20,8 @@ const DEFAULT_SETTINGS: AdminSettingsResponse = {
   maxEventsPerOrganizer: 10,
   platformFeePercent: 10,
   ticketingCommissionPercent: 10,
+  paystackFeePercent: 1.95,
+  naloFeePercent: 2,
   enableFraudDetection: true,
   requireEmailVerification: true,
   maintenanceMode: false,
@@ -72,6 +76,14 @@ export async function GET() {
         (data as any).ticketing_commission_percent != null
           ? Number((data as any).ticketing_commission_percent)
           : DEFAULT_SETTINGS.ticketingCommissionPercent,
+      paystackFeePercent:
+        (data as any).paystack_fee_percent != null
+          ? Number((data as any).paystack_fee_percent)
+          : DEFAULT_SETTINGS.paystackFeePercent,
+      naloFeePercent:
+        (data as any).nalo_fee_percent != null
+          ? Number((data as any).nalo_fee_percent)
+          : DEFAULT_SETTINGS.naloFeePercent,
       enableFraudDetection: (data as any).enable_fraud_detection ?? DEFAULT_SETTINGS.enableFraudDetection,
       requireEmailVerification:
         (data as any).require_email_verification ?? DEFAULT_SETTINGS.requireEmailVerification,
@@ -99,6 +111,8 @@ export async function POST(request: NextRequest) {
     const maxEventsPerOrganizer = Number.parseInt(String(body?.maxEventsPerOrganizer ?? ''), 10)
     const platformFeePercent = Number(body?.platformFeePercent)
     const ticketingCommissionPercent = Number(body?.ticketingCommissionPercent)
+    const paystackFeePercent = Number(body?.paystackFeePercent)
+    const naloFeePercent = Number(body?.naloFeePercent)
     const enableFraudDetection = Boolean(body?.enableFraudDetection)
     const requireEmailVerification = Boolean(body?.requireEmailVerification)
     const maintenanceMode = Boolean(body?.maintenanceMode)
@@ -117,7 +131,13 @@ export async function POST(request: NextRequest) {
       platformFeePercent > 100 ||
       !Number.isFinite(ticketingCommissionPercent) ||
       ticketingCommissionPercent < 0 ||
-      ticketingCommissionPercent > 100
+      ticketingCommissionPercent > 100 ||
+      !Number.isFinite(paystackFeePercent) ||
+      paystackFeePercent < 0 ||
+      paystackFeePercent > 100 ||
+      !Number.isFinite(naloFeePercent) ||
+      naloFeePercent < 0 ||
+      naloFeePercent > 100
     ) {
       return NextResponse.json({ error: 'Fee percentages must be between 0 and 100' }, { status: 400 })
     }
@@ -127,6 +147,8 @@ export async function POST(request: NextRequest) {
       max_events_per_organizer: maxEventsPerOrganizer,
       platform_fee_percent: Number(platformFeePercent.toFixed(2)),
       ticketing_commission_percent: Number(ticketingCommissionPercent.toFixed(2)),
+      paystack_fee_percent: Number(paystackFeePercent.toFixed(2)),
+      nalo_fee_percent: Number(naloFeePercent.toFixed(2)),
       enable_fraud_detection: enableFraudDetection,
       require_email_verification: requireEmailVerification,
       maintenance_mode: maintenanceMode,
@@ -147,11 +169,16 @@ export async function POST(request: NextRequest) {
       ? await adminSupabase.from('platform_settings').update(payload).eq('id', existing.id)
       : await adminSupabase.from('platform_settings').insert(payload)
 
-    // If column doesn't exist yet in DB schema, retry without ticketing_commission_percent
+    // If columns don't exist yet in DB schema, retry without the newer fields.
     if (result.error) {
       const errMsg = String(result.error.message || '').toLowerCase()
-      if (errMsg.includes('ticketing_commission_percent') || errMsg.includes('column') || errMsg.includes('does not exist')) {
-        const { ticketing_commission_percent: _dropped, ...fallbackPayload } = payload
+      if (errMsg.includes('ticketing_commission_percent') || errMsg.includes('paystack_fee_percent') || errMsg.includes('nalo_fee_percent') || errMsg.includes('column') || errMsg.includes('does not exist')) {
+        const {
+          ticketing_commission_percent: _ticketing,
+          paystack_fee_percent: _paystack,
+          nalo_fee_percent: _nalo,
+          ...fallbackPayload
+        } = payload
         result = existing
           ? await adminSupabase.from('platform_settings').update(fallbackPayload).eq('id', existing.id)
           : await adminSupabase.from('platform_settings').insert(fallbackPayload)

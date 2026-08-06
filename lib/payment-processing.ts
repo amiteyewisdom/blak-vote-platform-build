@@ -721,17 +721,27 @@ async function resolveAdminRevenueFeePercent(params: {
   supabase: ReturnType<typeof getSupabaseAdminClient>
   paymentContext: 'vote' | 'ticket'
   organizerId: string | null
+  provider?: string | null
 }) {
-  const { supabase, paymentContext, organizerId } = params
-  const { getEffectiveTicketingFeePercent, getEffectiveVotePlatformFeePercent } = await import(
-    '@/lib/organizer-fees'
-  )
+  const { supabase, paymentContext, organizerId, provider } = params
+  const {
+    getEffectiveTicketingFeePercent,
+    getEffectiveVotePlatformFeePercent,
+    getPaymentProviderFeePercent,
+    applyProviderFeeDeduction,
+  } = await import('@/lib/organizer-fees')
 
-  if (paymentContext === 'ticket') {
-    return getEffectiveTicketingFeePercent(supabase, organizerId)
+  const nominalFeePercent =
+    paymentContext === 'ticket'
+      ? await getEffectiveTicketingFeePercent(supabase, organizerId)
+      : await getEffectiveVotePlatformFeePercent(supabase, organizerId)
+
+  if (!provider) {
+    return nominalFeePercent
   }
 
-  return getEffectiveVotePlatformFeePercent(supabase, organizerId)
+  const providerFeePercent = await getPaymentProviderFeePercent(supabase, provider)
+  return applyProviderFeeDeduction(nominalFeePercent, providerFeePercent)
 }
 
 async function ensureAdminRevenueCapturedForPayment(params: {
@@ -776,15 +786,16 @@ async function ensureAdminRevenueCapturedForPayment(params: {
     .filter('id::text', 'eq', eventId)
     .maybeSingle()
 
+  const provider = payment.provider
+    ? String(payment.provider).trim().toLowerCase()
+    : normalizeStoredPaymentProvider(String(payment.reference || ''), payment.provider)
+
   const feePercent = await resolveAdminRevenueFeePercent({
     supabase,
     paymentContext,
     organizerId: eventRow?.organizer_id || null,
+    provider,
   })
-
-  const provider = payment.provider
-    ? String(payment.provider).trim().toLowerCase()
-    : normalizeStoredPaymentProvider(String(payment.reference || ''), payment.provider)
 
   const platformFeeAmount = Number(((amountPaid * feePercent) / 100).toFixed(2))
   const organizerNetAmount = Number((amountPaid - platformFeeAmount).toFixed(2))
@@ -863,15 +874,16 @@ async function recordPaymentSplit(params: {
 
   const organizerId: string | null = eventRow?.organizer_id || null
 
+  const provider = payment.provider
+    ? String(payment.provider).trim().toLowerCase()
+    : normalizeStoredPaymentProvider(String(payment.reference || ''), payment.provider)
+
   const feePercent = await resolveAdminRevenueFeePercent({
     supabase,
     paymentContext,
     organizerId,
+    provider,
   })
-
-  const provider = payment.provider
-    ? String(payment.provider).trim().toLowerCase()
-    : normalizeStoredPaymentProvider(String(payment.reference || ''), payment.provider)
 
   // ── Primary path: atomic RPC (requires migration 20260526000000) ────────
   if (organizerId) {

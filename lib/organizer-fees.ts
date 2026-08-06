@@ -96,3 +96,33 @@ export async function getGlobalFeeDefaults() {
   const supabase = getSupabaseAdminClient()
   return fetchGlobalFeeDefaults(supabase)
 }
+
+export async function getPaymentProviderFeePercent(supabase: SupabaseLike, provider: string) {
+  const normalized = String(provider || '').trim().toLowerCase()
+
+  if (normalized === 'paystack') {
+    const { data } = await supabase
+      .from('platform_settings')
+      .select('paystack_fee_percent')
+      .limit(1)
+      .maybeSingle()
+    const value = data?.paystack_fee_percent
+    return value != null && Number.isFinite(Number(value)) ? Number(value) : 1.95
+  }
+
+  if (normalized === 'nalo') {
+    const { data } = await supabase
+      .from('platform_settings')
+      .select('nalo_fee_percent')
+      .limit(1)
+      .maybeSingle()
+    const value = data?.nalo_fee_percent
+    return value != null && Number.isFinite(Number(value)) ? Number(value) : 2.0
+  }
+
+  return 0
+}
+
+export function applyProviderFeeDeduction(platformFeePercent: number, providerFeePercent: number) {
+  return Math.max(platformFeePercent - providerFeePercent, 0)
+}

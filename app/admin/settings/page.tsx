@@ -26,6 +26,8 @@ export default function AdminSettingsPage() {
     maxEventsPerOrganizer: '10',
     platformFeePercent: '10',
     ticketingCommissionPercent: '10',
+    paystackFeePercent: '1.95',
+    naloFeePercent: '2',
     enableFraudDetection: true,
     requireEmailVerification: true,
     maintenanceMode: false,
@@ -50,6 +52,8 @@ export default function AdminSettingsPage() {
         maxEventsPerOrganizer: String(payload.maxEventsPerOrganizer ?? 10),
         platformFeePercent: String(payload.platformFeePercent ?? 10),
         ticketingCommissionPercent: String(payload.ticketingCommissionPercent ?? 10),
+        paystackFeePercent: String(payload.paystackFeePercent ?? 1.95),
+        naloFeePercent: String(payload.naloFeePercent ?? 2),
         enableFraudDetection: payload.enableFraudDetection ?? true,
         requireEmailVerification: payload.requireEmailVerification ?? true,
         maintenanceMode: payload.maintenanceMode ?? false,
@@ -69,6 +73,8 @@ export default function AdminSettingsPage() {
     const parsedMaxEvents = Number.parseInt(settings.maxEventsPerOrganizer, 10)
     const parsedVoteFee = Number(settings.platformFeePercent)
     const parsedTicketingFee = Number(settings.ticketingCommissionPercent)
+    const parsedPaystackFee = Number(settings.paystackFeePercent)
+    const parsedNaloFee = Number(settings.naloFeePercent)
 
     if (!Number.isInteger(parsedMaxEvents) || parsedMaxEvents <= 0) {
       toast({
@@ -94,11 +100,17 @@ export default function AdminSettingsPage() {
       parsedVoteFee > 100 ||
       !Number.isFinite(parsedTicketingFee) ||
       parsedTicketingFee < 0 ||
-      parsedTicketingFee > 100
+      parsedTicketingFee > 100 ||
+      !Number.isFinite(parsedPaystackFee) ||
+      parsedPaystackFee < 0 ||
+      parsedPaystackFee > 100 ||
+      !Number.isFinite(parsedNaloFee) ||
+      parsedNaloFee < 0 ||
+      parsedNaloFee > 100
     ) {
       toast({
         title: 'Invalid fee percentages',
-        description: 'Vote and ticketing defaults must be between 0 and 100.',
+        description: 'All fee percentages must be between 0 and 100.',
         variant: 'destructive',
       })
       return
@@ -115,6 +127,8 @@ export default function AdminSettingsPage() {
           maxEventsPerOrganizer: parsedMaxEvents,
           platformFeePercent: parsedVoteFee,
           ticketingCommissionPercent: parsedTicketingFee,
+          paystackFeePercent: parsedPaystackFee,
+          naloFeePercent: parsedNaloFee,
           enableFraudDetection: settings.enableFraudDetection,
           requireEmailVerification: settings.requireEmailVerification,
           maintenanceMode: settings.maintenanceMode,
@@ -254,6 +268,42 @@ export default function AdminSettingsPage() {
               value={settings.ticketingCommissionPercent}
               onChange={(e) =>
                 setSettings({ ...settings, ticketingCommissionPercent: e.target.value })
+              }
+              className="mt-2"
+            />
+          </div>
+
+          <div className="border-t border-border pt-4">
+            <Label>Paystack service fee (%)</Label>
+            <p className="text-sm text-muted-foreground mb-2">
+              Deducted from the platform fee for Paystack transactions (default 1.95%).
+            </p>
+            <DSInput
+              type="number"
+              min="0"
+              max="100"
+              step="0.01"
+              value={settings.paystackFeePercent}
+              onChange={(e) =>
+                setSettings({ ...settings, paystackFeePercent: e.target.value })
+              }
+              className="mt-2"
+            />
+          </div>
+
+          <div>
+            <Label>Nalo service fee (%)</Label>
+            <p className="text-sm text-muted-foreground mb-2">
+              Deducted from the platform fee for Nalo transactions (default 2%).
+            </p>
+            <DSInput
+              type="number"
+              min="0"
+              max="100"
+              step="0.01"
+              value={settings.naloFeePercent}
+              onChange={(e) =>
+                setSettings({ ...settings, naloFeePercent: e.target.value })
               }
               className="mt-2"
             />
