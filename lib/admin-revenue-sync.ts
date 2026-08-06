@@ -38,27 +38,17 @@ function normalizeStoredPaymentProvider(paymentReference: unknown, provider: unk
 async function resolveAdminRevenueFeePercent(
   adminSupabase: SupabaseLike,
   paymentContext: string,
-  organizerRef: string | null,
-  provider?: string | null
+  organizerRef: string | null
 ) {
-  const {
-    getEffectiveTicketingFeePercent,
-    getEffectiveVotePlatformFeePercent,
-    getPaymentProviderFeePercent,
-    applyProviderFeeDeduction,
-  } = await import('@/lib/organizer-fees')
+  const { getEffectiveTicketingFeePercent, getEffectiveVotePlatformFeePercent } = await import(
+    '@/lib/organizer-fees'
+  )
 
-  const nominalFeePercent =
-    paymentContext === 'ticket'
-      ? await getEffectiveTicketingFeePercent(adminSupabase, organizerRef)
-      : await getEffectiveVotePlatformFeePercent(adminSupabase, organizerRef)
-
-  if (!provider) {
-    return nominalFeePercent
+  if (paymentContext === 'ticket') {
+    return getEffectiveTicketingFeePercent(adminSupabase, organizerRef)
   }
 
-  const providerFeePercent = await getPaymentProviderFeePercent(adminSupabase, provider)
-  return applyProviderFeeDeduction(nominalFeePercent, providerFeePercent)
+  return getEffectiveVotePlatformFeePercent(adminSupabase, organizerRef)
 }
 
 export async function syncMissingAdminRevenueTransactions(adminSupabase: SupabaseLike) {
@@ -141,24 +131,22 @@ export async function syncMissingAdminRevenueTransactions(adminSupabase: Supabas
     const paymentContext = String(payment.payment_context || 'vote').toLowerCase() === 'ticket' ? 'ticket' : 'vote'
 
     const paymentProvider = normalizeStoredPaymentProvider(payment.reference, payment.provider)
-    const feeCacheKey = `${paymentContext}:${paymentProvider}:${organizerRef || '__default__'}`
+    const feeCacheKey = `${paymentContext}:${organizerRef || '__default__'}`
     let feePercent = feePercentCache.get(feeCacheKey)
     if (feePercent == null) {
-      feePercent = await resolveAdminRevenueFeePercent(
-        adminSupabase,
-        paymentContext,
-        organizerRef,
-        paymentProvider
-      )
+      feePercent = await resolveAdminRevenueFeePercent(adminSupabase, paymentContext, organizerRef)
       feePercentCache.set(feeCacheKey, feePercent)
     }
 
+    const { getPaymentProviderFeePercent } = await import('@/lib/organizer-fees')
+    const providerFeePercent = await getPaymentProviderFeePercent(adminSupabase, paymentProvider)
     const grossAmount = Number(toNumber(payment.amount).toFixed(2))
     if (grossAmount <= 0) {
       continue
     }
 
     const platformFeeAmount = Number(((grossAmount * feePercent) / 100).toFixed(2))
+    const providerFeeAmount = Number(((grossAmount * providerFeePercent) / 100).toFixed(2))
     const organizerNetAmount = Number((grossAmount - platformFeeAmount).toFixed(2))
 
     rowsToInsert.push({
@@ -174,6 +162,7 @@ export async function syncMissingAdminRevenueTransactions(adminSupabase: Supabas
       gross_amount: grossAmount,
       platform_fee_percent: Number(feePercent.toFixed(2)),
       platform_fee_amount: platformFeeAmount,
+      provider_fee_amount: providerFeeAmount,
       organizer_net_amount: organizerNetAmount,
       processed_at:
         toStringOrNull(payment.processed_at) ||

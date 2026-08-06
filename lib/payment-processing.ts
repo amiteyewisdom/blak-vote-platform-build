@@ -721,27 +721,17 @@ async function resolveAdminRevenueFeePercent(params: {
   supabase: ReturnType<typeof getSupabaseAdminClient>
   paymentContext: 'vote' | 'ticket'
   organizerId: string | null
-  provider?: string | null
 }) {
-  const { supabase, paymentContext, organizerId, provider } = params
-  const {
-    getEffectiveTicketingFeePercent,
-    getEffectiveVotePlatformFeePercent,
-    getPaymentProviderFeePercent,
-    applyProviderFeeDeduction,
-  } = await import('@/lib/organizer-fees')
+  const { supabase, paymentContext, organizerId } = params
+  const { getEffectiveTicketingFeePercent, getEffectiveVotePlatformFeePercent } = await import(
+    '@/lib/organizer-fees'
+  )
 
-  const nominalFeePercent =
-    paymentContext === 'ticket'
-      ? await getEffectiveTicketingFeePercent(supabase, organizerId)
-      : await getEffectiveVotePlatformFeePercent(supabase, organizerId)
-
-  if (!provider) {
-    return nominalFeePercent
+  if (paymentContext === 'ticket') {
+    return getEffectiveTicketingFeePercent(supabase, organizerId)
   }
 
-  const providerFeePercent = await getPaymentProviderFeePercent(supabase, provider)
-  return applyProviderFeeDeduction(nominalFeePercent, providerFeePercent)
+  return getEffectiveVotePlatformFeePercent(supabase, organizerId)
 }
 
 async function ensureAdminRevenueCapturedForPayment(params: {
@@ -794,10 +784,12 @@ async function ensureAdminRevenueCapturedForPayment(params: {
     supabase,
     paymentContext,
     organizerId: eventRow?.organizer_id || null,
-    provider,
   })
+  const { getPaymentProviderFeePercent } = await import('@/lib/organizer-fees')
+  const providerFeePercent = await getPaymentProviderFeePercent(supabase, provider)
 
   const platformFeeAmount = Number(((amountPaid * feePercent) / 100).toFixed(2))
+  const providerFeeAmount = Number(((amountPaid * providerFeePercent) / 100).toFixed(2))
   const organizerNetAmount = Number((amountPaid - platformFeeAmount).toFixed(2))
 
   const payloadVariants: Array<Record<string, unknown>> = [
@@ -814,6 +806,7 @@ async function ensureAdminRevenueCapturedForPayment(params: {
       gross_amount: Number(amountPaid.toFixed(2)),
       platform_fee_percent: Number(feePercent.toFixed(2)),
       platform_fee_amount: platformFeeAmount,
+      provider_fee_amount: providerFeeAmount,
       organizer_net_amount: organizerNetAmount,
       processed_at: processedAtIso,
     },
@@ -830,6 +823,7 @@ async function ensureAdminRevenueCapturedForPayment(params: {
       gross_amount: Number(amountPaid.toFixed(2)),
       platform_fee_percent: Number(feePercent.toFixed(2)),
       platform_fee_amount: platformFeeAmount,
+      provider_fee_amount: providerFeeAmount,
       organizer_net_amount: organizerNetAmount,
       processed_at: processedAtIso,
     },
@@ -882,22 +876,24 @@ async function recordPaymentSplit(params: {
     supabase,
     paymentContext,
     organizerId,
-    provider,
   })
+  const { getPaymentProviderFeePercent } = await import('@/lib/organizer-fees')
+  const providerFeePercent = await getPaymentProviderFeePercent(supabase, provider)
 
   // ── Primary path: atomic RPC (requires migration 20260526000000) ────────
   if (organizerId) {
     const { error: rpcError } = await supabase.rpc('record_payment_split', {
-      p_payment_id:        paymentId,
-      p_payment_reference: verificationReference,
-      p_event_id:          eventId,
-      p_organizer_id:      organizerId,
-      p_gross_amount:      Number(amountPaid.toFixed(2)),
-      p_payment_context:   paymentContext,
-      p_fee_percent:       Number(feePercent.toFixed(2)),
-      p_vote_id:           paymentContext === 'vote' ? (voteId ?? null) : null,
-      p_provider:          provider,
-      p_processed_at:      processedAtIso,
+      p_payment_id:             paymentId,
+      p_payment_reference:      verificationReference,
+      p_event_id:               eventId,
+      p_organizer_id:           organizerId,
+      p_gross_amount:           Number(amountPaid.toFixed(2)),
+      p_payment_context:        paymentContext,
+      p_fee_percent:            Number(feePercent.toFixed(2)),
+      p_provider_fee_percent:   Number(providerFeePercent.toFixed(2)),
+      p_vote_id:              paymentContext === 'vote' ? (voteId ?? null) : null,
+      p_provider:             provider,
+      p_processed_at:         processedAtIso,
     })
 
     if (!rpcError) {
