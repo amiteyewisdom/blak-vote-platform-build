@@ -89,10 +89,18 @@ export default function CreateEventPage() {
       return
     }
 
-    if (form.votingType === 'paid' && !form.costPerVote) {
-      toast({ title: 'Missing vote price', description: 'Cost per vote is required for paid voting.', variant: 'destructive' })
-      setLoading(false)
-      return
+    if (form.votingType === 'paid') {
+      if (!form.costPerVote) {
+        toast({ title: 'Missing vote price', description: 'Cost per vote is required for paid voting.', variant: 'destructive' })
+        setLoading(false)
+        return
+      }
+      const cost = Number(form.costPerVote)
+      if (!Number.isInteger(cost) || cost < 1) {
+        toast({ title: 'Invalid vote price', description: 'Cost per vote must be a whole number of at least 1 GHS.', variant: 'destructive' })
+        setLoading(false)
+        return
+      }
     }
 
     // =========================
@@ -163,7 +171,7 @@ export default function CreateEventPage() {
             price: Number(pkg.price),
             description: pkg.description?.trim() || null,
           }))
-          .filter((pkg) => Number.isFinite(pkg.votes) && pkg.votes > 0 && Number.isFinite(pkg.price) && pkg.price >= 0)
+          .filter((pkg) => Number.isFinite(pkg.votes) && Number.isInteger(pkg.votes) && pkg.votes > 0 && Number.isFinite(pkg.price) && Number.isInteger(pkg.price) && pkg.price >= 1)
 
         if (validPackages.length > 0) {
           for (const pkg of validPackages) {
@@ -305,7 +313,9 @@ export default function CreateEventPage() {
             <>
               <DSInput
                 type="number"
-                placeholder="Cost per vote (GHS)"
+                min="1"
+                step="1"
+                placeholder="Cost per vote (GHS, whole number)"
                 className="h-12"
                 onChange={(e) =>
                   update('costPerVote', e.target.value)
@@ -332,8 +342,9 @@ export default function CreateEventPage() {
                     />
                     <DSInput
                       type="number"
-                      min="0"
-                      placeholder="Package price (GHS)"
+                      min="1"
+                      step="1"
+                      placeholder="Package price (GHS, whole number)"
                       value={pkg.price}
                       onChange={(e) => {
                         const next = [...bulkPackages]

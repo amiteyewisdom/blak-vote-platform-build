@@ -113,6 +113,16 @@ export default function EventSettingsPage() {
 
     const votePrice = Number(form.cost_per_vote || 0)
 
+    if (!Number.isInteger(votePrice) || votePrice < 1) {
+      toast({
+        title: 'Invalid vote price',
+        description: 'Vote price must be a whole number of at least 1 GHS.',
+        variant: 'destructive',
+      })
+      setSaving(false)
+      return
+    }
+
     if (form.start_date && form.end_date && new Date(form.end_date) <= new Date(form.start_date)) {
       toast({
         title: 'Invalid voting window',
@@ -301,6 +311,8 @@ export default function EventSettingsPage() {
         {/* Cost */}
         <DSInput
           type="number"
+          min="1"
+          step="1"
           value={form.cost_per_vote}
           onChange={(e) =>
             setForm({
@@ -309,7 +321,7 @@ export default function EventSettingsPage() {
             })
           }
           className="w-full bg-surface rounded-2xl px-6 h-14"
-          placeholder="Cost per vote"
+          placeholder="Cost per vote (GHS, whole number only)"
         />
 
         <div className="space-y-3 rounded-2xl border border-border bg-surface p-4">

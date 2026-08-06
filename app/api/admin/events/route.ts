@@ -25,6 +25,7 @@ type EventEarningsRow = {
   event_id: string
   total_revenue?: number | string | null
   net_earnings?: number | string | null
+  platform_fee_deducted?: number | string | null
   withdrawn_vote_revenue?: number | string | null
   withdrawn_ticket_revenue?: number | string | null
 }
@@ -88,7 +89,7 @@ export async function GET() {
   if (eventIds.length > 0) {
     const { data: earningsRows, error: earningsError } = await adminSupabase
       .from('organizer_event_earnings')
-      .select('event_id,total_revenue,net_earnings,withdrawn_vote_revenue,withdrawn_ticket_revenue')
+      .select('event_id,total_revenue,net_earnings,platform_fee_deducted,withdrawn_vote_revenue,withdrawn_ticket_revenue')
       .in('event_id', eventIds)
 
     if (!earningsError) {
@@ -166,12 +167,14 @@ export async function GET() {
     const totalRevenue = toNumber(earnings?.total_revenue ?? event.total_revenue)
     const totalWithdrawn = toNumber(earnings?.withdrawn_vote_revenue) + toNumber(earnings?.withdrawn_ticket_revenue)
     const availableWithdrawalBalance = Math.max(toNumber(earnings?.net_earnings) - totalWithdrawn, 0)
+    const adminProfit = toNumber(earnings?.platform_fee_deducted ?? (totalRevenue - toNumber(earnings?.net_earnings)))
 
     return {
       ...event,
       total_revenue: totalRevenue,
       total_withdrawn: totalWithdrawn,
       available_withdrawal_balance: availableWithdrawalBalance,
+      admin_profit: adminProfit,
       profiles: profile
         ? {
             first_name: profile.first_name ?? fallbackNames.first_name,

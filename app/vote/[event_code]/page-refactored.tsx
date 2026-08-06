@@ -6,6 +6,7 @@ import { useToast } from '@/hooks/use-toast'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { resolveEventVotePrice } from '@/lib/event-pricing'
+import { formatGHS } from '@/lib/utils'
 import { ChevronDown, ChevronUp } from 'lucide-react'
 
 interface EventData {
@@ -218,7 +219,7 @@ export default function PublicVotePage() {
           <div className="grid grid-cols-2 gap-6">
             <div>
               <p className="text-xs uppercase tracking-[0.12em] text-foreground/45 font-medium">Price per vote</p>
-              <p className="mt-2 text-xl sm:text-2xl font-semibold tabular-nums">GHS {votePrice.toFixed(2)}</p>
+              <p className="mt-2 text-xl sm:text-2xl font-semibold tabular-nums">{formatGHS(votePrice)}</p>
             </div>
             <div>
               <label className="text-xs uppercase tracking-[0.12em] text-foreground/45 font-medium block">Receipt email</label>
@@ -376,17 +377,17 @@ export default function PublicVotePage() {
                       </div>
                       <div className="flex justify-between">
                         <span className="text-foreground/70">Effective price:</span>
-                        <span className="font-semibold">GHS {unitPrice.toFixed(4)}</span>
+                        <span className="font-semibold">{formatGHS(unitPrice)}</span>
                       </div>
                       {savings > 0 && (
                         <div className="flex justify-between text-emerald-500">
                           <span>You save:</span>
-                          <span className="font-semibold">GHS {savings.toFixed(2)}</span>
+                          <span className="font-semibold">{formatGHS(savings)}</span>
                         </div>
                       )}
                       <div className="flex justify-between border-t border-border/60 pt-2 text-base font-semibold">
                         <span>Total:</span>
-                        <span>GHS {total.toFixed(2)}</span>
+                        <span>{formatGHS(total)}</span>
                       </div>
                     </div>
 
@@ -419,11 +420,11 @@ export default function PublicVotePage() {
                                 <div className="flex items-start justify-between gap-2">
                                   <div>
                                     <p className="text-sm font-semibold">{packageVotes} votes</p>
-                                    <p className="text-xs text-foreground/60">GHS {packagePrice.toFixed(2)}</p>
+                                    <p className="text-xs text-foreground/60">{formatGHS(packagePrice)}</p>
                                   </div>
                                   {packageSavings > 0 && (
                                     <span className="text-xs font-semibold text-emerald-500 flex-shrink-0">
-                                      Save GHS {packageSavings.toFixed(2)}
+                                      Save {formatGHS(packageSavings)}
                                     </span>
                                   )}
                                 </div>

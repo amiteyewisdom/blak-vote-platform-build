@@ -7,6 +7,7 @@ import { ArrowLeft, CreditCard } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import { DSInput, DSSelect } from '@/components/ui/design-system'
 import { Button } from '@/components/ui/button'
+import { formatGHS } from '@/lib/utils'
 
 interface TransferOption {
   code: string
@@ -169,7 +170,7 @@ export default function WithdrawPage() {
 
       toast({
         title: 'Withdrawal Submitted',
-        description: `GHS ${parsed.toFixed(2)} withdrawal request submitted. Pending admin review.`,
+        description: `${formatGHS(parsed)} withdrawal request submitted. Pending admin review.`,
       })
 
       setWithdrawAmount('')
@@ -245,15 +246,15 @@ export default function WithdrawPage() {
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="bg-[hsl(var(--legacy-bg-card))] border border-border/70 rounded-2xl p-5">
           <div className="text-xs text-muted-foreground mb-1 uppercase tracking-wider">Your Revenue</div>
-          <div className="text-2xl font-bold text-gold">GHS {netEarnings.toFixed(2)}</div>
+          <div className="text-2xl font-bold text-gold">{formatGHS(netEarnings)}</div>
         </div>
         <div className="bg-[hsl(var(--legacy-bg-card))] border border-border/70 rounded-2xl p-5">
           <div className="text-xs text-muted-foreground mb-1 uppercase tracking-wider">Withdrawn</div>
-          <div className="text-2xl font-bold text-orange-400">GHS {totalWithdrawn.toFixed(2)}</div>
+          <div className="text-2xl font-bold text-orange-400">{formatGHS(totalWithdrawn)}</div>
         </div>
         <div className="bg-[hsl(var(--legacy-bg-card))] border border-[hsl(var(--gold))]/30 rounded-2xl p-5">
           <div className="text-xs text-muted-foreground mb-1 uppercase tracking-wider">Available</div>
-          <div className="text-2xl font-bold text-emerald-400">GHS {available.toFixed(2)}</div>
+          <div className="text-2xl font-bold text-emerald-400">{formatGHS(available)}</div>
         </div>
       </div>
 
@@ -360,7 +361,7 @@ export default function WithdrawPage() {
             {withdrawals.map((w) => (
               <div key={w.id} className="bg-[hsl(var(--legacy-bg-card))] border border-border/70 rounded-2xl p-5 flex justify-between items-center">
                 <div>
-                  <div className="font-semibold">GHS {Number(w.amount_requested).toFixed(2)}</div>
+                  <div className="font-semibold">{formatGHS(w.amount_requested)}</div>
                   <div className="text-sm text-muted-foreground capitalize mt-0.5">{(w.method || '').replace('_', ' ')}</div>
                   <div className="text-xs text-muted-foreground/70 mt-1">{new Date(w.created_at).toLocaleString()}</div>
                 </div>

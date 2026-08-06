@@ -89,8 +89,8 @@ export default function BulkVoteManagementPage() {
     if (!Number.isInteger(votes) || votes < 1) {
       return 'Votes must be a whole number greater than 0'
     }
-    if (!Number.isFinite(price) || price < 0) {
-      return 'Price must be a non-negative number'
+    if (!Number.isFinite(price) || price < 1 || !Number.isInteger(price)) {
+      return 'Price must be a whole number of at least 1 GHS'
     }
     return null
   }
@@ -297,8 +297,8 @@ export default function BulkVoteManagementPage() {
                   <label className="block text-xs text-muted-foreground mb-1">Price (GHS)</label>
                   <DSInput
                     type="number"
-                    min="0"
-                    step="0.01"
+                    min="1"
+                    step="1"
                     value={pkg.price_per_package || ''}
                     onChange={(e) =>
                       updatePackage(index, {

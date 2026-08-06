@@ -6,6 +6,7 @@ import { useToast } from '@/hooks/use-toast'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { resolveEventVotePrice } from '@/lib/event-pricing'
+import { formatGHS } from '@/lib/utils'
 import { getPublicUssdShortcode } from '@/lib/ussd-shortcode'
 import { openPaymentTab, goToPaymentCheckout, closePaymentTab } from '@/lib/open-payment'
 import PublicNav from '@/components/PublicNav'
@@ -290,7 +291,7 @@ export default function PublicVotePage() {
           <div className='grid gap-4 md:grid-cols-3 md:items-end'>
             <div>
               <p className='text-xs font-semibold uppercase tracking-[0.16em]' style={{ color: UI.textSecondary }}>Price per vote</p>
-              <p className='mt-2 text-xl font-bold sm:text-2xl'>GHS {votePrice.toFixed(2)}</p>
+              <p className='mt-2 text-xl font-bold sm:text-2xl'>{formatGHS(votePrice)}</p>
             </div>
             <div className='md:col-span-2'>
               <label className='text-xs font-semibold uppercase tracking-[0.16em]' style={{ color: UI.textSecondary }}>
@@ -462,12 +463,12 @@ export default function PublicVotePage() {
                   </div>
 
                   <div className='rounded-xl border p-3 text-sm sm:p-4' style={{ borderColor: 'rgba(255,255,255,0.08)', backgroundColor: 'rgba(255,255,255,0.02)' }}>
-                    <p>You are purchasing {votes} votes for GHS {total.toFixed(2)}</p>
-                    <p className='mt-1' style={{ color: UI.textSecondary }}>Effective price per vote: GHS {unitPrice.toFixed(4)}</p>
-                    {savings > 0 ? <p className='mt-1' style={{ color: '#34D399' }}>You saved GHS {savings.toFixed(2)}</p> : null}
+                    <p>You are purchasing {votes} votes for {formatGHS(total)}</p>
+                    <p className='mt-1' style={{ color: UI.textSecondary }}>Effective price per vote: {formatGHS(unitPrice)}</p>
+                    {savings > 0 ? <p className='mt-1' style={{ color: '#34D399' }}>You saved {formatGHS(savings)}</p> : null}
                     <div className='mt-3 flex items-center justify-between gap-3 text-sm'>
                       <span style={{ color: UI.textSecondary }}>Total payable</span>
-                      <span className='font-semibold'>GHS {total.toFixed(2)}</span>
+                      <span className='font-semibold'>{formatGHS(total)}</span>
                     </div>
                   </div>
 
@@ -504,7 +505,7 @@ export default function PublicVotePage() {
                               <div className='flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3'>
                                 <div>
                                   <p className='text-sm font-semibold' style={{ color: UI.textPrimary }}>
-                                    {packageVotes} votes for GHS {packagePrice.toFixed(2)}
+                                    {packageVotes} votes for {formatGHS(packagePrice)}
                                   </p>
                                   <p className='text-xs' style={{ color: UI.textSecondary }}>
                                     {pkg.description || 'Organizer bulk package'}
@@ -512,7 +513,7 @@ export default function PublicVotePage() {
                                 </div>
                                 {packageSavings > 0 ? (
                                   <span className='text-xs' style={{ color: '#34D399' }}>
-                                    Save GHS {packageSavings.toFixed(2)}
+                                    Save {formatGHS(packageSavings)}
                                   </span>
                                 ) : null}
                               </div>

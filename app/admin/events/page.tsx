@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react"
 import { isLiveEventStatus } from "@/lib/event-status"
+import { formatGHS } from "@/lib/utils"
 
 type OrganizerProfile = {
   first_name?: string | null
@@ -13,9 +14,13 @@ type AdminEvent = {
   id: string
   title?: string | null
   status?: string | null
+  event_type?: string | null
+  image_url?: string | null
+  banner_url?: string | null
   total_revenue?: number | null
   total_withdrawn?: number | null
   available_withdrawal_balance?: number | null
+  admin_profit?: number | null
   organizer_id?: string | null
   created_at?: string | null
   profiles?: OrganizerProfile | null
@@ -95,6 +100,10 @@ export default function AdminEventsPage() {
     return name || event.profiles?.email || 'Unknown organizer'
   }
 
+  const eventImage = (event: AdminEvent) => {
+    return event.image_url || event.banner_url || null
+  }
+
   const organizers = useMemo(() => Array.from(new Set(events.map(organizerName))).sort(), [events])
   const filteredEvents = useMemo(() => events.filter((event) => {
     const createdDate = event.created_at ? event.created_at.slice(0, 10) : ''
@@ -112,7 +121,7 @@ export default function AdminEventsPage() {
     <div className="p-4 md:p-8 text-foreground space-y-6">
       <div>
         <h1 className="text-2xl md:text-3xl font-bold">All Events</h1>
-        <p className="mt-1 text-sm text-muted-foreground">Suspend, reactivate, or remove organizer events.</p>
+        <p className="mt-1 text-sm text-muted-foreground">Manage organizer events and view platform profit.</p>
       </div>
 
       <div className="grid gap-3 rounded-2xl border border-border bg-card p-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -131,68 +140,93 @@ export default function AdminEventsPage() {
         </div>
       )}
 
-      <div className="space-y-4">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {filteredEvents.map(event => (
           <div
             key={event.id}
-            className="rounded-2xl border border-border bg-card p-4 md:p-5"
+            className="rounded-2xl border border-border bg-card overflow-hidden flex flex-col"
           >
-            <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
-              <div>
-                <h3 className="font-semibold text-lg">{event.title}</h3>
+            <div className="relative h-40 w-full overflow-hidden bg-muted">
+              {eventImage(event) ? (
+                <img
+                  src={eventImage(event) as string}
+                  alt={event.title || 'Event'}
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <div className="flex h-full w-full items-center justify-center text-muted-foreground text-sm">
+                  No event image
+                </div>
+              )}
+              <div className="absolute top-3 left-3">
+                <StatusBadge status={event.status} />
+              </div>
+            </div>
 
-                <p className="mt-1 text-sm text-muted-foreground">
-                  Organizer: {organizerName(event)} {event.profiles?.email ? `(${event.profiles.email})` : ""}
+            <div className="p-4 md:p-5 flex-1 flex flex-col">
+              <div className="flex-1">
+                <h3 className="font-semibold text-lg line-clamp-1">{event.title}</h3>
+
+                <p className="mt-1 text-sm text-muted-foreground line-clamp-1">
+                  {organizerName(event)} {event.profiles?.email ? `(${event.profiles.email})` : ""}
                 </p>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Created: {event.created_at ? new Date(event.created_at).toLocaleString() : 'Unknown'}
+                  Created: {event.created_at ? new Date(event.created_at).toLocaleDateString() : 'Unknown'}
                 </p>
 
-                <div className="mt-3">
-                  <StatusBadge status={event.status} />
-                </div>
-
                 <p className="mt-2 text-xs text-muted-foreground">
-                  Active Event: {isLiveEventStatus(event.status) ? 'Yes' : 'No'}
+                  Active: {isLiveEventStatus(event.status) ? 'Yes' : 'No'}
+                  {event.event_type && ` · ${event.event_type}`}
                 </p>
               </div>
 
-              <div className="text-left md:text-right space-y-3 md:min-w-[220px]">
-                <div className="grid grid-cols-1 gap-1 text-sm sm:grid-cols-3 md:grid-cols-1">
-                  <p className="font-semibold text-yellow-400">Revenue: GHS {Number(event.total_revenue || 0).toFixed(2)}</p>
-                  <p className="text-muted-foreground">Withdrawn: GHS {Number(event.total_withdrawn || 0).toFixed(2)}</p>
-                  <p className="font-semibold text-emerald-400">Available: GHS {Number(event.available_withdrawal_balance || 0).toFixed(2)}</p>
+              <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
+                <div className="rounded-xl border border-border bg-background/50 p-3">
+                  <p className="text-xs text-muted-foreground">Revenue</p>
+                  <p className="font-semibold text-yellow-400">{formatGHS(event.total_revenue)}</p>
                 </div>
+                <div className="rounded-xl border border-border bg-background/50 p-3">
+                  <p className="text-xs text-muted-foreground">Withdrawn</p>
+                  <p className="text-muted-foreground">{formatGHS(event.total_withdrawn)}</p>
+                </div>
+                <div className="rounded-xl border border-border bg-background/50 p-3">
+                  <p className="text-xs text-muted-foreground">Available</p>
+                  <p className="font-semibold text-emerald-400">{formatGHS(event.available_withdrawal_balance)}</p>
+                </div>
+                <div className="rounded-xl border border-border bg-background/50 p-3">
+                  <p className="text-xs text-muted-foreground">Admin Profit</p>
+                  <p className="font-semibold text-blue-400">{formatGHS(event.admin_profit)}</p>
+                </div>
+              </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:flex gap-2 md:justify-end">
-                  {isLiveEventStatus(event.status) && (
-                    <button
-                      onClick={() => suspendEvent(event.id)}
-                      disabled={processingId === event.id}
-                      className="min-h-10 px-3 py-2 text-sm rounded-xl bg-yellow-500/20 border border-yellow-500/30 text-yellow-300 hover:bg-yellow-500/30 disabled:opacity-50"
-                    >
-                      {processingId === event.id ? "Processing..." : "Suspend"}
-                    </button>
-                  )}
-
-                  {event.status === "cancelled" && (
-                    <button
-                      onClick={() => unsuspendEvent(event.id)}
-                      disabled={processingId === event.id}
-                      className="min-h-10 px-3 py-2 text-sm rounded-xl bg-emerald-500/20 border border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/30 disabled:opacity-50"
-                    >
-                      {processingId === event.id ? "Processing..." : "Reactivate"}
-                    </button>
-                  )}
-
+              <div className="mt-4 flex flex-wrap gap-2">
+                {isLiveEventStatus(event.status) && (
                   <button
-                    onClick={() => deleteEvent(event.id)}
+                    onClick={() => suspendEvent(event.id)}
                     disabled={processingId === event.id}
-                    className="min-h-10 px-3 py-2 text-sm rounded-xl bg-red-500/20 border border-red-500/30 text-red-300 hover:bg-red-500/30 disabled:opacity-50"
+                    className="min-h-10 px-3 py-2 text-sm rounded-xl bg-yellow-500/20 border border-yellow-500/30 text-yellow-300 hover:bg-yellow-500/30 disabled:opacity-50"
                   >
-                    {processingId === event.id ? "Processing..." : "Delete"}
+                    {processingId === event.id ? "Processing..." : "Suspend"}
                   </button>
-                </div>
+                )}
+
+                {event.status === "cancelled" && (
+                  <button
+                    onClick={() => unsuspendEvent(event.id)}
+                    disabled={processingId === event.id}
+                    className="min-h-10 px-3 py-2 text-sm rounded-xl bg-emerald-500/20 border border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/30 disabled:opacity-50"
+                  >
+                    {processingId === event.id ? "Processing..." : "Reactivate"}
+                  </button>
+                )}
+
+                <button
+                  onClick={() => deleteEvent(event.id)}
+                  disabled={processingId === event.id}
+                  className="min-h-10 px-3 py-2 text-sm rounded-xl bg-red-500/20 border border-red-500/30 text-red-300 hover:bg-red-500/30 disabled:opacity-50"
+                >
+                  {processingId === event.id ? "Processing..." : "Delete"}
+                </button>
               </div>
             </div>
           </div>
@@ -202,14 +236,10 @@ export default function AdminEventsPage() {
   )
 }
 
-function StatusBadge({ status }: { status: string }) {
+function StatusBadge({ status }: { status: string | null | undefined }) {
   if (isLiveEventStatus(status)) {
-    return <span className="px-3 py-1 rounded-full text-xs font-semibold border bg-emerald-500/20 text-emerald-300 border-emerald-500/30">LIVE</span>
+    return <span className="inline-flex items-center rounded-full bg-emerald-500/20 px-2.5 py-1 text-xs font-medium text-emerald-300 border border-emerald-500/30">Active</span>
   }
 
-  if (status === "cancelled") {
-    return <span className="px-3 py-1 rounded-full text-xs font-semibold border bg-yellow-500/20 text-yellow-300 border-yellow-500/30">SUSPENDED</span>
-  }
-
-  return <span className="px-3 py-1 rounded-full text-xs font-semibold border bg-white/10 text-foreground/70 border-white/20 uppercase">{status || "unknown"}</span>
+  return <span className="inline-flex items-center rounded-full bg-red-500/20 px-2.5 py-1 text-xs font-medium text-red-300 border border-red-500/30">{status || 'Inactive'}</span>
 }

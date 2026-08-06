@@ -95,9 +95,16 @@ export default function CreateTicketingPage() {
       return
     }
 
-    const validPlans = ticketPlans.filter((p) => p.name.trim() && Number(p.price) >= 0 && Number(p.quantity) > 0)
+    const invalidFeePlan = ticketPlans.find((p) => p.adminFee.trim() && (!Number.isFinite(Number(p.adminFee)) || !Number.isInteger(Number(p.adminFee)) || Number(p.adminFee) < 0))
+    if (invalidFeePlan) {
+      toast({ title: 'Invalid admin fee', description: 'Admin fee must be a whole number of GHS or left empty.', variant: 'destructive' })
+      setLoading(false)
+      return
+    }
+
+    const validPlans = ticketPlans.filter((p) => p.name.trim() && Number.isInteger(Number(p.price)) && Number(p.price) >= 0 && Number.isInteger(Number(p.quantity)) && Number(p.quantity) > 0)
     if (validPlans.length === 0) {
-      toast({ title: 'Add ticket plans', description: 'At least one ticket plan with name, price and quantity is required.', variant: 'destructive' })
+      toast({ title: 'Add ticket plans', description: 'At least one ticket plan with whole-number price (0 for free) and quantity is required.', variant: 'destructive' })
       setLoading(false)
       return
     }
@@ -293,12 +300,12 @@ export default function CreateTicketingPage() {
                     label="Price (GHS) *"
                     type="number"
                     min="0"
-                    step="0.01"
+                    step="1"
                     value={plan.price}
                     onChange={(e) => updatePlan(index, 'price', e.target.value)}
-                    placeholder="0.00"
+                    placeholder="0"
                   />
-                  <p className="text-xs text-muted-foreground px-1">Amount each buyer pays. Enter 0 for a free ticket tier.</p>
+                  <p className="text-xs text-muted-foreground px-1">Amount each buyer pays (whole GHS only). Enter 0 for a free ticket tier.</p>
                 </div>
                 <div className="space-y-1">
                   <DSInput
@@ -316,12 +323,12 @@ export default function CreateTicketingPage() {
                     label="Admin Fee (GHS, optional)"
                     type="number"
                     min="0"
-                    step="0.01"
+                    step="1"
                     value={plan.adminFee}
                     onChange={(e) => updatePlan(index, 'adminFee', e.target.value)}
-                    placeholder="0.00"
+                    placeholder="0"
                   />
-                  <p className="text-xs text-muted-foreground px-1">Optional extra processing/service fee charged on top of the ticket price.</p>
+                  <p className="text-xs text-muted-foreground px-1">Optional extra fee charged on top of the ticket price (whole GHS only).</p>
                 </div>
               </div>
               <div className="space-y-1">

@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { isLiveEventStatus } from '@/lib/event-status'
+import { formatGHS } from '@/lib/utils'
 import { Settings, Edit, Clock, Ticket } from 'lucide-react'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts'
 
@@ -114,7 +115,7 @@ export default function OrganizerDashboard() {
 
       {/* Metrics */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 md:gap-6">
-        <MetricCard title="Total Revenue" value={`GHS ${totalRevenue.toFixed(2)}`} />
+        <MetricCard title="Total Revenue" value={formatGHS(totalRevenue)} />
         <MetricCard title="Total Events" value={events.length.toString()} />
         <MetricCard title="Live Events" value={events.filter((e) => isLiveEventStatus(e.status)).length.toString()} />
       </div>
@@ -133,7 +134,7 @@ export default function OrganizerDashboard() {
                 <YAxis tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} axisLine={false} tickLine={false} tickFormatter={(v) => `₵${v}`} width={52} />
                 <Tooltip
                   contentStyle={{ background: 'hsl(var(--popover))', border: '1px solid hsl(var(--border))', borderRadius: 10, fontSize: 12 }}
-                  formatter={(value: number) => [`GHS ${Number(value).toFixed(2)}`, 'Revenue']}
+                  formatter={(value: number) => [formatGHS(value), 'Revenue']}
                   labelStyle={{ color: 'hsl(var(--foreground))' }}
                 />
                 <Bar dataKey="revenue" radius={[6, 6, 0, 0]}>
@@ -220,19 +221,19 @@ export default function OrganizerDashboard() {
                 <div>
                   <div className="text-foreground/50 text-[11px] font-semibold uppercase tracking-wider mb-1">Your Revenue</div>
                   <div className="text-lg font-bold text-gold">
-                    GHS {Number(event.total_revenue || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    {formatGHS(event.total_revenue)}
                   </div>
                 </div>
                 <div>
                   <div className="text-foreground/50 text-[11px] font-semibold uppercase tracking-wider mb-1">Revenue Left</div>
                   <div className="text-base font-semibold text-emerald-300">
-                    GHS {Number(event.revenue_left || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    {formatGHS(event.revenue_left)}
                   </div>
                 </div>
                 <div>
                   <div className="text-foreground/50 text-[11px] font-semibold uppercase tracking-wider mb-1">Cashed Out</div>
                   <div className="text-base font-semibold text-orange-300">
-                    GHS {Number(event.cashed_out_amount || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    {formatGHS(event.cashed_out_amount)}
                   </div>
                 </div>
                 {(event.event_type === 'voting' || !event.event_type) && (

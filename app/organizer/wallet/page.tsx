@@ -6,6 +6,7 @@ import { useToast } from '@/hooks/use-toast'
 import { DSInput, DSSelect } from '@/components/ui/design-system'
 import { Wallet, ArrowLeft } from 'lucide-react'
 import { useRouter } from 'next/navigation'
+import { formatGHS } from '@/lib/utils'
 
 interface TransferOption {
   code: string
@@ -310,7 +311,7 @@ export default function OrganizerWalletPage() {
     }
   }
 
-  const fmt = (n: number) => `GHS ${Number(n).toFixed(2)}`
+  const fmt = formatGHS
 
   if (loading) {
     return (
