@@ -6,8 +6,9 @@ import { getSupabaseAdminClient } from '@/lib/server-security'
 /**
  * POST /api/admin/reconcile-accounting
  *
- * Runs a full recompute of all organizer_wallets rows and the
- * admin_platform_wallet from the admin_revenue_transactions ledger.
+ * Runs a full recompute of all organizer_wallets rows,
+ * organizer_event_earnings rows, and the admin_platform_wallet from the
+ * admin_revenue_transactions ledger.
  * Safe to call at any time — all functions are idempotent.
  */
 export async function POST(req: Request) {
@@ -44,7 +45,19 @@ export async function POST(req: Request) {
     )
   }
 
-  // 3. Fetch updated admin platform wallet totals for confirmation.
+  // 3. Reconcile per-event earnings (including withdrawn buckets) from the ledger.
+  const { error: eventEarningsError } = await adminSupabase.rpc(
+    'recalculate_revenue_state',
+  )
+
+  if (eventEarningsError) {
+    return NextResponse.json(
+      { error: `Event earnings reconciliation failed: ${eventEarningsError.message}` },
+      { status: 500 },
+    )
+  }
+
+  // 4. Fetch updated admin platform wallet totals for confirmation.
   const { data: platformWallet } = await adminSupabase
     .from('admin_platform_wallet')
     .select('platform_voting_earnings,platform_ticket_earnings,total_platform_earnings,pending_admin_withdrawals,total_withdrawn,available_platform_balance,last_updated')
