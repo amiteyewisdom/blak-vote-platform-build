@@ -172,14 +172,14 @@ export default function PublicNomineesPage() {
                     onClick={() => setOpenGroupId((current) => (current === group.id ? null : group.id))}
                     className="w-full px-5 py-4 flex items-center justify-between text-left"
                   >
-                    <div className="flex items-center gap-3 min-w-0">
-                      {isOpen ? <ChevronDown className="w-4 h-4 text-[hsl(var(--gold))]" /> : <ChevronRight className="w-4 h-4 text-[hsl(var(--gold))]" />}
+                    <div className="flex items-center gap-3 min-w-0 flex-1">
+                      {isOpen ? <ChevronDown className="w-4 h-4 text-[hsl(var(--gold))] shrink-0" /> : <ChevronRight className="w-4 h-4 text-[hsl(var(--gold))] shrink-0" />}
                       {event.image_url ? (
-                        <img src={event.image_url} alt={event.title || 'Event'} className="h-8 w-8 rounded-md object-cover border border-border" />
+                        <img src={event.image_url} alt={event.title || 'Event'} className="h-8 w-8 rounded-md object-cover border border-border shrink-0" />
                       ) : (
-                        <div className="h-8 w-8 rounded-md border border-border bg-surface/80" />
+                        <div className="h-8 w-8 rounded-md border border-border bg-surface/80 shrink-0" />
                       )}
-                      <span className="font-semibold text-[hsl(var(--gold))] truncate">{group.name}</span>
+                      <span className="font-semibold text-[hsl(var(--gold))] truncate block">{group.name}</span>
                     </div>
 
                     <span className="text-xs text-muted-foreground inline-flex items-center gap-1 px-2 py-1 rounded-full bg-surface/80">
@@ -191,8 +191,8 @@ export default function PublicNomineesPage() {
                   {isOpen && (
                     <div className="px-5 pb-5 space-y-3 border-t border-border/60">
                       {group.candidates.map((candidate) => (
-                        <div key={candidate.id} className="rounded-xl border border-border/70 bg-background/30 p-4 flex items-start justify-between gap-3">
-                          <div className="min-w-0 flex items-start gap-3">
+                        <div key={candidate.id} className="rounded-xl border border-border/70 bg-background/30 p-4 flex items-start justify-between gap-3 overflow-hidden">
+                          <div className="min-w-0 flex-1 flex items-start gap-3">
                             <div className="h-11 w-11 rounded-lg overflow-hidden bg-surface border border-border flex-shrink-0">
                               {candidate.photo_url ? (
                                 <img
@@ -211,7 +211,7 @@ export default function PublicNomineesPage() {
                               {candidate.bio && <p className="text-sm text-muted-foreground line-clamp-2 mt-1">{candidate.bio}</p>}
                             </div>
                           </div>
-                          <div className="text-sm font-semibold text-[hsl(var(--gold))] whitespace-nowrap">
+                          <div className="text-sm font-semibold text-[hsl(var(--gold))] whitespace-nowrap shrink-0">
                             {candidate.vote_count || 0} votes
                           </div>
                         </div>
