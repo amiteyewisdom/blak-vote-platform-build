@@ -30,28 +30,50 @@ WITH settings AS (
     COALESCE(nalo_fee_percent, 2.00)     AS nalo_fee
   FROM platform_settings
   LIMIT 1
+),
+zero_overrides AS (
+  -- Preserve deliberate 0% platform-fee overrides: do not add the provider fee
+  -- back onto those rows, otherwise a 0% organizer would be charged the gateway fee.
+  SELECT organizer_user_id
+  FROM organizer_fee_overrides
+  WHERE platform_fee_percent = 0
 )
 UPDATE admin_revenue_transactions art
 SET
-  provider_fee_amount = (art.gross_amount * CASE
-    WHEN LOWER(COALESCE(art.payment_provider, 'paystack')) = 'nalo' THEN s.nalo_fee
-    ELSE s.paystack_fee
-  END / 100)::NUMERIC(12, 2),
-  platform_fee_percent = GREATEST(art.platform_fee_percent + CASE
-    WHEN LOWER(COALESCE(art.payment_provider, 'paystack')) = 'nalo' THEN s.nalo_fee
-    ELSE s.paystack_fee
-  END, 0),
-  platform_fee_amount = (art.gross_amount * GREATEST(art.platform_fee_percent + CASE
-    WHEN LOWER(COALESCE(art.payment_provider, 'paystack')) = 'nalo' THEN s.nalo_fee
-    ELSE s.paystack_fee
-  END, 0) / 100)::NUMERIC(12, 2)
+  provider_fee_amount = CASE
+    WHEN art.platform_fee_percent = 0
+      AND EXISTS (SELECT 1 FROM zero_overrides z WHERE z.organizer_user_id = art.organizer_id)
+    THEN 0
+    ELSE (art.gross_amount * CASE
+      WHEN LOWER(COALESCE(art.payment_provider, 'paystack')) = 'nalo' THEN s.nalo_fee
+      ELSE s.paystack_fee
+    END / 100)::NUMERIC(12, 2)
+  END,
+  platform_fee_percent = CASE
+    WHEN art.platform_fee_percent = 0
+      AND EXISTS (SELECT 1 FROM zero_overrides z WHERE z.organizer_user_id = art.organizer_id)
+    THEN 0
+    ELSE GREATEST(art.platform_fee_percent + CASE
+      WHEN LOWER(COALESCE(art.payment_provider, 'paystack')) = 'nalo' THEN s.nalo_fee
+      ELSE s.paystack_fee
+    END, 0)
+  END,
+  platform_fee_amount = CASE
+    WHEN art.platform_fee_percent = 0
+      AND EXISTS (SELECT 1 FROM zero_overrides z WHERE z.organizer_user_id = art.organizer_id)
+    THEN 0
+    ELSE (art.gross_amount * GREATEST(art.platform_fee_percent + CASE
+      WHEN LOWER(COALESCE(art.payment_provider, 'paystack')) = 'nalo' THEN s.nalo_fee
+      ELSE s.paystack_fee
+    END, 0) / 100)::NUMERIC(12, 2)
+  END
 FROM settings s
 WHERE art.gross_amount > 0 AND art.provider_fee_amount = 0;
 
 -- Recompute organizer_net_amount from the corrected full platform fee.
 UPDATE admin_revenue_transactions
 SET organizer_net_amount = GREATEST(gross_amount - platform_fee_amount, 0)
-WHERE gross_amount > 0 AND provider_fee_amount > 0;
+WHERE gross_amount > 0;
 
 -- 3. Add provider fee column to per-event earnings.
 ALTER TABLE organizer_event_earnings
