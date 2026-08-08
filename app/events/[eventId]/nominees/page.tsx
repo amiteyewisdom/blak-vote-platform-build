@@ -191,25 +191,27 @@ export default function PublicNomineesPage() {
                   {isOpen && (
                     <div className="px-5 pb-5 space-y-3 border-t border-border/60">
                       {group.candidates.map((candidate) => (
-                        <div key={candidate.id} className="rounded-xl border border-border/70 bg-background/30 p-4 grid grid-cols-[auto_minmax(0,1fr)_auto] gap-3 items-start overflow-hidden">
-                          <div className="h-11 w-11 rounded-lg overflow-hidden bg-surface border border-border flex-shrink-0">
-                            {candidate.photo_url ? (
-                              <img
-                                src={candidate.photo_url}
-                                alt={candidate.nominee_name}
-                                className="h-full w-full object-cover"
-                              />
-                            ) : (
-                              <div className="h-full w-full flex items-center justify-center text-sm font-semibold text-[hsl(var(--gold))]">
-                                {candidate.nominee_name.charAt(0).toUpperCase()}
-                              </div>
-                            )}
+                        <div key={candidate.id} className="rounded-xl border border-border/70 bg-background/30 p-4 flex flex-row items-start gap-3 overflow-hidden">
+                          <div className="flex items-start gap-3 flex-1 min-w-0">
+                            <div className="h-11 w-11 rounded-lg overflow-hidden bg-surface border border-border flex-shrink-0">
+                              {candidate.photo_url ? (
+                                <img
+                                  src={candidate.photo_url}
+                                  alt={candidate.nominee_name}
+                                  className="h-full w-full object-cover"
+                                />
+                              ) : (
+                                <div className="h-full w-full flex items-center justify-center text-sm font-semibold text-[hsl(var(--gold))]">
+                                  {candidate.nominee_name.charAt(0).toUpperCase()}
+                                </div>
+                              )}
+                            </div>
+                            <div className="flex-1 min-w-0 pt-0.5 w-full">
+                              <h3 className="font-semibold break-words leading-tight w-full min-w-0">{candidate.nominee_name}</h3>
+                              {candidate.bio && <p className="text-sm text-muted-foreground line-clamp-2 mt-1">{candidate.bio}</p>}
+                            </div>
                           </div>
-                          <div className="min-w-0 pt-0.5">
-                            <h3 className="font-semibold break-words line-clamp-2 leading-tight">{candidate.nominee_name}</h3>
-                            {candidate.bio && <p className="text-sm text-muted-foreground line-clamp-2 mt-1">{candidate.bio}</p>}
-                          </div>
-                          <div className="text-sm font-semibold text-[hsl(var(--gold))] shrink-0 min-w-[4.5rem] text-right pt-0.5">
+                          <div className="text-sm font-semibold text-[hsl(var(--gold))] shrink-0 min-w-[4.5rem] text-right self-center">
                             {candidate.vote_count || 0} votes
                           </div>
                         </div>

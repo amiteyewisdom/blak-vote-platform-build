@@ -24,18 +24,24 @@ Context: This preserves the intended “platform bears the provider fee” model
 ### Application UI
 - File: `app/events/[eventId]/nominees/page.tsx`
   - Candidate rows:
-    - Switched to a 3-column grid (`grid-cols-[auto_minmax(0,1fr)_auto]`) so the vote-count text has its own fixed column and cannot be pushed off-screen by long nominee names.
-    - Name uses `break-words` + `line-clamp-2` to prevent overflow.
-    - Vote text is right-aligned and gets a minimum width (`min-w-[4.5rem]`) so it stays fully visible on all screen sizes.
+    - Switched to a single, safe **flex row** (`flex flex-row items-start gap-3`) on all screens.
+    - Long nominee names wrap naturally (`break-words w-full min-w-0`) instead of using `line-clamp-2`, which was creating a huge min-content width and pushing the count off-screen on phones.
+    - Vote text is right-aligned, vertically centered, and has a fixed minimum width (`shrink-0 min-w-[4.5rem]`) so it never gets squeezed out.
+    - Card keeps `overflow-hidden` as a safety net.
   - Group header: `min-w-0 flex-1` with chevron/image set to `shrink-0`, title `truncate`.
 
 - File: `app/events/[eventId]/page.tsx`
   - Category header: same min/max-width/truncate pattern so long titles don’t push counts or icons.
-  - Candidate cards: switched to a 3-column grid (`grid-cols-[auto_minmax(0,1fr)_auto]`) so the vote-count box has its own fixed column and cannot be pushed off-screen by long nominee names.
-  - Removed the selected-card `scale-[1.01]` transform that could clip the right edge of the count box on mobile.
-  - Name uses `break-words` + `line-clamp-2` to prevent overflow.
-  - Vote box gets a minimum width (`min-w-[4.5rem]`) and stays fully visible on all screen sizes.
-  - Added `overflow-hidden` on the card to avoid layout spill.
+  - Candidate cards:
+    - Same single **flex row** layout as the nominees page (`flex flex-row items-start gap-3`).
+    - Avatar and name on the left (`flex items-start gap-4 flex-1 min-w-0`).
+    - Name wraps naturally (`break-words w-full min-w-0`) with no mobile line-clamp, fixing the overflow caused by `line-clamp-2` min-content.
+    - Vote-count box is `shrink-0 min-w-[4.5rem]` and `self-center`, so it stays fully visible on the right even on 320px screens.
+    - Removed the selected-card `scale-[1.01]` transform to avoid clipping the count box on mobile.
+  - Added `min-w-0` to the `lg:col-span-2` candidate list column so the outer grid can shrink on narrow viewports.
+
+### Root cause of the mobile overflow
+`line-clamp-2` on nominee names made the heading’s **min-content** equal to the full, un-clamped text width. Because the flex item had no explicit width/min-width, that intrinsic width pushed the right-side vote-count box off the screen. Setting `w-full min-w-0` and using plain `break-words` lets the name wrap to the available space instead of dictating a minimum width.
 
 Notes on Tailwind utilities used:
 - `min-w-0`: required in flex containers for truncation/line-clamp to work.

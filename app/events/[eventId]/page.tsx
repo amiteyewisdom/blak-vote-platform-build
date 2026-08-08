@@ -548,7 +548,7 @@ export default function EventPage() {
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="grid lg:grid-cols-3 gap-8">
           {/* Candidates List */}
-          <div className="lg:col-span-2">
+          <div className="lg:col-span-2 min-w-0">
             <div className="flex items-center justify-between mb-8 pb-6 border-b border-border/70">
               <div>
                 <h2 className="text-2xl sm:text-3xl font-bold text-foreground">Vote for Your Favorite</h2>
@@ -619,28 +619,30 @@ export default function EventPage() {
                           }}
                           style={{ animationDelay: `${index * 30}ms` }}
                         >
-                          <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] gap-3 items-start">
-                            <div className="w-14 h-14 rounded-lg overflow-hidden bg-[hsl(var(--legacy-bg-input))] border border-border shadow-md flex-shrink-0">
-                              {candidate.photo_url ? (
-                                <img
-                                  src={candidate.photo_url}
-                                  alt={candidate.nominee_name}
-                                  className="w-full h-full object-cover"
-                                />
-                              ) : (
-                                <div className="w-full h-full bg-gradient-to-br from-[hsl(var(--gold))]/90 to-[hsl(var(--gold-deep))] flex items-center justify-center text-black font-bold text-xl">
-                                  {candidate.nominee_name.charAt(0).toUpperCase()}
-                                </div>
-                              )}
-                            </div>
-                            <div className="min-w-0 pt-1">
-                              <h3 className="font-bold text-base text-foreground group-hover/card:text-[hsl(var(--gold))] transition-colors break-words line-clamp-2">{candidate.nominee_name}</h3>
-                              {candidate.bio && (
-                                <p className="text-muted-foreground text-xs leading-relaxed line-clamp-1 mt-1">{candidate.bio}</p>
-                              )}
+                          <div className="flex flex-row items-start gap-3">
+                            <div className="flex items-start gap-4 flex-1 min-w-0">
+                              <div className="w-14 h-14 rounded-lg overflow-hidden bg-[hsl(var(--legacy-bg-input))] border border-border shadow-md flex-shrink-0">
+                                {candidate.photo_url ? (
+                                  <img
+                                    src={candidate.photo_url}
+                                    alt={candidate.nominee_name}
+                                    className="w-full h-full object-cover"
+                                  />
+                                ) : (
+                                  <div className="w-full h-full bg-gradient-to-br from-[hsl(var(--gold))]/90 to-[hsl(var(--gold-deep))] flex items-center justify-center text-black font-bold text-xl">
+                                    {candidate.nominee_name.charAt(0).toUpperCase()}
+                                  </div>
+                                )}
+                              </div>
+                              <div className="flex-1 min-w-0 pt-1 w-full">
+                                <h3 className="font-bold text-base text-foreground group-hover/card:text-[hsl(var(--gold))] transition-colors break-words w-full min-w-0">{candidate.nominee_name}</h3>
+                                {candidate.bio && (
+                                  <p className="text-muted-foreground text-xs leading-relaxed line-clamp-1 mt-1">{candidate.bio}</p>
+                                )}
+                              </div>
                             </div>
 
-                            <div className="px-3 py-2 bg-[hsl(var(--gold))]/12 border border-[hsl(var(--gold))]/25 rounded-lg flex flex-col items-center justify-center min-w-[4.5rem]">
+                            <div className="px-3 py-2 bg-[hsl(var(--gold))]/12 border border-[hsl(var(--gold))]/25 rounded-lg flex flex-col items-center justify-center min-w-[4.5rem] shrink-0 self-center">
                               <div className="font-bold text-lg text-[hsl(var(--gold))]">
                                 {candidate.vote_count || 0}
                               </div>
