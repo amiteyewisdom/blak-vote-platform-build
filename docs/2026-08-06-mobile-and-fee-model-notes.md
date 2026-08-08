@@ -24,15 +24,17 @@ Context: This preserves the intended “platform bears the provider fee” model
 ### Application UI
 - File: `app/events/[eventId]/nominees/page.tsx`
   - Candidate rows:
-    - Use `flex flex-col sm:flex-row` so the right-side vote box drops below on small screens instead of overflowing.
-    - Left text column is `flex-1 min-w-0` to allow truncation/wrap.
-    - Name uses `break-words` + `line-clamp-2` to prevent long names from taking the whole row.
-    - Vote box gets `whitespace-nowrap shrink-0 min-w-[64px]` and right-align on mobile (`self-end` / `text-right`) to keep it visible.
+    - Switched to a 3-column grid (`grid-cols-[auto_minmax(0,1fr)_auto]`) so the vote-count text has its own fixed column and cannot be pushed off-screen by long nominee names.
+    - Name uses `break-words` + `line-clamp-2` to prevent overflow.
+    - Vote text is right-aligned and gets a minimum width (`min-w-[4.5rem]`) so it stays fully visible on all screen sizes.
   - Group header: `min-w-0 flex-1` with chevron/image set to `shrink-0`, title `truncate`.
 
 - File: `app/events/[eventId]/page.tsx`
   - Category header: same min/max-width/truncate pattern so long titles don’t push counts or icons.
-  - Candidate cards: stack on mobile; name wraps to two lines (`line-clamp-2`, `break-words`), vote box aligned to the right on mobile and non-shrinking.
+  - Candidate cards: switched to a 3-column grid (`grid-cols-[auto_minmax(0,1fr)_auto]`) so the vote-count box has its own fixed column and cannot be pushed off-screen by long nominee names.
+  - Removed the selected-card `scale-[1.01]` transform that could clip the right edge of the count box on mobile.
+  - Name uses `break-words` + `line-clamp-2` to prevent overflow.
+  - Vote box gets a minimum width (`min-w-[4.5rem]`) and stays fully visible on all screen sizes.
   - Added `overflow-hidden` on the card to avoid layout spill.
 
 Notes on Tailwind utilities used:

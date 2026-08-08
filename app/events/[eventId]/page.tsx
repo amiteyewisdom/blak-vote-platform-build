@@ -595,7 +595,7 @@ export default function EventPage() {
                         )}
                         <span className="truncate block">{group.name}</span>
                       </h3>
-                      <span className="text-xs font-medium text-muted-foreground bg-surface/70 px-3 py-1 rounded-full">
+                      <span className="text-xs font-medium text-muted-foreground bg-surface/70 px-3 py-1 rounded-full shrink-0 whitespace-nowrap">
                         {group.candidates.length} candidates
                       </span>
                     </button>
@@ -607,7 +607,7 @@ export default function EventPage() {
                           key={candidate.id}
                           className={`bg-[hsl(var(--legacy-bg-card))]/60 backdrop-blur-sm border rounded-xl p-4 sm:p-5 cursor-pointer transition-all duration-200 group/card overflow-hidden ${
                             selectedCandidate === candidate.id
-                              ? 'border-[hsl(var(--gold))]/70 bg-[hsl(var(--gold))]/8 shadow-lg shadow-[hsl(var(--gold))]/15 scale-[1.01]'
+                              ? 'border-[hsl(var(--gold))]/70 bg-[hsl(var(--gold))]/8 shadow-lg shadow-[hsl(var(--gold))]/15'
                                 : 'border-border/70 hover:border-[hsl(var(--gold))]/40 hover:bg-[hsl(var(--gold))]/5'
                           }`}
                           onClick={() => {
@@ -619,30 +619,28 @@ export default function EventPage() {
                           }}
                           style={{ animationDelay: `${index * 30}ms` }}
                         >
-                          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-4">
-                            <div className="flex items-start gap-4 flex-1 min-w-0">
-                              <div className="w-14 h-14 rounded-lg overflow-hidden bg-[hsl(var(--legacy-bg-input))] border border-border shadow-md flex-shrink-0">
-                                {candidate.photo_url ? (
-                                  <img
-                                    src={candidate.photo_url}
-                                    alt={candidate.nominee_name}
-                                    className="w-full h-full object-cover"
-                                  />
-                                ) : (
-                                  <div className="w-full h-full bg-gradient-to-br from-[hsl(var(--gold))]/90 to-[hsl(var(--gold-deep))] flex items-center justify-center text-black font-bold text-xl">
-                                    {candidate.nominee_name.charAt(0).toUpperCase()}
-                                  </div>
-                                )}
-                              </div>
-                              <div className="flex-1 min-w-0 pt-1">
-                                <h3 className="font-bold text-base text-foreground group-hover/card:text-[hsl(var(--gold))] transition-colors break-words line-clamp-2">{candidate.nominee_name}</h3>
-                                {candidate.bio && (
-                                  <p className="text-muted-foreground text-xs leading-relaxed line-clamp-1 mt-1">{candidate.bio}</p>
-                                )}
-                              </div>
+                          <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] gap-3 items-start">
+                            <div className="w-14 h-14 rounded-lg overflow-hidden bg-[hsl(var(--legacy-bg-input))] border border-border shadow-md flex-shrink-0">
+                              {candidate.photo_url ? (
+                                <img
+                                  src={candidate.photo_url}
+                                  alt={candidate.nominee_name}
+                                  className="w-full h-full object-cover"
+                                />
+                              ) : (
+                                <div className="w-full h-full bg-gradient-to-br from-[hsl(var(--gold))]/90 to-[hsl(var(--gold-deep))] flex items-center justify-center text-black font-bold text-xl">
+                                  {candidate.nominee_name.charAt(0).toUpperCase()}
+                                </div>
+                              )}
+                            </div>
+                            <div className="min-w-0 pt-1">
+                              <h3 className="font-bold text-base text-foreground group-hover/card:text-[hsl(var(--gold))] transition-colors break-words line-clamp-2">{candidate.nominee_name}</h3>
+                              {candidate.bio && (
+                                <p className="text-muted-foreground text-xs leading-relaxed line-clamp-1 mt-1">{candidate.bio}</p>
+                              )}
                             </div>
 
-                            <div className="px-3 py-2 bg-[hsl(var(--gold))]/12 border border-[hsl(var(--gold))]/25 rounded-lg flex flex-col items-center justify-center min-w-fit flex-shrink-0 self-end mt-3 sm:mt-0 sm:self-auto">
+                            <div className="px-3 py-2 bg-[hsl(var(--gold))]/12 border border-[hsl(var(--gold))]/25 rounded-lg flex flex-col items-center justify-center min-w-[4.5rem]">
                               <div className="font-bold text-lg text-[hsl(var(--gold))]">
                                 {candidate.vote_count || 0}
                               </div>
