@@ -278,10 +278,10 @@ async function buildOrganizerEventMetrics(adminSupabase: SupabaseLike, userId: s
       .in('event_id', eventIds),
     adminSupabase
       .from('organizer_withdrawals')
-      .select('event_id,amount_requested,withdrawal_type,status')
+      .select('event_id,amount_requested,withdrawal_type')
       .eq('organizer_id', userId)
-      .in('status', ['pending', 'approved', 'processed'])
-      .not('event_id', 'is', null),
+      .eq('status', 'processed')
+      .in('event_id', eventIds),
   ])
 
   if (votesError) throw new Error(votesError.message)
@@ -562,10 +562,8 @@ export async function getOrganizerWalletSummaryData(adminSupabase: SupabaseLike,
 
 export async function getOrganizerEventEarningsData(adminSupabase: SupabaseLike, userId: string) {
   const metrics = await buildOrganizerEventMetrics(adminSupabase, userId)
-  const processedWithdrawals = await getOrganizerProcessedWithdrawalTotal(adminSupabase, userId)
-  const withCashedOut = distributeProcessedWithdrawalsAcrossEvents(metrics, processedWithdrawals)
 
-  return withCashedOut.sort((left, right) => String(right.updated_at).localeCompare(String(left.updated_at)))
+  return metrics.sort((left, right) => String(right.updated_at).localeCompare(String(left.updated_at)))
 }
 
 export async function getOrganizerWithdrawalHistoryData(

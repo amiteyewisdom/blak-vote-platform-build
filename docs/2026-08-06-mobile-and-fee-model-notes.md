@@ -135,6 +135,7 @@ If totals appear inconsistent, refresh derived tables via the reconciliation API
 - File: `lib/organizer-wallet.ts`
   - Renamed `positiveFee` to `resolveFeeOrDefault` and made it accept an explicit `0%` override instead of falling back to the global default.
   - This aligns dashboard/API fee resolution with the `organizer_fee_overrides` contract where `0` is a valid, intentional override.
+  - Per-event `cashed_out_amount` now comes from **processed withdrawals actually tied to that event** (`event_id` match), not a proportional share of every processed withdrawal across all events. This stops old withdrawals that lack an `event_id` from being spread onto unrelated events under the same organizer.
 
 ## Verification
 
