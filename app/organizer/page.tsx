@@ -237,18 +237,12 @@ export default function OrganizerDashboard() {
                     </div>
                   </div>
                   <div>
-                    <div className="text-foreground/50 text-[11px] font-semibold uppercase tracking-wider mb-1">Platform Fee</div>
-                    <div className="text-sm font-semibold text-rose-300">
-                      {formatGHS(event.platform_fee_deducted)}
-                    </div>
-                  </div>
-                  <div>
                     <div className="text-foreground/50 text-[11px] font-semibold uppercase tracking-wider mb-1">Revenue Left</div>
                     <div className="text-sm font-semibold text-emerald-300">
                       {formatGHS(event.revenue_left)}
                     </div>
                   </div>
-                  <div className="col-span-2">
+                  <div>
                     <div className="text-foreground/50 text-[11px] font-semibold uppercase tracking-wider mb-1">Cashed Out</div>
                     <div className="text-sm font-semibold text-orange-300">
                       {formatGHS(event.cashed_out_amount)}
@@ -266,19 +260,6 @@ export default function OrganizerDashboard() {
                       <span><span className="font-semibold text-sky-300">{event.free_votes ?? 0}</span> free</span>
                       <span><span className="font-semibold text-amber-300">{event.manual_votes ?? 0}</span> manual</span>
                     </div>
-                  </div>
-                )}
-                {event.platform_fee_percent > 0 && (
-                  <div className="flex flex-wrap gap-1.5">
-                    {event.event_type === 'ticketing' ? (
-                      <span className="text-[10px] text-foreground/40">
-                        {Number(event.platform_fee_percent).toFixed(0)}% ticketing fee
-                      </span>
-                    ) : (
-                      <span className="text-[10px] text-foreground/40">
-                        {Number(event.platform_fee_percent).toFixed(0)}% platform fee
-                      </span>
-                    )}
                   </div>
                 )}
                 <div className="flex items-center gap-1 text-foreground/40 text-xs pt-1">
