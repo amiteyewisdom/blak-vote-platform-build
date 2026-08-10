@@ -110,10 +110,11 @@ export async function resolveOrganizerRefs(adminSupabase: SupabaseLike, userId: 
   }
 }
 
-function positiveFee(...candidates: Array<unknown>): number {
+function resolveFeeOrDefault(...candidates: Array<unknown>): number {
   for (const c of candidates) {
+    if (c == null) continue
     const n = Number(c)
-    if (Number.isFinite(n) && n > 0) return n
+    if (Number.isFinite(n) && n >= 0) return n
   }
   return 10
 }
@@ -135,7 +136,7 @@ async function resolveEffectivePlatformFeePercent(adminSupabase: SupabaseLike, u
     }),
   ])
 
-  return positiveFee(feeResult, feeOverride?.platform_fee_percent, globalSettings?.platform_fee_percent)
+  return resolveFeeOrDefault(feeResult, feeOverride?.platform_fee_percent, globalSettings?.platform_fee_percent)
 }
 
 async function resolveEffectiveTicketingFeePercent(adminSupabase: SupabaseLike, userId: string) {
@@ -155,7 +156,7 @@ async function resolveEffectiveTicketingFeePercent(adminSupabase: SupabaseLike, 
     }),
   ])
 
-  return positiveFee(
+  return resolveFeeOrDefault(
     feeResult,
     feeOverride?.ticketing_fee_percent,
     globalSettings?.ticketing_commission_percent,

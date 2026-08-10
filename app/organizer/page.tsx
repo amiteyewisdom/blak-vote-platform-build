@@ -14,6 +14,8 @@ interface VotingEvent {
   status: string
   event_type: string
   total_revenue: number
+  net_earnings: number
+  platform_fee_deducted: number
   revenue_left: number
   cashed_out_amount: number
   platform_fee_percent: number
@@ -25,6 +27,9 @@ interface VotingEvent {
   is_active?: boolean
   nominee_count?: number
   total_votes?: number
+  paid_votes?: number
+  free_votes?: number
+  manual_votes?: number
 }
 
 export default function OrganizerDashboard() {
@@ -217,33 +222,54 @@ export default function OrganizerDashboard() {
                 </div>
               </div>
 
-              <div className="rounded-lg border border-white/8 bg-white/5 p-3 sm:p-4 space-y-2.5">
-                <div>
-                  <div className="text-foreground/50 text-[11px] font-semibold uppercase tracking-wider mb-1">Your Revenue</div>
-                  <div className="text-lg font-bold text-gold">
-                    {formatGHS(event.total_revenue)}
+              <div className="rounded-lg border border-white/8 bg-white/5 p-3 sm:p-4 space-y-3">
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <div className="text-foreground/50 text-[11px] font-semibold uppercase tracking-wider mb-1">Gross Revenue</div>
+                    <div className="text-base font-bold text-gold">
+                      {formatGHS(event.total_revenue)}
+                    </div>
                   </div>
-                </div>
-                <div>
-                  <div className="text-foreground/50 text-[11px] font-semibold uppercase tracking-wider mb-1">Revenue Left</div>
-                  <div className="text-base font-semibold text-emerald-300">
-                    {formatGHS(event.revenue_left)}
+                  <div>
+                    <div className="text-foreground/50 text-[11px] font-semibold uppercase tracking-wider mb-1">Net Earnings</div>
+                    <div className="text-base font-bold text-gold">
+                      {formatGHS(event.net_earnings)}
+                    </div>
                   </div>
-                </div>
-                <div>
-                  <div className="text-foreground/50 text-[11px] font-semibold uppercase tracking-wider mb-1">Cashed Out</div>
-                  <div className="text-base font-semibold text-orange-300">
-                    {formatGHS(event.cashed_out_amount)}
+                  <div>
+                    <div className="text-foreground/50 text-[11px] font-semibold uppercase tracking-wider mb-1">Platform Fee</div>
+                    <div className="text-sm font-semibold text-rose-300">
+                      {formatGHS(event.platform_fee_deducted)}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-foreground/50 text-[11px] font-semibold uppercase tracking-wider mb-1">Revenue Left</div>
+                    <div className="text-sm font-semibold text-emerald-300">
+                      {formatGHS(event.revenue_left)}
+                    </div>
+                  </div>
+                  <div className="col-span-2">
+                    <div className="text-foreground/50 text-[11px] font-semibold uppercase tracking-wider mb-1">Cashed Out</div>
+                    <div className="text-sm font-semibold text-orange-300">
+                      {formatGHS(event.cashed_out_amount)}
+                    </div>
                   </div>
                 </div>
                 {(event.event_type === 'voting' || !event.event_type) && (
-                  <div className="flex gap-4 pt-1 text-xs text-foreground/50">
-                    <span><span className="font-semibold text-foreground/70">{event.nominee_count ?? 0}</span> nominees</span>
-                    <span><span className="font-semibold text-foreground/70">{(event.total_votes ?? 0).toLocaleString()}</span> votes</span>
+                  <div className="space-y-1.5 pt-1 text-xs text-foreground/50 border-t border-white/8">
+                    <div className="flex flex-wrap gap-x-4 gap-y-1">
+                      <span><span className="font-semibold text-foreground/70">{event.nominee_count ?? 0}</span> nominees</span>
+                      <span><span className="font-semibold text-foreground/70">{(event.total_votes ?? 0).toLocaleString()}</span> total votes</span>
+                    </div>
+                    <div className="flex flex-wrap gap-x-4 gap-y-1">
+                      <span><span className="font-semibold text-emerald-300">{event.paid_votes ?? 0}</span> paid</span>
+                      <span><span className="font-semibold text-sky-300">{event.free_votes ?? 0}</span> free</span>
+                      <span><span className="font-semibold text-amber-300">{event.manual_votes ?? 0}</span> manual</span>
+                    </div>
                   </div>
                 )}
                 {event.platform_fee_percent > 0 && (
-                  <div className="flex flex-wrap gap-1.5 pt-1">
+                  <div className="flex flex-wrap gap-1.5">
                     {event.event_type === 'ticketing' ? (
                       <span className="text-[10px] text-foreground/40">
                         {Number(event.platform_fee_percent).toFixed(0)}% ticketing fee

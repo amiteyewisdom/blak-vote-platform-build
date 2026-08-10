@@ -107,5 +107,65 @@ If totals appear inconsistent, refresh derived tables via the reconciliation API
 - IDE may show TypeScript module-type errors if `node_modules` or framework types are missing locally; these do not affect the deployed UI.
 - Ensure Tailwind `line-clamp` plugin is enabled; otherwise text may wrap but not clamp to exactly two lines.
 
+## Organizer dashboard revenue transparency fix (2026-08-10)
+
+### Problem
+- Organizers saw a single **"Your Revenue"** line on the dashboard event card that actually displayed **net earnings after the platform fee**.
+- The same card showed **total votes**, which includes free and manual votes that generate no revenue.
+- This caused confusion (e.g. "the amounts aren't tallying" / "90% of 1,035"): the organizer expected revenue to be proportional to the total vote count, while the real revenue only comes from paid votes.
+- Example (GLOBAL YOUTH EXCELLENCE AWARDS):
+  - 1,035 total votes, but only ~872 paid votes at the time of the screenshot.
+  - Paid-vote gross ≈ GHS 872; 10% platform fee ≈ GHS 87; net earnings ≈ GHS 785.
+  - The remaining ~163 votes were manual/free, so they correctly added no revenue.
+  - The "GHS 5 cashed out" was simply old processed withdrawals, not an automatic withdrawal.
+
+### Changes
+- File: `app/api/organizer/dashboard/route.ts`
+  - The API now returns `total_revenue` as the **gross** paid-vote/ticket revenue.
+  - Added explicit fields: `net_earnings`, `platform_fee_deducted`, `paid_votes`, `free_votes`, `manual_votes`.
+- File: `app/organizer/page.tsx`
+  - Event card now shows:
+    - **Gross Revenue**
+    - **Net Earnings** (was "Your Revenue")
+    - **Platform Fee**
+    - **Revenue Left**
+    - **Cashed Out**
+    - Vote breakdown: total votes, paid votes, free votes, manual votes
+  - This makes it obvious that only paid votes generate revenue.
+- File: `lib/organizer-wallet.ts`
+  - Renamed `positiveFee` to `resolveFeeOrDefault` and made it accept an explicit `0%` override instead of falling back to the global default.
+  - This aligns dashboard/API fee resolution with the `organizer_fee_overrides` contract where `0` is a valid, intentional override.
+
+## Verification
+
+### Dashboard checks
+1. Open `/organizer/dashboard`.
+2. Confirm each event card shows **Gross Revenue**, **Platform Fee**, **Net Earnings**, **Revenue Left**, and **Cashed Out**.
+3. Confirm vote counts break down into **paid / free / manual / total**.
+4. For a voting event, verify: `Net Earnings = Gross Revenue - Platform Fee` and `Revenue Left = Net Earnings - Cashed Out`.
+
+### Data checks (revenue breakdown)
+Run this for any event in question:
+
+```sql
+SELECT
+  e.title,
+  oee.paid_votes,
+  oee.free_votes,
+  oee.manual_votes,
+  oee.total_votes,
+  oee.vote_revenue AS gross_revenue,
+  oee.platform_fee_deducted,
+  oee.net_earnings,
+  oee.withdrawn_vote_revenue + oee.withdrawn_ticket_revenue AS cashed_out,
+  oee.net_earnings - (oee.withdrawn_vote_revenue + oee.withdrawn_ticket_revenue) AS revenue_left
+FROM organizer_event_earnings oee
+JOIN events e ON e.id::text = oee.event_id
+WHERE oee.event_id = '<EVENT_ID>';
+```
+
+Expected: `net_earnings = gross_revenue - platform_fee_deducted` and matches the dashboard's **Net Earnings**.
+
 ## Changelog entry
 - 2026-08-06: Backfill guard for 0% platform-fee overrides; mobile nominee and event cards hardened for long names; vote counts remain visible across phone sizes.
+- 2026-08-10: Organizer dashboard event cards now expose gross/net revenue, platform fee, and paid/free/manual vote breakdown to prevent revenue/vote-count confusion.

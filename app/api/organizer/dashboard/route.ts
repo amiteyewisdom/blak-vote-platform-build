@@ -75,7 +75,9 @@ export async function GET() {
         end_date: event.end_date || null,
         image_url: event.image_url || null,
         is_active: Boolean(event.is_active),
-        total_revenue: Number(earning?.net_earnings || 0),
+        total_revenue: Number(earning?.total_revenue || 0),
+        net_earnings: Number(earning?.net_earnings || 0),
+        platform_fee_deducted: Number(earning?.platform_fee_deducted || 0),
         revenue_left: Number(earning?.revenue_left || 0),
         cashed_out_amount: Number(earning?.cashed_out_amount || 0),
         platform_fee_percent: feePercent,
@@ -83,6 +85,9 @@ export async function GET() {
         ticket_platform_fee_deducted: Number(earning?.ticket_platform_fee_deducted || 0),
         nominee_count: nomineeCountMap.get(eventId) || 0,
         total_votes: voteCountMap.get(eventId) || 0,
+        paid_votes: Number(earning?.paid_votes || 0),
+        free_votes: Number(earning?.free_votes || 0),
+        manual_votes: Number(earning?.manual_votes || 0),
       }
     })
 
