@@ -225,15 +225,15 @@ export default function OrganizerDashboard() {
               <div className="rounded-lg border border-white/8 bg-white/5 p-3 sm:p-4 space-y-3">
                 <div className="grid grid-cols-2 gap-2">
                   <div>
-                    <div className="text-foreground/50 text-[11px] font-semibold uppercase tracking-wider mb-1">Gross Revenue</div>
-                    <div className="text-base font-bold text-gold">
-                      {formatGHS(event.total_revenue)}
-                    </div>
-                  </div>
-                  <div>
                     <div className="text-foreground/50 text-[11px] font-semibold uppercase tracking-wider mb-1">Net Earnings</div>
                     <div className="text-base font-bold text-gold">
                       {formatGHS(event.net_earnings)}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-foreground/50 text-[11px] font-semibold uppercase tracking-wider mb-1">Platform Fee</div>
+                    <div className="text-sm font-semibold text-rose-300">
+                      {event.platform_fee_percent}%
                     </div>
                   </div>
                   <div>
