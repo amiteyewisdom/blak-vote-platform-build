@@ -589,6 +589,45 @@ export async function getOrganizerWithdrawalHistoryData(
 const WITHDRAWAL_SELECT_COLUMNS =
   'id,event_id,amount_requested,platform_fee_percent,platform_fee_amount,net_amount,method,account_details,withdrawal_type,status,admin_note,requested_at,approved_at,processed_at,payout_provider,payout_reference,payout_recipient_code,payout_attempted_at,payout_failure_reason,payout_metadata,created_at'
 
+async function ensureOrganizerWalletExists(adminSupabase: SupabaseLike, userId: string) {
+  const { data: existingWallet } = await adminSupabase
+    .from('organizer_wallets')
+    .select('organizer_id')
+    .eq('organizer_id', userId)
+    .maybeSingle()
+
+  if (!existingWallet) {
+    // Create wallet row if it doesn't exist
+    const { error } = await adminSupabase
+      .from('organizer_wallets')
+      .insert({
+        organizer_id: userId,
+        total_revenue: 0,
+        vote_revenue: 0,
+        ticket_revenue: 0,
+        total_paid_votes: 0,
+        paid_ticket_count: 0,
+        manual_votes: 0,
+        vote_platform_fees_deducted: 0,
+        ticket_platform_fees_deducted: 0,
+        platform_fees_deducted: 0,
+        net_balance: 0,
+        voting_earnings: 0,
+        ticket_earnings: 0,
+        total_earnings: 0,
+        withdrawable_balance: 0,
+        pending_balance: 0,
+        total_withdrawn: 0,
+        transferable_balance: 0,
+        last_updated: new Date().toISOString(),
+      })
+
+    if (error) {
+      console.warn('[ACCOUNTING] Failed to create organizer wallet row:', error.message)
+    }
+  }
+}
+
 export async function createOrganizerWithdrawalRequest(
   adminSupabase: SupabaseLike,
   userId: string,
@@ -613,6 +652,9 @@ export async function createOrganizerWithdrawalRequest(
   if (input.orphanedEventIds && input.orphanedEventIds.length > 0) {
     storedAccountDetails._orphaned_event_ids = input.orphanedEventIds
   }
+
+  // Ensure wallet row exists before attempting RPC
+  await ensureOrganizerWalletExists(adminSupabase, userId)
 
   // ── Primary path: atomic RPC with row-level lock ──────────────────────────
   // Requires migration 20260526000000_enterprise_accounting_ledger to be deployed.
@@ -647,11 +689,14 @@ export async function createOrganizerWithdrawalRequest(
       msg.includes('does not exist') ||
       msg.includes('could not find')
 
-    if (!isFunctionMissing) {
+    // Also treat "wallet not found" as a fallback case since we just created it
+    const isWalletNotFound = msg.includes('wallet not found')
+
+    if (!isFunctionMissing && !isWalletNotFound) {
       throw new Error(rpcError.message)
     }
 
-    console.warn('[ACCOUNTING] process_organizer_withdrawal RPC not available, using legacy fallback:', rpcError.message)
+    console.warn('[ACCOUNTING] process_organizer_withdrawal RPC not available or wallet issue, using legacy fallback:', rpcError.message)
   }
 
   // ── Fallback: legacy path (migration not yet deployed) ───────────────────
