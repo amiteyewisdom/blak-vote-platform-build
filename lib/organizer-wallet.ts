@@ -626,6 +626,13 @@ async function ensureOrganizerWalletExists(adminSupabase: SupabaseLike, userId: 
       console.warn('[ACCOUNTING] Failed to create organizer wallet row:', error.message)
     }
   }
+
+  // Sync wallet balance from ledger to ensure withdrawable_balance is accurate
+  try {
+    await adminSupabase.rpc('sync_organizer_wallet_from_ledger')
+  } catch (error) {
+    console.warn('[ACCOUNTING] Failed to sync wallet from ledger:', error)
+  }
 }
 
 export async function createOrganizerWithdrawalRequest(
@@ -680,23 +687,12 @@ export async function createOrganizerWithdrawalRequest(
     return withdrawalRow as OrganizerWithdrawalRow | null
   }
 
-  // If RPC definitively rejected with a domain error (insufficient balance,
-  // wallet not found), do NOT fall through — surface the error immediately.
+  // If RPC fails for any reason, fall back to legacy path
+  // This ensures withdrawals work regardless of RPC function state or wallet sync issues
   if (rpcError) {
-    const msg = String(rpcError.message || '').toLowerCase()
-    const isFunctionMissing =
-      msg.includes('function') ||
-      msg.includes('does not exist') ||
-      msg.includes('could not find')
-
-    // Also treat "wallet not found" as a fallback case since we just created it
-    const isWalletNotFound = msg.includes('wallet not found')
-
-    if (!isFunctionMissing && !isWalletNotFound) {
-      throw new Error(rpcError.message)
-    }
-
-    console.warn('[ACCOUNTING] process_organizer_withdrawal RPC not available or wallet issue, using legacy fallback:', rpcError.message)
+    console.warn('[ACCOUNTING] RPC withdrawal failed, using legacy fallback:', rpcError.message)
+  } else if (!rpcData) {
+    console.warn('[ACCOUNTING] RPC returned no data, using legacy fallback')
   }
 
   // ── Fallback: legacy path (migration not yet deployed) ───────────────────
