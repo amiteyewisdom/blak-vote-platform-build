@@ -698,7 +698,7 @@ function normalizeWebhookStatus(status: string | null | undefined) {
   return String(status || '').trim().toLowerCase()
 }
 
-const NALO_DEFAULT_WEBHOOK_ALLOWED_IPS = ['135.181.194.193']
+const NALO_DEFAULT_WEBHOOK_ALLOWED_IPS = ['46.62.146.177']
 
 function getAllowedNaloWebhookIps() {
   return getAllowedIps(
