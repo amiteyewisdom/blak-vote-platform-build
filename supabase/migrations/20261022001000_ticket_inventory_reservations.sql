@@ -103,6 +103,29 @@ begin
 end;
 $$;
 
+-- Short, unique, typeable ticket codes (6 chars, A-Z0-9).
+create or replace function public.generate_ticket_code()
+returns text
+language plpgsql
+as $$
+declare
+  v_code text;
+  v_exists boolean;
+  v_chars text := 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+begin
+  loop
+    select string_agg(substr(v_chars, floor(random() * 36)::int + 1, 1), '')
+    into v_code
+    from generate_series(1, 6);
+
+    select exists(select 1 from tickets where ticket_code = v_code) into v_exists;
+    exit when not v_exists;
+  end loop;
+
+  return v_code;
+end;
+$$;
+
 -- Issuance must respect outstanding holds, while atomically consuming the
 -- hold that belongs to the paying reference itself.
 create or replace function public.issue_ticket_purchase(
@@ -210,7 +233,7 @@ begin
       v_plan.price,
       1,
       coalesce(v_plan.admin_fee, 0),
-      upper(substr(md5(random()::text || clock_timestamp()::text || series_number::text || coalesce(p_payment_reference, 'FREE')), 1, 12)),
+      generate_ticket_code(),
       'valid',
       'unused',
       p_payment_reference,

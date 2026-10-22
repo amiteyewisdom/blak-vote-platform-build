@@ -1032,7 +1032,7 @@ async function issueTicketPurchaseFallback(params: {
       price: Number(plan.price || 0),
       quantity: 1,
       admin_fee: Number(plan.admin_fee || 0),
-      ticket_code: crypto.randomUUID().replace(/-/g, '').toUpperCase().slice(0, 12),
+      ticket_code: crypto.randomUUID().replace(/-/g, '').toUpperCase().slice(0, 6),
       status: 'valid',
       usage_status: 'unused',
       payment_reference: paymentReference,
