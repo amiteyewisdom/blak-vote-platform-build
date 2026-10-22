@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import jsQR from 'jsqr'
 import { ArrowLeft, Camera, CameraOff, KeyRound, Loader2 } from 'lucide-react'
+import { supabase } from '@/lib/supabaseClient'
 
 type ScanStatus = 'idle' | 'scanning' | 'loading' | 'valid' | 'used' | 'invalid'
 
@@ -84,13 +85,26 @@ export default function TicketScanPage() {
     setResult({ status: 'loading', code })
 
     try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+      const accessToken = session?.access_token
+
       const res = await fetch('/api/tickets/verify', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+        },
         body: JSON.stringify({ code }),
       })
 
       const payload = await res.json()
+
+      if (res.status === 401 || res.status === 403) {
+        setResult({ status: 'invalid', code, message: 'Sign in as the event organizer to check in tickets.' })
+        return
+      }
 
       if (res.status === 409 && payload.error?.includes('already been used')) {
         // Fetch details for the used ticket

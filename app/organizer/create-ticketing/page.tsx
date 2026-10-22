@@ -157,6 +157,7 @@ export default function CreateTicketingPage() {
       event_id: eventId,
       ticket_kind: 'plan',
       name: plan.name.trim(),
+      description: plan.description.trim() || null,
       price: Number(plan.price),
       quantity: Number(plan.quantity),
       sold_count: 0,

@@ -23,11 +23,24 @@ export async function POST(req: NextRequest) {
     const { ticketId, buyerName, buyerEmail, buyerPhone, quantity, paymentReference } = parsed.data
     const supabase = getSupabaseAdminClient()
 
-    const { data: plan, error: planError } = await supabase
+    const planColumns = 'id, event_id, name, price, quantity, sold_count, ticket_kind'
+
+    let { data: plan, error: planError } = await supabase
       .from('tickets')
-      .select('id, event_id, name, price, quantity, sold_count, ticket_kind')
+      .select(`${planColumns}, reserved_count`)
       .eq('id', ticketId)
       .maybeSingle()
+
+    // Older databases without the reservation column still purchase normally.
+    if (planError && String(planError.message || '').toLowerCase().includes('reserved_count')) {
+      const retry = await supabase
+        .from('tickets')
+        .select(planColumns)
+        .eq('id', ticketId)
+        .maybeSingle()
+      plan = retry.data ? { ...retry.data, reserved_count: 0 } : retry.data
+      planError = retry.error
+    }
 
     if (planError || !plan) {
       return NextResponse.json({ error: 'Ticket plan not found' }, { status: 404 })
@@ -39,7 +52,8 @@ export async function POST(req: NextRequest) {
 
     const totalQuantity = Math.max(1, Number(plan.quantity || 1))
     const soldCount = Math.max(0, Number(plan.sold_count || 0))
-    const remainingQuantity = Math.max(totalQuantity - soldCount, 0)
+    const reservedCount = Math.max(0, Number(plan.reserved_count || 0))
+    const remainingQuantity = Math.max(totalQuantity - soldCount - reservedCount, 0)
 
     if (remainingQuantity < quantity) {
       return NextResponse.json({ error: `Only ${remainingQuantity} tickets remaining for this plan` }, { status: 409 })

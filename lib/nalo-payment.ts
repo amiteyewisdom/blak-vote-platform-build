@@ -280,6 +280,30 @@ export async function createOrReuseUssdPendingTransaction(
     throw new Error(createPaymentError?.message || 'Unable to create pending USSD transaction')
   }
 
+  // Hold the requested slots while the USSD payment is in flight so the same
+  // seat can't be sold to another buyer. Missing reservation support degrades
+  // to the legacy best-effort check at issuance time.
+  if (input.type === 'ticket' && input.planId) {
+    const { error: reserveError } = await supabase.rpc('reserve_ticket_inventory', {
+      p_plan_id: String(input.planId),
+      p_payment_reference: String(createdPayment.reference || input.id),
+      p_quantity: Math.max(1, Number(input.quantity || 1)),
+    })
+
+    if (reserveError) {
+      const unsupported = String(reserveError.message || '').toLowerCase().includes('reserve_ticket_inventory')
+
+      if (!unsupported) {
+        await supabase
+          .from('payments')
+          .update({ status: 'failed', gateway_status: 'ticket_sold_out' })
+          .eq('reference', createdPayment.reference)
+
+        throw new Error(reserveError.message || 'Ticket plan is sold out')
+      }
+    }
+  }
+
   return mapExistingTransaction({
     id: String(createdPayment.reference || input.id),
     phoneNumber: input.phoneNumber,

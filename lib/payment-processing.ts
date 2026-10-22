@@ -147,7 +147,7 @@ function paymentAmountsMatch(storedAmount: unknown, verifiedAmount: unknown) {
     return true
   }
 
-  return Math.abs(stored - verified) <= 0.02
+  return Math.abs(Number((stored - verified).toFixed(4))) <= 0.02
 }
 
 function isSellableTicketPlan(ticket: {
@@ -922,6 +922,61 @@ async function recordPaymentSplit(params: {
   })
 }
 
+function isTicketReservationUnsupportedError(error: { message?: string } | null | undefined) {
+  const message = String(error?.message || '').toLowerCase()
+  return (
+    message.includes('reserve_ticket_inventory') ||
+    message.includes('release_ticket_reservation') ||
+    message.includes('reserved_count') ||
+    message.includes('reserved_ticket_quantity')
+  )
+}
+
+// Atomically holds `quantity` slots on the plan for this payment reference.
+// Returns unsupported=true when the reservation migration isn't applied yet,
+// so callers can degrade to the legacy best-effort check.
+async function reserveTicketInventory(params: {
+  supabase: ReturnType<typeof getSupabaseAdminClient>
+  planId: string
+  paymentReference: string
+  quantity: number
+}) {
+  const { supabase, planId, paymentReference, quantity } = params
+  const { error } = await supabase.rpc('reserve_ticket_inventory', {
+    p_plan_id: planId,
+    p_payment_reference: paymentReference,
+    p_quantity: quantity,
+  })
+
+  if (!error) {
+    return { ok: true as const }
+  }
+
+  return {
+    ok: false as const,
+    unsupported: isTicketReservationUnsupportedError(error),
+    error: error.message || 'Unable to reserve tickets',
+  }
+}
+
+// Best-effort, idempotent release of a payment's held slots.
+async function releaseTicketReservation(
+  supabase: ReturnType<typeof getSupabaseAdminClient>,
+  paymentReference: string
+) {
+  try {
+    const { error } = await supabase.rpc('release_ticket_reservation', {
+      p_payment_reference: paymentReference,
+    })
+
+    if (error && !isTicketReservationUnsupportedError(error)) {
+      console.warn('[TICKET_RESERVATION_RELEASE_FAIL]', { reference: paymentReference, error: error.message })
+    }
+  } catch (error) {
+    console.warn('[TICKET_RESERVATION_RELEASE_FAIL]', { reference: paymentReference, error })
+  }
+}
+
 async function issueTicketPurchaseFallback(params: {
   supabase: ReturnType<typeof getSupabaseAdminClient>
   planId: string
@@ -995,6 +1050,13 @@ async function issueTicketPurchaseFallback(params: {
       .select('id, ticket_code')
 
     if (issuedError || !issuedTickets || issuedTickets.length === 0) {
+      // Roll back the reserved inventory so sold_count isn't inflated
+      // without corresponding issued tickets.
+      await supabase
+        .from('tickets')
+        .update({ sold_count: soldCount, updated_at: nowIso })
+        .eq('id', plan.id)
+
       return { ok: false as const, error: issuedError?.message || 'Unable to issue tickets after payment verification' }
     }
 
@@ -1197,6 +1259,32 @@ export async function initializeVotePayment(input: PaymentInitInput | unknown) {
       },
     })
 
+    // Hold the requested slots for the duration of checkout so a sold-out
+    // plan can never collect payment it can't fulfill.
+    const reservation = await reserveTicketInventory({
+      supabase,
+      planId: String(ticket.id),
+      paymentReference: reference,
+      quantity,
+    })
+
+    if (!reservation.ok) {
+      if (reservation.unsupported) {
+        console.warn('[TICKET_RESERVATION_SKIP] reservation RPC unavailable — continuing without hold')
+      } else {
+        await supabase
+          .from('payments')
+          .update({ status: 'failed', gateway_status: 'ticket_sold_out' })
+          .eq('reference', reference)
+
+        return {
+          ok: false as const,
+          status: 409,
+          body: { error: reservation.error },
+        }
+      }
+    }
+
     const response = await fetch('https://api.paystack.co/transaction/initialize', {
       method: 'POST',
       headers: {
@@ -1224,6 +1312,7 @@ export async function initializeVotePayment(input: PaymentInitInput | unknown) {
     const payload = await response.json()
 
     if (!response.ok || !payload?.status || !payload?.data?.authorization_url) {
+      await releaseTicketReservation(supabase, reference)
       await supabase
         .from('payments')
         .update({ status: 'failed', gateway_status: 'initialize_failed' })
@@ -1635,6 +1724,7 @@ export async function processConfirmedPayment(verification: PaymentVerificationP
   if (!isConfirmedPaymentStatus(verification.status)) {
     console.warn('[PAYMENT_VERIFY_FAIL] Payment not successful:', { reference: verification.reference, status: verification.status })
     await logPaymentVerificationFailure(verification.reference, `Payment not successful: ${verification.status}`)
+    await releaseTicketReservation(supabase, verification.reference)
     await supabase
       .from('payments')
       .update({ status: 'failed', gateway_status: verification.status, verified_at: new Date().toISOString() })
@@ -1660,6 +1750,7 @@ export async function processConfirmedPayment(verification: PaymentVerificationP
   ) {
     console.error('[PAYMENT_VERIFY_FAIL] Metadata mismatch:', { reference: verification.reference, payment, metadata })
     await logPaymentVerificationFailure(verification.reference, 'Metadata mismatch')
+    await releaseTicketReservation(supabase, verification.reference)
     await supabase
       .from('payments')
       .update({ status: 'failed', gateway_status: 'metadata_mismatch', verified_at: new Date().toISOString() })
@@ -1675,6 +1766,7 @@ export async function processConfirmedPayment(verification: PaymentVerificationP
   if (!paymentAmountsMatch(payment.amount, verification.amount)) {
     console.error('[PAYMENT_VERIFY_FAIL] Amount mismatch:', { reference: verification.reference, expected: payment.amount, received: verification.amount })
     await logPaymentVerificationFailure(verification.reference, `Amount mismatch: expected ${payment.amount}, received ${verification.amount}`)
+    await releaseTicketReservation(supabase, verification.reference)
     await supabase
       .from('payments')
       .update({ status: 'failed', gateway_status: 'amount_mismatch', verified_at: new Date().toISOString() })
@@ -1830,13 +1922,29 @@ export async function processConfirmedPayment(verification: PaymentVerificationP
   }
 
   if (paymentContext === 'ticket') {
-    const { data: ticket, error: ticketError } = await supabase
+    const ticketColumns =
+      'id, event_id, name, price, admin_fee, quantity, sold_count, ticket_kind, ticket_type, parent_ticket_id'
+    const ticketIdValue = (metadata?.ticketId ?? rawStoredMeta.ticketId) as string
+
+    let { data: ticket, error: ticketError } = await supabase
       .from('tickets')
-      .select('id, event_id, name, price, admin_fee, quantity, sold_count, ticket_kind, ticket_type, parent_ticket_id')
-      .eq('id', (metadata?.ticketId ?? rawStoredMeta.ticketId) as string)
+      .select(`${ticketColumns}, reserved_count`)
+      .eq('id', ticketIdValue)
       .maybeSingle()
 
+    // Older databases without the reservation column still verify normally.
+    if (ticketError && isTicketReservationUnsupportedError(ticketError)) {
+      const retry = await supabase
+        .from('tickets')
+        .select(ticketColumns)
+        .eq('id', ticketIdValue)
+        .maybeSingle()
+      ticket = retry.data ? { ...retry.data, reserved_count: 0 } : retry.data
+      ticketError = retry.error
+    }
+
     if (ticketError || !ticket) {
+      await releaseTicketReservation(supabase, verification.reference)
       await supabase
         .from('payments')
         .update({
@@ -1854,6 +1962,7 @@ export async function processConfirmedPayment(verification: PaymentVerificationP
     }
 
     if (!isSellableTicketPlan(ticket)) {
+      await releaseTicketReservation(supabase, verification.reference)
       await supabase
         .from('payments')
         .update({
@@ -1871,6 +1980,7 @@ export async function processConfirmedPayment(verification: PaymentVerificationP
     }
 
     if (String(ticket.event_id) !== effectiveEventId) {
+      await releaseTicketReservation(supabase, verification.reference)
       await supabase
         .from('payments')
         .update({
@@ -1890,9 +2000,14 @@ export async function processConfirmedPayment(verification: PaymentVerificationP
     const requestedQuantity = Math.max(1, Number(metadata.quantity || payment.quantity || 1))
     const totalQuantity = Math.max(1, Number(ticket.quantity || 1))
     const soldCount = Math.max(0, Number(ticket.sold_count || 0))
-    const remainingQuantity = Math.max(totalQuantity - soldCount, 0)
+    // Slots held by other in-flight checkouts are unavailable, but this
+    // payment's own reservation counts toward fulfilling its request.
+    const reservedCount = Math.max(0, Number((ticket as { reserved_count?: number }).reserved_count || 0))
+    const ownHold = Math.max(0, Number((payment as { reserved_ticket_quantity?: number }).reserved_ticket_quantity || 0))
+    const remainingQuantity = Math.max(totalQuantity - soldCount - reservedCount + ownHold, 0)
 
     if (remainingQuantity < requestedQuantity) {
+      await releaseTicketReservation(supabase, verification.reference)
       await supabase
         .from('payments')
         .update({
@@ -1940,7 +2055,10 @@ export async function processConfirmedPayment(verification: PaymentVerificationP
 
         if (fallback.ok) {
           finalIssuedTickets = fallback.issuedTickets
+          // The fallback path bypasses the RPC, so release the hold manually.
+          await releaseTicketReservation(supabase, verification.reference)
         } else {
+          await releaseTicketReservation(supabase, verification.reference)
           await supabase
             .from('payments')
             .update({
@@ -1960,6 +2078,7 @@ export async function processConfirmedPayment(verification: PaymentVerificationP
     }
 
     if (!(finalIssuedTickets && finalIssuedTickets.length > 0)) {
+      await releaseTicketReservation(supabase, verification.reference)
       await supabase
         .from('payments')
         .update({
@@ -2306,6 +2425,47 @@ export async function cleanupStalePayments(ageMinutes: number = 30) {
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Cleanup failed'
     console.error('Payment stale cleanup error:', message)
+    return { ok: false as const, error: message }
+  }
+}
+
+// Releases ticket inventory held by pending payments older than `ageMinutes`.
+// The holds themselves are keyed by payment reference, so repeat runs are safe.
+export async function releaseStaleTicketReservations(ageMinutes: number = 30) {
+  const supabase = getSupabaseAdminClient()
+
+  try {
+    const thresholdIso = new Date(Date.now() - ageMinutes * 60 * 1000).toISOString()
+    const { data: staleHolds, error } = await supabase
+      .from('payments')
+      .select('reference')
+      .gt('reserved_ticket_quantity', 0)
+      .eq('status', 'pending')
+      .lt('created_at', thresholdIso)
+      .limit(500)
+
+    if (error) {
+      if (isTicketReservationUnsupportedError(error)) {
+        return { ok: true as const, releasedCount: 0 }
+      }
+      console.error('Failed to list stale ticket reservations:', error.message)
+      return { ok: false as const, error: error.message }
+    }
+
+    let releasedCount = 0
+    for (const hold of staleHolds || []) {
+      await releaseTicketReservation(supabase, String(hold.reference))
+      releasedCount += 1
+    }
+
+    if (releasedCount > 0) {
+      console.log(`✓ Released ${releasedCount} stale ticket reservations`)
+    }
+
+    return { ok: true as const, releasedCount }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Cleanup failed'
+    console.error('Ticket reservation cleanup error:', message)
     return { ok: false as const, error: message }
   }
 }

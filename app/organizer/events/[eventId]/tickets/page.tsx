@@ -9,6 +9,7 @@ import { supabase } from '@/lib/supabaseClient'
 type TicketPlan = {
   id: string
   name: string
+  description?: string | null
   price: number
   admin_fee: number
   totalQuantity: number
@@ -36,6 +37,7 @@ type VerificationResult = {
 
 const defaultForm = {
   name: 'Regular',
+  description: '',
   price: '0',
   quantity: '100',
 }
@@ -205,12 +207,14 @@ export default function EventTicketsPage() {
       ? {
           ticketId: editingPlanId,
           name: form.name,
+          description: form.description,
           price: Number(form.price),
           quantity: Number(form.quantity),
         }
       : {
           event_id: eventId,
           name: form.name,
+          description: form.description,
           price: Number(form.price),
           quantity: Number(form.quantity),
         }
@@ -238,6 +242,7 @@ export default function EventTicketsPage() {
     setEditingPlanId(plan.id)
     setForm({
       name: plan.name,
+      description: plan.description || '',
       price: String(plan.price),
       quantity: String(plan.totalQuantity),
     })
@@ -281,16 +286,13 @@ export default function EventTicketsPage() {
     setVerificationResult(null)
 
     const endpoint = '/api/tickets/verify'
-    const res = await fetch(
-      markAsUsed ? endpoint : `${endpoint}?code=${encodeURIComponent(verificationCode.trim())}`,
-      markAsUsed
-        ? {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ code: verificationCode.trim() }),
-          }
-        : undefined
-    )
+    const res = markAsUsed
+      ? await fetchWithAuth(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ code: verificationCode.trim() }),
+        })
+      : await fetch(`${endpoint}?code=${encodeURIComponent(verificationCode.trim())}`)
     const payload = await res.json()
 
     setVerificationBusy(false)
@@ -377,6 +379,8 @@ export default function EventTicketsPage() {
             <DSInput className="bg-surface" value={form.quantity} onChange={(e) => setForm((current) => ({ ...current, quantity: e.target.value }))} placeholder="Inventory" type="number" min="1" />
           </div>
 
+          <DSInput className="bg-surface" value={form.description} onChange={(e) => setForm((current) => ({ ...current, description: e.target.value }))} placeholder="Plan description (optional, e.g. Includes backstage access)" />
+
           {(feedback || error) && (
             <div className={`rounded-xl border px-4 py-3 text-sm ${error ? 'border-destructive/30 bg-destructive/10 text-destructive' : 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'}`}>
               {error || feedback}
@@ -455,6 +459,7 @@ export default function EventTicketsPage() {
                 <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                   <div>
                     <p className="text-lg font-semibold">{plan.name}</p>
+                    {!!plan.description && <p className="text-sm text-muted-foreground">{plan.description}</p>}
                     <p className="text-sm text-muted-foreground">GHS {plan.price.toFixed(2)} per ticket</p>
                   </div>
                   <div className="text-left md:text-right">

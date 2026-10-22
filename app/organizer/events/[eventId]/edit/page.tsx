@@ -22,6 +22,7 @@ export default function EventSettingsPage() {
 
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [eventType, setEventType] = useState<string>('voting')
 
   const [form, setForm] = useState({
     title: '',
@@ -59,6 +60,8 @@ export default function EventSettingsPage() {
 
     if (!data) return
 
+    setEventType(String(data.event_type || 'voting'))
+
     setForm({
       title: data.title || '',
       description: data.description || '',
@@ -82,8 +85,17 @@ export default function EventSettingsPage() {
       data: { user },
     } = await supabase.auth.getUser()
 
-    if (!user) return
+    if (!user) {
+      toast({
+        title: 'Not authenticated',
+        description: 'Sign in again to save changes.',
+        variant: 'destructive',
+      })
+      setSaving(false)
+      return
+    }
 
+    const isTicketingEvent = eventType === 'ticketing'
     let imageUrl = preview
 
     // Upload new image if selected
@@ -113,7 +125,7 @@ export default function EventSettingsPage() {
 
     const votePrice = Number(form.cost_per_vote || 0)
 
-    if (!Number.isInteger(votePrice) || votePrice < 1) {
+    if (!isTicketingEvent && (!Number.isInteger(votePrice) || votePrice < 1)) {
       toast({
         title: 'Invalid vote price',
         description: 'Vote price must be a whole number of at least 1 GHS.',
@@ -142,8 +154,7 @@ export default function EventSettingsPage() {
         eventId,
         title: form.title,
         description: form.description,
-        cost_per_vote: votePrice,
-        vote_price: votePrice,
+        ...(isTicketingEvent ? {} : { cost_per_vote: votePrice, vote_price: votePrice }),
         status: form.status,
         image_url: imageUrl,
         start_date: form.start_date || null,
@@ -308,41 +319,45 @@ export default function EventSettingsPage() {
           placeholder="Description"
         />
 
-        {/* Cost */}
-        <DSInput
-          type="number"
-          min="1"
-          step="1"
-          value={form.cost_per_vote}
-          onChange={(e) =>
-            setForm({
-              ...form,
-              cost_per_vote: e.target.value,
-            })
-          }
-          className="w-full bg-surface rounded-2xl px-6 h-14"
-          placeholder="Cost per vote (GHS, whole number only)"
-        />
+        {/* Cost — voting events only */}
+        {eventType !== 'ticketing' && (
+          <>
+            <DSInput
+              type="number"
+              min="1"
+              step="1"
+              value={form.cost_per_vote}
+              onChange={(e) =>
+                setForm({
+                  ...form,
+                  cost_per_vote: e.target.value,
+                })
+              }
+              className="w-full bg-surface rounded-2xl px-6 h-14"
+              placeholder="Cost per vote (GHS, whole number only)"
+            />
 
-        <div className="space-y-3 rounded-2xl border border-border bg-surface p-4">
-          <div>
-            <h3 className="text-sm font-semibold">Bulk Vote Packages</h3>
-            <p className="text-xs text-muted-foreground">
-              Manage discounted vote bundles on a dedicated page.
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={() => router.push(`/organizer/events/${eventId}/bulk-votes`)}
-            className="px-4 py-3 rounded-xl border border-border bg-card text-sm hover:border-[hsl(var(--gold))]/40 transition"
-          >
-            Open Bulk Vote Management
-          </button>
-        </div>
+            <div className="space-y-3 rounded-2xl border border-border bg-surface p-4">
+              <div>
+                <h3 className="text-sm font-semibold">Bulk Vote Packages</h3>
+                <p className="text-xs text-muted-foreground">
+                  Manage discounted vote bundles on a dedicated page.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => router.push(`/organizer/events/${eventId}/bulk-votes`)}
+                className="px-4 py-3 rounded-xl border border-border bg-card text-sm hover:border-[hsl(var(--gold))]/40 transition"
+              >
+                Open Bulk Vote Management
+              </button>
+            </div>
+          </>
+        )}
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm text-muted-foreground mb-2">Voting Starts</label>
+            <label className="block text-sm text-muted-foreground mb-2">{eventType === 'ticketing' ? 'Event Starts' : 'Voting Starts'}</label>
             <DSInput
               type="datetime-local"
               value={form.start_date}
@@ -357,7 +372,7 @@ export default function EventSettingsPage() {
           </div>
 
           <div>
-            <label className="block text-sm text-muted-foreground mb-2">Voting Ends</label>
+            <label className="block text-sm text-muted-foreground mb-2">{eventType === 'ticketing' ? 'Event Ends' : 'Voting Ends'}</label>
             <DSInput
               type="datetime-local"
               value={form.end_date}

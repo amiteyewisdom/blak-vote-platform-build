@@ -3,6 +3,7 @@ import {
   cleanupStalePayments,
   cleanupGhostPayments,
   cleanupStuckVerifyingPayments,
+  releaseStaleTicketReservations,
   getPaymentStats,
 } from '@/lib/payment-processing'
 
@@ -36,6 +37,11 @@ export async function POST(request: NextRequest) {
     const results: Record<string, unknown> = {
       action,
       before: before.stats,
+    }
+
+    if (action === 'full' || action === 'stale' || action === 'reservations') {
+      const reservationResult = await releaseStaleTicketReservations(30)
+      results.ticketReservations = reservationResult
     }
 
     if (action === 'full' || action === 'stale') {

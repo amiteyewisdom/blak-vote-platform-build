@@ -7,6 +7,7 @@ import { getSupabaseAdminClient } from '@/lib/server-security'
 const ticketPlanSchema = z.object({
   event_id: z.string().uuid(),
   name: z.string().trim().min(1).max(120),
+  description: z.string().trim().max(500).optional().or(z.literal('')),
   price: z.coerce.number().min(0).max(1000000),
   quantity: z.coerce.number().int().min(1).max(100000),
 })
@@ -14,6 +15,7 @@ const ticketPlanSchema = z.object({
 const ticketPlanUpdateSchema = z.object({
   ticketId: z.string().uuid(),
   name: z.string().trim().min(1).max(120).optional(),
+  description: z.string().trim().max(500).optional(),
   price: z.coerce.number().min(0).max(1000000).optional(),
   quantity: z.coerce.number().int().min(1).max(100000).optional(),
 })
@@ -218,7 +220,7 @@ export async function GET(req: NextRequest) {
     const { supabase } = access
     const { data: plans, error } = await supabase
       .from('tickets')
-      .select('id, event_id, name, price, quantity, sold_count, admin_fee, created_at, updated_at')
+      .select('id, event_id, name, description, price, quantity, sold_count, reserved_count, admin_fee, created_at, updated_at')
       .eq('event_id', eventId)
       .eq('ticket_kind', 'plan')
       .order('created_at', { ascending: false })
@@ -227,11 +229,23 @@ export async function GET(req: NextRequest) {
       return serviceUnavailableResponse()
     }
 
-    if (error && !isMissingColumnError(error, 'ticket_kind') && !isMissingColumnError(error, 'sold_count')) {
+    if (
+      error &&
+      !isMissingColumnError(error, 'ticket_kind') &&
+      !isMissingColumnError(error, 'sold_count') &&
+      !isMissingColumnError(error, 'description') &&
+      !isMissingColumnError(error, 'reserved_count')
+    ) {
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
-    if (error && (isMissingColumnError(error, 'ticket_kind') || isMissingColumnError(error, 'sold_count'))) {
+    if (
+      error &&
+      (isMissingColumnError(error, 'ticket_kind') ||
+        isMissingColumnError(error, 'sold_count') ||
+        isMissingColumnError(error, 'description') ||
+        isMissingColumnError(error, 'reserved_count'))
+    ) {
       return migrationRequiredResponse()
     }
 
@@ -268,7 +282,8 @@ export async function GET(req: NextRequest) {
     const ticketPlans = normalizedPlans.map((plan) => {
       const totalQuantity = Math.max(1, Number(plan.quantity || 1))
       const soldCount = Math.max(0, Number(plan.sold_count || 0))
-      const remainingQuantity = Math.max(totalQuantity - soldCount, 0)
+      const reservedCount = Math.max(0, Number(plan.reserved_count || 0))
+      const remainingQuantity = Math.max(totalQuantity - soldCount - reservedCount, 0)
       const grossRevenue = Number((Number(plan.price || 0) * soldCount).toFixed(2))
       const platformFees = Number((Number(plan.admin_fee || 0) * soldCount).toFixed(2))
 
@@ -351,6 +366,7 @@ export async function POST(req: NextRequest) {
       .insert({
       event_id: parsed.data.event_id,
       name: parsed.data.name,
+      description: parsed.data.description || null,
       price: parsed.data.price,
       quantity: parsed.data.quantity,
       sold_count: 0,
@@ -364,7 +380,7 @@ export async function POST(req: NextRequest) {
       created_at: timestamp,
       updated_at: timestamp,
       })
-      .select('id, event_id, name, price, quantity, sold_count, admin_fee, created_at, updated_at')
+      .select('id, event_id, name, description, price, quantity, sold_count, admin_fee, created_at, updated_at')
       .single()
 
     if (error || !createdPlan) {
@@ -376,7 +392,11 @@ export async function POST(req: NextRequest) {
         return legacyTicketTypeSchemaResponse()
       }
 
-      if (isMissingColumnError(error, 'ticket_kind') || isMissingColumnError(error, 'sold_count')) {
+      if (
+        isMissingColumnError(error, 'ticket_kind') ||
+        isMissingColumnError(error, 'sold_count') ||
+        isMissingColumnError(error, 'description')
+      ) {
         return migrationRequiredResponse()
       }
 
@@ -467,6 +487,10 @@ export async function PATCH(req: NextRequest) {
       updates.name = parsed.data.name
     }
 
+    if (parsed.data.description !== undefined) {
+      updates.description = parsed.data.description || null
+    }
+
     if (parsed.data.price !== undefined) {
       updates.price = parsed.data.price
       updates.admin_fee = Number(((parsed.data.price * ticketPercent) / 100).toFixed(2))
@@ -481,12 +505,16 @@ export async function PATCH(req: NextRequest) {
       .update(updates)
       .eq('id', parsed.data.ticketId)
       .eq('ticket_kind', 'plan')
-      .select('id, event_id, name, price, quantity, sold_count, admin_fee, created_at, updated_at')
+      .select('id, event_id, name, description, price, quantity, sold_count, admin_fee, created_at, updated_at')
       .single()
 
     if (updateError || !updatedPlan) {
       if (isConnectivityError(updateError)) {
         return serviceUnavailableResponse()
+      }
+
+      if (isMissingColumnError(updateError, 'description')) {
+        return migrationRequiredResponse()
       }
 
       return NextResponse.json({ error: updateError?.message || 'Unable to update ticket plan' }, { status: 500 })

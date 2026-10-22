@@ -73,6 +73,20 @@ class Builder {
     return this
   }
 
+  or(_condition: string) {
+    return this
+  }
+
+  filter(column: string, operator: string, value: unknown) {
+    const normalizedColumn = column.split('::')[0]
+    if (operator === 'eq') {
+      this.filters[normalizedColumn] = value
+    } else if (operator === 'is' && value === null) {
+      this.nullFilters.push(normalizedColumn)
+    }
+    return this
+  }
+
   neq(column: string, value: unknown) {
     this.notEqualFilters[column] = value
     return this
@@ -161,6 +175,27 @@ class Builder {
       return { data: null, error: null }
     }
 
+    if (this.table === 'nominations') {
+      const candidateId = state.payment.candidate_id
+      const matches =
+        this.filters.uuid_ref === candidateId ||
+        this.filters.id === candidateId ||
+        this.filters.event_id === state.payment.event_id
+
+      if (matches) {
+        return {
+          data: {
+            id: candidateId,
+            nominee_name: 'Candidate',
+            uuid_ref: candidateId,
+          },
+          error: null,
+        }
+      }
+
+      return { data: null, error: null }
+    }
+
     if (this.table === 'votes') {
       if (this.insertPayload) {
         const transactionId = String(this.insertPayload.transaction_id || '')
@@ -231,7 +266,15 @@ const mockSupabase = {
   from(table: string) {
     return new Builder(table)
   },
-  async rpc() {
+  async rpc(fn: string, args: Record<string, unknown>) {
+    if (fn === 'process_vote') {
+      const transactionId = String(args?.p_transaction_id || '')
+      if (transactionId && !state.votes.find((vote) => vote.transaction_id === transactionId)) {
+        state.votes.push({ id: `vote-${state.votes.length + 1}`, transaction_id: transactionId })
+      }
+      return { data: null, error: null }
+    }
+
     return { data: null, error: null }
   },
 }

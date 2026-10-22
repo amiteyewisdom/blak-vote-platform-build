@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { createClient as createServerClient } from '@/lib/supabase/server'
+import { ensureEventOwnedByOrganizer, requireRole } from '@/lib/api-auth'
 import { getSupabaseAdminClient } from '@/lib/server-security'
 
 function normalizeTicketCode(input: unknown): string {
@@ -7,6 +9,88 @@ function normalizeTicketCode(input: unknown): string {
 
 function isValidTicketCodeFormat(code: string): boolean {
   return /^[A-Z0-9]{6,32}$/.test(code)
+}
+
+function extractBearerToken(req: NextRequest): string | null {
+  const authHeader = req.headers.get('authorization')
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return null
+  }
+
+  const token = authHeader.slice('Bearer '.length).trim()
+  return token || null
+}
+
+type AuthorizedActor = {
+  ok: true
+  userId: string
+  role: 'admin' | 'organizer'
+}
+
+async function requireRoleFromBearer(req: NextRequest): Promise<AuthorizedActor | null> {
+  const token = extractBearerToken(req)
+  if (!token) {
+    return null
+  }
+
+  const supabase = getSupabaseAdminClient()
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser(token)
+
+  if (userError || !user) {
+    return null
+  }
+
+  const { data: actor, error: actorError } = await supabase
+    .from('users')
+    .select('role')
+    .eq('id', user.id)
+    .maybeSingle()
+
+  if (actorError || !actor?.role) {
+    return null
+  }
+
+  const role = String(actor.role)
+  if (role !== 'admin' && role !== 'organizer') {
+    return null
+  }
+
+  return { ok: true, userId: user.id, role }
+}
+
+// Only event staff (admin or the owning organizer) may mark a ticket used
+// or view buyer PII.
+async function authorizeGateAccess(eventId: string, req: NextRequest) {
+  const sessionClient = await createServerClient()
+  let auth = await requireRole(sessionClient, ['admin', 'organizer'])
+
+  if (!auth.ok) {
+    const bearerAuth = await requireRoleFromBearer(req)
+    if (bearerAuth) {
+      auth = bearerAuth
+    }
+  }
+
+  if (!auth.ok) {
+    return {
+      ok: false as const,
+      response: NextResponse.json({ error: 'Authentication required to check in tickets' }, { status: 401 }),
+    }
+  }
+
+  const supabase = getSupabaseAdminClient()
+
+  if (auth.role === 'organizer') {
+    const ownershipError = await ensureEventOwnedByOrganizer(supabase, eventId, auth.userId)
+    if (ownershipError) {
+      return { ok: false as const, response: ownershipError }
+    }
+  }
+
+  return { ok: true as const, supabase }
 }
 
 export async function GET(req: NextRequest) {
@@ -24,7 +108,7 @@ export async function GET(req: NextRequest) {
 
     const { data, error } = await supabase
       .from('tickets')
-      .select('id, event_id, parent_ticket_id, ticket_kind, name, ticket_code, status, usage_status, payment_reference, purchased_at, used_at, buyer_name, buyer_email')
+      .select('id, event_id, parent_ticket_id, ticket_kind, name, ticket_code, status, usage_status, purchased_at, used_at, buyer_name')
       .eq('ticket_code', code)
       .maybeSingle()
 
@@ -36,10 +120,10 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Ticket not found' }, { status: 404 })
     }
 
-    const isPurchased = Boolean(data.payment_reference)
     const status = String(data.status || 'valid').toLowerCase() === 'used' ? 'used' : 'valid'
     const usageStatus = String(data.usage_status || 'unused').toLowerCase() === 'used' ? 'used' : 'unused'
     const alreadyUsed = status === 'used' || usageStatus === 'used'
+    const isIssued = Boolean(data.purchased_at) || Boolean(data.ticket_code)
 
     return NextResponse.json({
       ticket: {
@@ -47,10 +131,10 @@ export async function GET(req: NextRequest) {
         status,
         usage_status: usageStatus,
       },
-      valid: isPurchased && !alreadyUsed,
-      invalid: !isPurchased,
+      valid: isIssued && !alreadyUsed,
+      invalid: !isIssued,
       alreadyUsed,
-      message: !isPurchased ? 'Ticket has not been issued' : alreadyUsed ? 'Ticket has already been used' : 'Ticket is valid',
+      message: !isIssued ? 'Ticket has not been issued' : alreadyUsed ? 'Ticket has already been used' : 'Ticket is valid',
     })
   } catch {
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
@@ -73,7 +157,7 @@ export async function POST(req: NextRequest) {
 
     const { data: ticket, error: fetchError } = await supabase
       .from('tickets')
-      .select('id, ticket_kind, ticket_code, status, usage_status, payment_reference, used_at, name, buyer_name, buyer_email')
+      .select('id, event_id, ticket_kind, ticket_code, status, usage_status, payment_reference, used_at, name, buyer_name, buyer_email')
       .eq('ticket_code', code)
       .maybeSingle()
 
@@ -85,8 +169,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Ticket not found' }, { status: 404 })
     }
 
-    if (!ticket.payment_reference) {
-      return NextResponse.json({ error: 'Ticket is invalid' }, { status: 404 })
+    const access = await authorizeGateAccess(String(ticket.event_id), req)
+    if (!access.ok) {
+      return access.response
     }
 
     const currentStatus = String(ticket.status || 'valid').toLowerCase()
@@ -104,7 +189,6 @@ export async function POST(req: NextRequest) {
         updated_at: new Date().toISOString(),
       })
       .eq('id', ticket.id)
-      .not('payment_reference', 'is', null)
       .eq('status', 'valid')
       .eq('usage_status', 'unused')
       .select('*')

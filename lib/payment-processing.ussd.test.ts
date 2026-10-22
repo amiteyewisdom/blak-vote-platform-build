@@ -13,7 +13,7 @@ function paymentAmountsMatch(storedAmount: unknown, verifiedAmount: unknown) {
     return true
   }
 
-  return Math.abs(stored - verified) <= 0.02
+  return Math.abs(Number((stored - verified).toFixed(4))) <= 0.02
 }
 
 function isSellableTicketPlan(ticket: {
