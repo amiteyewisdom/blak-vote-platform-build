@@ -92,6 +92,14 @@ function toUpperCode(value: string) {
   return String(value || '').trim().toUpperCase()
 }
 
+function sanitizeForSms(text: string): string {
+  // Remove special characters that garble in SMS/USSD (emoji, non-ASCII symbols)
+  return String(text || '')
+    .replace(/[^\x00-\x7F]/g, '') // Remove non-ASCII characters
+    .replace(/[^\w\s\-.,']/g, '') // Keep only alphanumeric, spaces, and basic punctuation
+    .trim()
+}
+
 function toLowerCaseKeys(raw: Record<string, unknown>) {
   return Object.fromEntries(
     Object.entries(raw).map(([key, value]) => [key.toLowerCase(), value])
@@ -886,7 +894,7 @@ async function handleTicketFlow(params: {
       .map((plan, index) => {
         const globalIndex = startIndex + index + 1
         const price = Number(plan.price || 0).toFixed(0)
-        return `${globalIndex}. ${plan.name || 'Ticket'} GHS${price}`
+        return `${globalIndex}. ${sanitizeForSms(plan.name || 'Ticket')} GHS${price}`
       })
       .join('\n')
 
@@ -918,7 +926,7 @@ async function handleTicketFlow(params: {
       .map((plan, index) => {
         const globalIndex = startIndex + index + 1
         const price = Number(plan.price || 0).toFixed(0)
-        return `${globalIndex}. ${plan.name || 'Ticket'} GHS${price}`
+        return `${globalIndex}. ${sanitizeForSms(plan.name || 'Ticket')} GHS${price}`
       })
       .join('\n')
 
@@ -932,7 +940,7 @@ async function handleTicketFlow(params: {
       backOption = '\n1. Back'
     }
 
-    return con(`${event.title || eventCode}\nSelect ticket (Page ${page}/${totalPages})\n${menu}${backOption}${moreOption}`)
+    return con(`${sanitizeForSms(event.title || eventCode)}\nSelect ticket (Page ${page}/${totalPages})\n${menu}${backOption}${moreOption}`)
   }
 
   // Handle "Back" to go to previous page
@@ -945,11 +953,11 @@ async function handleTicketFlow(params: {
       .map((plan, index) => {
         const globalIndex = startIndex + index + 1
         const price = Number(plan.price || 0).toFixed(0)
-        return `${globalIndex}. ${plan.name || 'Ticket'} GHS${price}`
+        return `${globalIndex}. ${sanitizeForSms(plan.name || 'Ticket')} GHS${price}`
       })
       .join('\n')
 
-    return con(`${event.title || eventCode}\nSelect ticket (Page ${page}/${totalPages})\n${menu}\n1. Back`)
+    return con(`${sanitizeForSms(event.title || eventCode)}\nSelect ticket (Page ${page}/${totalPages})\n${menu}\n1. Back`)
   }
 
   const planIndex = Number(steps[2]) - 1
@@ -960,7 +968,7 @@ async function handleTicketFlow(params: {
   const plan = plans[planIndex] as TicketPlanRecord & { price: number; remainingQuantity: number }
 
   if (steps.length === 3) {
-    return con(`Ticket: ${plan.name || 'Ticket'}\nEnter quantity`) 
+    return con(`${sanitizeForSms(plan.name || 'Ticket')}\nEnter quantity`)
   }
 
   const quantity = Number(steps[3])
@@ -981,13 +989,11 @@ async function handleTicketFlow(params: {
   }
 
   if (steps.length === 5) {
-    const ticketLabel = quantity === 1 ? 'Ticket' : 'Tickets'
+    const price = Number(plan.price || 0).toFixed(0)
     return con(
-      `${ticketLabel} x${quantity}\n` +
-        `Event: ${event.title || eventCode}\n` +
-        `Ticket: ${plan.name || 'Ticket'}\n` +
-        `Amount: GHS ${totalAmount.toFixed(2)}\n` +
-        '1. Confirm\n2. Cancel'
+      `${sanitizeForSms(plan.name || 'Ticket')} x${quantity} GHS${price}\n` +
+      `${sanitizeForSms(event.title || eventCode)}\n` +
+      '1. Confirm\n2. Cancel'
     )
   }
 
