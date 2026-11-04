@@ -12,6 +12,7 @@ type NormalizedUssdRequest = {
   sessionId: string
   phoneNumber: string
   text: string
+  isSms: boolean
 }
 
 type GenericInput = Record<string, unknown>
@@ -871,17 +872,86 @@ async function handleTicketFlow(params: {
     return end('No tickets are available for this event.')
   }
 
+  const pageSize = 5
+  const totalPages = Math.ceil(plans.length / pageSize)
+
+  // steps[2] can be a plan number or "more"/page number
   if (steps.length === 2) {
-    // Truncate descriptions to fit carrier limit (~120 chars for header + lines)
+    const page = 1
+    const startIndex = (page - 1) * pageSize
+    const pagePlans = plans.slice(startIndex, startIndex + pageSize)
+
     const maxDescLen = 15
-    const menu = plans
+    const menu = pagePlans
       .map((plan, index) => {
+        const globalIndex = startIndex + index + 1
         const desc = plan.description ? ` - ${plan.description.slice(0, maxDescLen)}${plan.description.length > maxDescLen ? '...' : ''}` : ''
-        return `${index + 1}. ${plan.name || 'Ticket'}${desc} - GHS ${Number(plan.price || 0).toFixed(2)}`
+        return `${globalIndex}. ${plan.name || 'Ticket'}${desc} - GHS ${Number(plan.price || 0).toFixed(2)}`
       })
       .join('\n')
 
-    return con(`Event: ${event.title || eventCode}\nSelect ticket\n${menu}`)
+    let moreOption = ''
+    if (totalPages > 1) {
+      moreOption = '\n2. More'
+    }
+
+    return con(`${event.title || eventCode}\nSelect ticket\n${menu}${moreOption}`)
+  }
+
+  // Handle "More" or page number navigation
+  if (steps.length === 2 && (steps[1].toLowerCase() === 'more' || !isNaN(Number(steps[1])))) {
+    let page = 1
+    if (steps[1].toLowerCase() === 'more') {
+      page = 2
+    } else {
+      page = Number(steps[1])
+    }
+
+    if (page < 1 || page > totalPages) {
+      return end('Invalid page number.')
+    }
+
+    const startIndex = (page - 1) * pageSize
+    const pagePlans = plans.slice(startIndex, startIndex + pageSize)
+
+    const maxDescLen = 15
+    const menu = pagePlans
+      .map((plan, index) => {
+        const globalIndex = startIndex + index + 1
+        const desc = plan.description ? ` - ${plan.description.slice(0, maxDescLen)}${plan.description.length > maxDescLen ? '...' : ''}` : ''
+        return `${globalIndex}. ${plan.name || 'Ticket'}${desc} - GHS ${Number(plan.price || 0).toFixed(2)}`
+      })
+      .join('\n')
+
+    let moreOption = ''
+    if (page < totalPages) {
+      moreOption = '\n2. More'
+    }
+
+    let backOption = ''
+    if (page > 1) {
+      backOption = '\n1. Back'
+    }
+
+    return con(`${event.title || eventCode}\nSelect ticket (Page ${page}/${totalPages})\n${menu}${backOption}${moreOption}`)
+  }
+
+  // Handle "Back" to go to previous page
+  if (steps.length === 2 && steps[1].toLowerCase() === 'back') {
+    const page = totalPages
+    const startIndex = (page - 1) * pageSize
+    const pagePlans = plans.slice(startIndex, startIndex + pageSize)
+
+    const maxDescLen = 15
+    const menu = pagePlans
+      .map((plan, index) => {
+        const globalIndex = startIndex + index + 1
+        const desc = plan.description ? ` - ${plan.description.slice(0, maxDescLen)}${plan.description.length > maxDescLen ? '...' : ''}` : ''
+        return `${globalIndex}. ${plan.name || 'Ticket'}${desc} - GHS ${Number(plan.price || 0).toFixed(2)}`
+      })
+      .join('\n')
+
+    return con(`${event.title || eventCode}\nSelect ticket (Page ${page}/${totalPages})\n${menu}\n1. Back`)
   }
 
   const planIndex = Number(steps[2]) - 1
