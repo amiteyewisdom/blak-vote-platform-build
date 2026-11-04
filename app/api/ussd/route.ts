@@ -32,9 +32,11 @@ type TicketPlanRecord = {
   id: string
   event_id: string
   name?: string | null
+  description?: string | null
   price?: number | string | null
   quantity?: number | string | null
   sold_count?: number | string | null
+  reserved_count?: number | string | null
 }
 
 type UssdSessionRecord = {
@@ -422,13 +424,33 @@ async function findCandidateByCode(code: string): Promise<{ candidate: Candidate
 
 async function getTicketPlansForEvent(eventId: string) {
   const supabase = getSupabaseAdminClient()
-  const { data, error } = await supabase
+  const coreColumns = 'id, event_id, name, price, quantity, sold_count, admin_fee, created_at'
+
+  let { data, error } = await supabase
     .from('tickets')
-    .select('id, event_id, name, price, quantity, sold_count, admin_fee, created_at')
+    .select(`${coreColumns}, description, reserved_count`)
     .eq('event_id', eventId)
     .or('ticket_kind.eq.plan,and(ticket_kind.is.null,parent_ticket_id.is.null,payment_reference.is.null)')
     .order('price', { ascending: true })
     .order('created_at', { ascending: true })
+
+  // Fallback for databases without the newer columns
+  if (error && String(error.message || '').toLowerCase().includes('reserved_count')) {
+    const retry = await supabase
+      .from('tickets')
+      .select(coreColumns)
+      .eq('event_id', eventId)
+      .or('ticket_kind.eq.plan,and(ticket_kind.is.null,parent_ticket_id.is.null,payment_reference.is.null)')
+      .order('price', { ascending: true })
+      .order('created_at', { ascending: true })
+
+    if (retry.error) {
+      throw new Error(retry.error.message)
+    }
+
+    data = (retry.data || []).map((plan) => ({ ...plan, description: null, reserved_count: 0 }))
+    error = null
+  }
 
   if (error) {
     throw new Error(error.message)
@@ -438,7 +460,8 @@ async function getTicketPlansForEvent(eventId: string) {
     .map((plan) => {
       const totalQuantity = Math.max(1, Number(plan.quantity || 1))
       const soldCount = Math.max(0, Number(plan.sold_count || 0))
-      const remainingQuantity = Math.max(totalQuantity - soldCount, 0)
+      const reservedCount = Math.max(0, Number((plan as { reserved_count?: number }).reserved_count || 0))
+      const remainingQuantity = Math.max(totalQuantity - soldCount - reservedCount, 0)
 
       return {
         id: plan.id,
@@ -851,7 +874,10 @@ async function handleTicketFlow(params: {
   if (steps.length === 2) {
     const menu = plans
       .slice(0, 6)
-      .map((plan, index) => `${index + 1}. ${plan.name || 'Ticket'} GHS ${Number(plan.price || 0).toFixed(2)}`)
+      .map((plan, index) => {
+        const desc = plan.description ? ` - ${plan.description}` : ''
+        return `${index + 1}. ${plan.name || 'Ticket'}${desc} - GHS ${Number(plan.price || 0).toFixed(2)}`
+      })
       .join('\n')
 
     return con(`Event: ${event.title || eventCode}\nSelect ticket\n${menu}`)

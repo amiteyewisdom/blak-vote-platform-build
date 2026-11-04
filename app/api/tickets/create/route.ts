@@ -218,9 +218,12 @@ export async function GET(req: NextRequest) {
     }
 
     const { supabase } = access
-    const { data: plans, error } = await supabase
+    const corePlanColumns =
+      'id, event_id, name, price, quantity, sold_count, admin_fee, created_at, updated_at'
+
+    let { data: plans, error } = await supabase
       .from('tickets')
-      .select('id, event_id, name, description, price, quantity, sold_count, reserved_count, admin_fee, created_at, updated_at')
+      .select(`${corePlanColumns}, description, reserved_count`)
       .eq('event_id', eventId)
       .eq('ticket_kind', 'plan')
       .order('created_at', { ascending: false })
@@ -229,24 +232,48 @@ export async function GET(req: NextRequest) {
       return serviceUnavailableResponse()
     }
 
+    // ticket_kind/sold_count are core to the plan model — hard requirement.
     if (
       error &&
-      !isMissingColumnError(error, 'ticket_kind') &&
-      !isMissingColumnError(error, 'sold_count') &&
-      !isMissingColumnError(error, 'description') &&
-      !isMissingColumnError(error, 'reserved_count')
-    ) {
-      return NextResponse.json({ error: error.message }, { status: 500 })
-    }
-
-    if (
-      error &&
-      (isMissingColumnError(error, 'ticket_kind') ||
-        isMissingColumnError(error, 'sold_count') ||
-        isMissingColumnError(error, 'description') ||
-        isMissingColumnError(error, 'reserved_count'))
+      (isMissingColumnError(error, 'ticket_kind') || isMissingColumnError(error, 'sold_count'))
     ) {
       return migrationRequiredResponse()
+    }
+
+    // description/reserved_count are optional enrichments — degrade gracefully
+    // on databases that haven't applied the newer migrations yet.
+    if (
+      error &&
+      (isMissingColumnError(error, 'description') || isMissingColumnError(error, 'reserved_count'))
+    ) {
+      const retry = await supabase
+        .from('tickets')
+        .select(corePlanColumns)
+        .eq('event_id', eventId)
+        .eq('ticket_kind', 'plan')
+        .order('created_at', { ascending: false })
+
+      if (retry.error) {
+        if (isConnectivityError(retry.error)) {
+          return serviceUnavailableResponse()
+        }
+
+        if (
+          isMissingColumnError(retry.error, 'ticket_kind') ||
+          isMissingColumnError(retry.error, 'sold_count')
+        ) {
+          return migrationRequiredResponse()
+        }
+
+        return NextResponse.json({ error: retry.error.message }, { status: 500 })
+      }
+
+      plans = (retry.data || []).map((plan) => ({ ...plan, description: null, reserved_count: 0 }))
+      error = null
+    }
+
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
     const normalizedPlans = plans || []
