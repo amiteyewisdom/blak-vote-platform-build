@@ -881,12 +881,12 @@ async function handleTicketFlow(params: {
     const startIndex = (page - 1) * pageSize
     const pagePlans = plans.slice(startIndex, startIndex + pageSize)
 
-    const maxDescLen = 15
+    // iPhone SMS truncates messages — make very compact
     const menu = pagePlans
       .map((plan, index) => {
         const globalIndex = startIndex + index + 1
-        const desc = plan.description ? ` - ${plan.description.slice(0, maxDescLen)}${plan.description.length > maxDescLen ? '...' : ''}` : ''
-        return `${globalIndex}. ${plan.name || 'Ticket'}${desc} - GHS ${Number(plan.price || 0).toFixed(2)}`
+        const price = Number(plan.price || 0).toFixed(0)
+        return `${globalIndex}. ${plan.name || 'Ticket'} GHS${price}`
       })
       .join('\n')
 
@@ -895,7 +895,7 @@ async function handleTicketFlow(params: {
       moreOption = '\n2. More'
     }
 
-    return con(`${event.title || eventCode}\nSelect ticket\n${menu}${moreOption}`)
+    return con(`${event.title || eventCode}\n${menu}${moreOption}`)
   }
 
   // Handle "More" or page number navigation
@@ -914,12 +914,11 @@ async function handleTicketFlow(params: {
     const startIndex = (page - 1) * pageSize
     const pagePlans = plans.slice(startIndex, startIndex + pageSize)
 
-    const maxDescLen = 15
     const menu = pagePlans
       .map((plan, index) => {
         const globalIndex = startIndex + index + 1
-        const desc = plan.description ? ` - ${plan.description.slice(0, maxDescLen)}${plan.description.length > maxDescLen ? '...' : ''}` : ''
-        return `${globalIndex}. ${plan.name || 'Ticket'}${desc} - GHS ${Number(plan.price || 0).toFixed(2)}`
+        const price = Number(plan.price || 0).toFixed(0)
+        return `${globalIndex}. ${plan.name || 'Ticket'} GHS${price}`
       })
       .join('\n')
 
@@ -942,12 +941,11 @@ async function handleTicketFlow(params: {
     const startIndex = (page - 1) * pageSize
     const pagePlans = plans.slice(startIndex, startIndex + pageSize)
 
-    const maxDescLen = 15
     const menu = pagePlans
       .map((plan, index) => {
         const globalIndex = startIndex + index + 1
-        const desc = plan.description ? ` - ${plan.description.slice(0, maxDescLen)}${plan.description.length > maxDescLen ? '...' : ''}` : ''
-        return `${globalIndex}. ${plan.name || 'Ticket'}${desc} - GHS ${Number(plan.price || 0).toFixed(2)}`
+        const price = Number(plan.price || 0).toFixed(0)
+        return `${globalIndex}. ${plan.name || 'Ticket'} GHS${price}`
       })
       .join('\n')
 
