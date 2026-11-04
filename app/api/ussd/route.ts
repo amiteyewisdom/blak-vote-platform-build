@@ -872,9 +872,11 @@ async function handleTicketFlow(params: {
   }
 
   if (steps.length === 2) {
+    // Truncate descriptions to fit carrier limit (~120 chars for header + lines)
+    const maxDescLen = 15
     const menu = plans
       .map((plan, index) => {
-        const desc = plan.description ? ` - ${plan.description}` : ''
+        const desc = plan.description ? ` - ${plan.description.slice(0, maxDescLen)}${plan.description.length > maxDescLen ? '...' : ''}` : ''
         return `${index + 1}. ${plan.name || 'Ticket'}${desc} - GHS ${Number(plan.price || 0).toFixed(2)}`
       })
       .join('\n')
