@@ -873,7 +873,6 @@ async function handleTicketFlow(params: {
 
   if (steps.length === 2) {
     const menu = plans
-      .slice(0, 6)
       .map((plan, index) => {
         const desc = plan.description ? ` - ${plan.description}` : ''
         return `${index + 1}. ${plan.name || 'Ticket'}${desc} - GHS ${Number(plan.price || 0).toFixed(2)}`
@@ -884,7 +883,7 @@ async function handleTicketFlow(params: {
   }
 
   const planIndex = Number(steps[2]) - 1
-  if (!Number.isInteger(planIndex) || planIndex < 0 || planIndex >= Math.min(plans.length, 6)) {
+  if (!Number.isInteger(planIndex) || planIndex < 0 || planIndex >= plans.length) {
     return end('Invalid ticket option selected.')
   }
 
