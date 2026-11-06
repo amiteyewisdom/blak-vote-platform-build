@@ -629,7 +629,7 @@ async function processUssdVotePayment(params: {
     try {
       const smsMsgFree =
         `BlakVote: Vote confirmed! You cast ${quantity} vote${quantity === 1 ? '' : 's'} for ` +
-        `${candidate.nominee_name || candidateCode} in ${event.title || eventCode}. ` +
+        `${candidate.nominee_name || candidateCode} in ${sanitizeForSms(event.title || eventCode)}. ` +
         `Amount: GHS 0.00. Thank you!`
       await sendNaloSms(formatPhoneForSms(phoneNumber), smsMsgFree)
     } catch (smsErr: any) {
@@ -744,13 +744,13 @@ async function handleVoteFlow(params: {
       return con(
         `Enter quantity (1-${MAX_VOTE_QUANTITY})\n` +
           `Candidate: ${candidate.nominee_name || candidateCode}\n` +
-          `Event: ${event.title || eventCode}`
+          `Event: ${sanitizeForSms(event.title || eventCode)}`
       )
     }
 
     return con(
       `Vote: ${candidate.nominee_name || candidateCode}\n` +
-        `Event: ${event.title || eventCode}\n` +
+        `Event: ${sanitizeForSms(event.title || eventCode)}\n` +
         '1. Single vote\n2. Bulk packages'
     )
   }
@@ -767,7 +767,7 @@ async function handleVoteFlow(params: {
     if (steps.length === 3) {
       return con(
         `Candidate: ${candidate.nominee_name || candidateCode}\n` +
-          `Event: ${event.title || eventCode}\n` +
+          `Event: ${sanitizeForSms(event.title || eventCode)}\n` +
           `Enter quantity (1-${MAX_VOTE_QUANTITY})`
       )
     }
@@ -783,7 +783,7 @@ async function handleVoteFlow(params: {
     if (steps.length === 4) {
       return con(
         `Vote ${quantity} for ${candidate.nominee_name || candidateCode}\n` +
-          `Event: ${event.title || eventCode}\n` +
+          `Event: ${sanitizeForSms(event.title || eventCode)}\n` +
           `Amount: GHS ${totalAmount.toFixed(2)}\n` +
           '1. Confirm\n2. Cancel'
       )
@@ -903,7 +903,7 @@ async function handleTicketFlow(params: {
       moreOption = '\n2. More'
     }
 
-    return con(`${event.title || eventCode}\n${menu}${moreOption}`)
+    return con(`${sanitizeForSms(event.title || eventCode)}\n${menu}${moreOption}`)
   }
 
   // Handle "More" or page number navigation
@@ -1033,7 +1033,7 @@ async function handleTicketFlow(params: {
       const codeLabel = issued.ticketCodes.length === 1 ? 'Code' : 'Codes'
       const smsMsgTicket =
         `BlakVote Ticket ${codeLabel}: ${issued.ticketCodes.join(', ')}` +
-        ` | Event: ${event.title || eventCode}. Show this code at the gate.`
+        ` | Event: ${sanitizeForSms(event.title || eventCode)}. Show this code at the gate.`
       await sendNaloSms(formatPhoneForSms(phoneNumber), smsMsgTicket)
     } catch (smsErr: any) {
       console.warn('[USSD_FREE_TICKET_SMS_FAIL]', smsErr?.message || smsErr)
