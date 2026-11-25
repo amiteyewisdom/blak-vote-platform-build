@@ -2,6 +2,9 @@
 -- so the same seat can never be sold twice. Holds are consumed on issuance
 -- and released on payment failure or by stale-payment cleanup.
 
+-- Drop any existing UUID-based signature to avoid function ambiguity
+drop function if exists public.issue_ticket_purchase(uuid, text, text, text, text, integer);
+
 alter table public.tickets
   add column if not exists reserved_count integer not null default 0;
 

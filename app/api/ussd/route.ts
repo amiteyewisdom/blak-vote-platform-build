@@ -494,7 +494,7 @@ async function issueFreeTickets(params: {
   const syntheticEmail = `ussd+${trimToPhoneIdentifier(buyerPhone)}@blakvote.local`
 
   const { data: issuedTickets, error: issueError } = await supabase.rpc('issue_ticket_purchase', {
-    p_plan_id: planId,
+    p_plan_id: String(planId), // Explicitly cast to text to avoid UUID/text ambiguity
     p_payment_reference: null,
     p_buyer_name: buyerName,
     p_buyer_email: syntheticEmail,

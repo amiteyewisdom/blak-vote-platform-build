@@ -74,7 +74,7 @@ export async function POST(req: NextRequest) {
     }
 
     const { data: issuedTickets, error: issueError } = await supabase.rpc('issue_ticket_purchase', {
-      p_plan_id: ticketId,
+      p_plan_id: String(ticketId), // Explicitly cast to text to avoid UUID/text ambiguity
       p_payment_reference: null,
       p_buyer_name: buyerName,
       p_buyer_email: buyerEmail,

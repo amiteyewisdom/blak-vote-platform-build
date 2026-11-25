@@ -2025,7 +2025,7 @@ export async function processConfirmedPayment(verification: PaymentVerificationP
     }
 
     const { data: issuedTickets, error: updateTicketError } = await supabase.rpc('issue_ticket_purchase', {
-      p_plan_id: ticket.id,
+      p_plan_id: String(ticket.id), // Explicitly cast to text to avoid UUID/text ambiguity
       p_payment_reference: verification.reference,
       p_buyer_name: metadata?.buyerName ?? (rawStoredMeta.buyerName as string | undefined),
       p_buyer_email: (metadata?.buyerEmail ?? rawStoredMeta.buyerEmail as string | undefined) ?? payment.voter_email,
